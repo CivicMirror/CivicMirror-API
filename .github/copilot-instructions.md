@@ -1,10 +1,48 @@
 # CivicMirror API — Copilot Instructions
 
+> **Status: Concept / Pre-development**  
+> Developer: Walter LeFort · AI tools: Copilot Pro, Claude, ChatGPT  
+> Companion app: https://github.com/tokendad/CivicMirror
+
 ## What This Project Is
 
-CivicMirror is an election data aggregation and mirroring platform. This repository (`API-CivicMirror`) is the **Django/Celery backend**. It ingests election data from multiple external sources, normalizes it into shared models, and serves it via API.
+CivicMirror is an election data aggregation and normalization platform. This repository (`API-CivicMirror`) is the **Django/Celery backend**. It ingests election and ballot data from multiple free public sources, normalizes it into shared models using FIPS codes and OCD-IDs, and serves it via a unified REST API (with a potential GraphQL endpoint) — primarily for the [CivicMirror](https://github.com/tokendad/CivicMirror) web app, and potentially as a public API.
 
-The `Docs/` tree is primary reference material: `Sources.md` covers the full data source catalog, `Docs/State Research/` has per-state results access research, and `WV-Results-Adapter-Plan.md` documents the first results adapter (Clarity Elections) in full.
+The `Docs/` tree is primary reference material: `Sources.md` covers the full data source catalog, `Docs/State Research/` has per-state results access research, `WV-Results-Adapter-Plan.md` documents the first results adapter (Clarity Elections), and `Docs/concept.md` is the authoritative project concept document.
+
+---
+
+## Core Data Points
+
+These represent minimum data standards when sourcing and normalizing content.
+
+- **Elections** — Primary (open/closed/non-partisan), General, Special, Mid-Term, Party
+- **Ballot Measures** — Resolutions, Referendums (direct & indirect)
+- **Candidates** — Contact info, website/phone, party affiliation, CV/résumé, platform statement
+- **Officials** — Incumbent status, office held, district represented, term start/end dates
+- **Districts & Jurisdictions** — Federal (House, Senate, Presidential), State (legislative, gubernatorial), Local (county, municipal, school board, special district), geographic boundaries (GeoJSON / FIPS codes)
+
+---
+
+## Normalization Strategy
+
+- Standardize jurisdiction identifiers using **FIPS codes** and **OCD-IDs** (Open Civic Data Division Identifiers)
+- Map source-specific election types to a common taxonomy (`primary`, `general`, `special`, etc.)
+- Deduplicate candidates across sources using name + district + party matching
+- Normalize all dates to **ISO 8601** format
+- **Output:** REST API with JSON responses (primary); GraphQL endpoint for CivicMirror front-end flexibility (future)
+
+---
+
+## Project Roadmap
+
+1. Define canonical data schema / JSON structure
+2. Prototype ingestion pipeline for Google Civic API
+3. Add OpenStates and Ballotpedia adapters
+4. Build normalization / deduplication layer
+5. Expose unified REST API
+6. CivicMirror integration
+7. Public API documentation
 
 ---
 
@@ -115,6 +153,19 @@ Sync interval: `CIVIC_SYNC_INTERVAL_HOURS = 6` (configurable via settings).
 
 ---
 
+## Data Sources
+
+| Source | Coverage | Format | Notes |
+|---|---|---|---|
+| [Google Civic Information API](https://developers.google.com/civic-information) | Federal, State, Local | REST/JSON | Elections, races, candidates, polling by address |
+| [OpenStates API](https://openstates.org/api/v3/) | State Legislative | REST/JSON | Bills, legislators, votes |
+| [Ballotpedia](https://ballotpedia.org/API_documentation) | Federal, State, Local | REST/JSON | Candidate & ballot measure data |
+| [OpenFEC API](https://api.open.fec.gov/developers/) | Federal | REST/JSON | Campaign finance, candidates, filings |
+| [MIT Election Data Lab (MEDSL)](https://electionlab.mit.edu/data) | Federal, State | CSV/JSON | Historical results |
+| [EAVS (EAC)](https://www.eac.gov/research-and-data/election-administration-voting-survey) | State | CSV | Election admin statistics |
+
+---
+
 ## Data Source Tiers
 
 **Tier 1 — Core (build around these first):**
@@ -125,9 +176,11 @@ Sync interval: `CIVIC_SYNC_INTERVAL_HOURS = 6` (configurable via settings).
 - **`unitedstates/congress-legislators`** — federal incumbent enrichment + FEC crosswalk IDs
 
 **Tier 2 — Add next:**
+- **OpenStates API** (`https://v3.openstates.org/`) — state legislative incumbents, bills, votes
+- **Ballotpedia** — candidate & ballot measure enrichment (federal, state, local)
 - **OpenElections** (CSV/GitHub) — certified historical results; state adapter patterns
 - **MEDSL / Harvard Dataverse** — historical result backfill
-- **Open States API** (`https://v3.openstates.org/`) — state incumbent enrichment
+- **EAVS (EAC)** — election administration statistics
 
 **Deprecated / do not use:** ProPublica Congress API (discontinued), OpenSecrets API (discontinued).
 
