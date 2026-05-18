@@ -1,0 +1,1126 @@
+openapi: 3.0.3
+
+info:
+  title: CivicMirror API
+  description: >
+    Aggregates and normalizes election data from multiple public sources
+    (Google Civic, OpenStates, Ballotpedia, OpenFEC, Clarity Elections, MEDSL)
+    into a unified REST API. Identifiers use OCD-IDs and FIPS codes.
+    Dates are ISO 8601.
+  version: "1"
+  contact:
+    name: CivicMirror
+    url: https://github.com/tokendad/CivicMirror
+
+servers:
+  - url: https://api.civicmirror.io/api/v1
+    description: Production
+
+tags:
+  - name: Lookup
+    description: Address/ZIP-based ballot and representative lookup
+  - name: Elections
+    description: Election records
+  - name: Races
+    description: Individual office and ballot measure contests
+  - name: Candidates
+    description: Candidate profiles
+  - name: Ballot Measures
+    description: Ballot measure details
+  - name: Officials
+    description: Currently serving elected officials
+  - name: Districts
+    description: Geographic and political districts
+
+# ---------------------------------------------------------------------------
+# Security
+# ---------------------------------------------------------------------------
+components:
+  securitySchemes:
+    ApiKeyQuery:
+      type: apiKey
+      in: query
+      name: key
+    BearerToken:
+      type: http
+      scheme: bearer
+
+  # -------------------------------------------------------------------------
+  # Reusable parameters
+  # -------------------------------------------------------------------------
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Page number (1-indexed)
+    PageSizeParam:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Results per page (max 100)
+    StateParam:
+      name: state
+      in: query
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 2
+        example: WV
+      description: 2-letter state abbreviation
+
+  # -------------------------------------------------------------------------
+  # Schemas
+  # -------------------------------------------------------------------------
+  schemas:
+
+    PaginatedEnvelope:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 142
+        next:
+          type: string
+          nullable: true
+          example: "https://api.civicmirror.io/api/v1/elections?page=3"
+        previous:
+          type: string
+          nullable: true
+          example: "https://api.civicmirror.io/api/v1/elections?page=1"
+        results:
+          type: array
+          items: {}
+
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          example: NOT_FOUND
+        message:
+          type: string
+          example: The requested resource does not exist.
+        detail:
+          type: object
+          additionalProperties: true
+
+    Contact:
+      type: object
+      properties:
+        email:
+          type: string
+          nullable: true
+          example: jane@janedoe.com
+        phone:
+          type: string
+          nullable: true
+          example: "304-555-0100"
+        website:
+          type: string
+          nullable: true
+          example: https://www.janedoe.com
+        address:
+          type: string
+          nullable: true
+          example: "123 Russell Senate Office Building, Washington, DC 20510"
+
+    Election:
+      type: object
+      properties:
+        id:
+          type: string
+          example: wv-2024-11-05-general
+        name:
+          type: string
+          example: West Virginia General Election 2024
+        election_date:
+          type: string
+          format: date
+          example: "2024-11-05"
+        election_type:
+          type: string
+          enum: [primary, general, special, midterm, party]
+        primary_type:
+          type: string
+          nullable: true
+          enum: [open, closed, nonpartisan, jungle, null]
+        state:
+          type: string
+          example: WV
+        state_fips:
+          type: string
+          example: "54"
+        ocd_division_id:
+          type: string
+          example: ocd-division/country:us/state:wv
+        status:
+          type: string
+          enum: [upcoming, active, certified]
+        results_url:
+          type: string
+          nullable: true
+          example: "https://results.enr.clarityelections.com/WV/123456/"
+        race_count:
+          type: integer
+          example: 12
+        source:
+          type: string
+          example: civic_api
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Race:
+      type: object
+      properties:
+        id:
+          type: string
+          example: race_wv_2024_us_senate
+        election_id:
+          type: string
+          example: wv-2024-11-05-general
+        office_title:
+          type: string
+          example: U.S. Senate
+        race_type:
+          type: string
+          enum: [candidate, measure]
+        office_level:
+          type: string
+          enum: [federal, state, local]
+        geography_scope:
+          type: string
+          example: statewide
+        jurisdiction:
+          type: string
+          example: West Virginia
+        ocd_division_id:
+          type: string
+          example: ocd-division/country:us/state:wv
+        district_id:
+          type: string
+          nullable: true
+          example: dist_wv_statewide
+        certification_status:
+          type: string
+          enum: [upcoming, results_pending, certified]
+        precinct_reporting:
+          type: integer
+          example: 1847
+        total_precincts:
+          type: integer
+          example: 1847
+        candidate_count:
+          type: integer
+          example: 3
+        source:
+          type: string
+          example: civic_api
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Candidate:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cand_001
+        name:
+          type: string
+          example: Jane Doe
+        party:
+          type: string
+          example: Democratic
+        party_abbr:
+          type: string
+          example: D
+        race_id:
+          type: string
+          example: race_wv_2024_us_senate
+        election_id:
+          type: string
+          example: wv-2024-11-05-general
+        office_title:
+          type: string
+          example: U.S. Senate
+        state:
+          type: string
+          example: WV
+        incumbent:
+          type: boolean
+          example: false
+        contact:
+          $ref: '#/components/schemas/Contact'
+        bio:
+          type: string
+          nullable: true
+          example: "Jane Doe is a former state delegate..."
+        platform_statement:
+          type: string
+          nullable: true
+          example: "My platform focuses on..."
+        source:
+          type: string
+          example: ballotpedia
+        source_url:
+          type: string
+          nullable: true
+          example: https://ballotpedia.org/Jane_Doe
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    MeasureOption:
+      type: object
+      properties:
+        label:
+          type: string
+          example: For the Amendment
+        option_type:
+          type: string
+          enum: [yes, no, abstain, other]
+
+    BallotMeasure:
+      type: object
+      properties:
+        id:
+          type: string
+          example: bm_001
+        election_id:
+          type: string
+          example: wv-2024-11-05-general
+        race_id:
+          type: string
+          example: race_wv_2024_amendment1
+        title:
+          type: string
+          example: Amendment 1 — State Authorization of Religious Expression
+        measure_type:
+          type: string
+          enum: [resolution, referendum, initiative, constitutional_amendment, bond, recall]
+        measure_subtype:
+          type: string
+          nullable: true
+          enum: [direct, indirect, null]
+        summary:
+          type: string
+          nullable: true
+        full_text:
+          type: string
+          nullable: true
+        state:
+          type: string
+          example: WV
+        ocd_division_id:
+          type: string
+          example: ocd-division/country:us/state:wv
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeasureOption'
+        source:
+          type: string
+          example: ballotpedia
+        source_url:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Official:
+      type: object
+      properties:
+        id:
+          type: string
+          example: off_001
+        name:
+          type: string
+          example: John Smith
+        office_title:
+          type: string
+          example: U.S. Senator
+        party:
+          type: string
+          example: Republican
+        party_abbr:
+          type: string
+          example: R
+        state:
+          type: string
+          example: WV
+        district_id:
+          type: string
+          example: dist_wv_statewide
+        ocd_division_id:
+          type: string
+          example: ocd-division/country:us/state:wv
+        incumbent:
+          type: boolean
+          example: true
+        term_start:
+          type: string
+          format: date
+          example: "2021-01-03"
+        term_end:
+          type: string
+          format: date
+          nullable: true
+          example: "2027-01-03"
+        contact:
+          $ref: '#/components/schemas/Contact'
+        source:
+          type: string
+          example: google_civic
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    District:
+      type: object
+      properties:
+        id:
+          type: string
+          example: dist_wv_cd2
+        name:
+          type: string
+          example: West Virginia 2nd Congressional District
+        ocd_division_id:
+          type: string
+          example: ocd-division/country:us/state:wv/cd:2
+        fips_code:
+          type: string
+          example: "54"
+        level:
+          type: string
+          enum: [federal, state, local]
+        office_type:
+          type: string
+          enum: [house, senate, governor, state_upper, state_lower, county, municipal, school_board, special]
+        state:
+          type: string
+          example: WV
+        parent_district_id:
+          type: string
+          nullable: true
+          example: dist_wv_statewide
+        source:
+          type: string
+          example: census
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Result:
+      type: object
+      properties:
+        id:
+          type: string
+          example: res_001
+        race_id:
+          type: string
+          example: race_wv_2024_us_senate
+        candidate_id:
+          type: string
+          nullable: true
+          example: cand_001
+        candidate_name:
+          type: string
+          example: Jane Doe
+        option_label:
+          type: string
+          nullable: true
+          example: For the Amendment
+        party:
+          type: string
+          nullable: true
+          example: D
+        vote_count:
+          type: integer
+          example: 324512
+        vote_percentage:
+          type: number
+          format: float
+          example: 52.3
+        winner:
+          type: boolean
+          nullable: true
+          example: true
+        result_type:
+          type: string
+          enum: [UNOFFICIAL, OFFICIAL]
+        source:
+          type: string
+          example: wv_clarity
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+
+  /lookup:
+    get:
+      tags: [Lookup]
+      summary: Ballot and representative lookup by address or ZIP
+      description: >
+        Primary entry point for the CivicMirror "what's on my ballot?" flow.
+        Returns elections, races, and current officials for a given address or ZIP code.
+      parameters:
+        - name: address
+          in: query
+          schema:
+            type: string
+            example: "123 Main St Charleston WV 25301"
+          description: Full street address. Either address or zip is required.
+        - name: zip
+          in: query
+          schema:
+            type: string
+            pattern: '^\d{5}$'
+            example: "25301"
+          description: 5-digit ZIP code. Either address or zip is required.
+        - name: election_id
+          in: query
+          schema:
+            type: string
+          description: Scope results to a specific election
+      responses:
+        "200":
+          description: Ballot and representative data for the location
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  address:
+                    type: object
+                    properties:
+                      formatted: { type: string }
+                      state: { type: string }
+                      state_fips: { type: string }
+                      zip: { type: string }
+                      congressional_district: { type: string }
+                      state_upper_district: { type: string }
+                      state_lower_district: { type: string }
+                  elections:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Election'
+                  races:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Race'
+                  officials:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Official'
+        "400":
+          description: Missing or invalid location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "404":
+          description: No contests found for this address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "503":
+          description: Upstream source unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /elections:
+    get:
+      tags: [Elections]
+      summary: List elections
+      parameters:
+        - $ref: '#/components/parameters/StateParam'
+        - name: election_type
+          in: query
+          schema:
+            type: string
+            enum: [primary, general, special, midterm, party]
+        - name: primary_type
+          in: query
+          schema:
+            type: string
+            enum: [open, closed, nonpartisan, jungle]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [upcoming, active, certified]
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        "200":
+          description: Paginated list of elections
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Election'
+
+  /elections/{id}:
+    get:
+      tags: [Elections]
+      summary: Get a single election
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Election detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /elections/{id}/races:
+    get:
+      tags: [Elections, Races]
+      summary: List races for an election
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: race_type
+          in: query
+          schema:
+            type: string
+            enum: [candidate, measure]
+        - name: office_level
+          in: query
+          schema:
+            type: string
+            enum: [federal, state, local]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        "200":
+          description: Paginated list of races
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Race'
+
+  /elections/{id}/results:
+    get:
+      tags: [Elections]
+      summary: Aggregate results for all races in an election
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: result_type
+          in: query
+          schema:
+            type: string
+            enum: [UNOFFICIAL, OFFICIAL]
+      responses:
+        "200":
+          description: Election results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  election_id: { type: string }
+                  result_type: { type: string }
+                  precinct_reporting_pct: { type: number }
+                  last_updated: { type: string, format: date-time }
+                  races:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        race_id: { type: string }
+                        office_title: { type: string }
+                        results:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/Result'
+
+  /races:
+    get:
+      tags: [Races]
+      summary: List races (cross-election)
+      parameters:
+        - $ref: '#/components/parameters/StateParam'
+        - name: election_id
+          in: query
+          schema: { type: string }
+        - name: race_type
+          in: query
+          schema:
+            type: string
+            enum: [candidate, measure]
+        - name: office_level
+          in: query
+          schema:
+            type: string
+            enum: [federal, state, local]
+        - name: office_title
+          in: query
+          schema: { type: string }
+          description: Partial match
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [upcoming, active, certified]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        "200":
+          description: Paginated list of races
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Race'
+
+  /races/{id}:
+    get:
+      tags: [Races]
+      summary: Get a single race
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Race detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Race'
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /races/{id}/candidates:
+    get:
+      tags: [Races, Candidates]
+      summary: List candidates in a race
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: party
+          in: query
+          schema: { type: string }
+        - name: incumbent
+          in: query
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        "200":
+          description: Paginated candidate list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Candidate'
+
+  /races/{id}/results:
+    get:
+      tags: [Races]
+      summary: Results for a race
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: result_type
+          in: query
+          schema:
+            type: string
+            enum: [UNOFFICIAL, OFFICIAL]
+      responses:
+        "200":
+          description: Race results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  race_id: { type: string }
+                  office_title: { type: string }
+                  result_type: { type: string }
+                  precinct_reporting: { type: integer }
+                  total_precincts: { type: integer }
+                  precinct_reporting_pct: { type: number }
+                  last_updated: { type: string, format: date-time }
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Result'
+
+  /candidates:
+    get:
+      tags: [Candidates]
+      summary: List candidates (cross-race)
+      parameters:
+        - $ref: '#/components/parameters/StateParam'
+        - name: election_id
+          in: query
+          schema: { type: string }
+        - name: race_id
+          in: query
+          schema: { type: string }
+        - name: party
+          in: query
+          schema: { type: string }
+        - name: incumbent
+          in: query
+          schema: { type: boolean }
+        - name: name
+          in: query
+          schema: { type: string }
+          description: Partial name match
+        - name: office_level
+          in: query
+          schema:
+            type: string
+            enum: [federal, state, local]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        "200":
+          description: Paginated candidate list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Candidate'
+
+  /candidates/{id}:
+    get:
+      tags: [Candidates]
+      summary: Get a single candidate profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Candidate detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Candidate'
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /ballot-measures:
+    get:
+      tags: [Ballot Measures]
+      summary: List ballot measures
+      parameters:
+        - $ref: '#/components/parameters/StateParam'
+        - name: election_id
+          in: query
+          schema: { type: string }
+        - name: measure_type
+          in: query
+          schema:
+            type: string
+            enum: [resolution, referendum, initiative, constitutional_amendment, bond, recall]
+        - name: measure_subtype
+          in: query
+          schema:
+            type: string
+            enum: [direct, indirect]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        "200":
+          description: Paginated ballot measure list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/BallotMeasure'
+
+  /ballot-measures/{id}:
+    get:
+      tags: [Ballot Measures]
+      summary: Get a single ballot measure
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Ballot measure detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BallotMeasure'
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /officials:
+    get:
+      tags: [Officials]
+      summary: List current elected officials
+      parameters:
+        - $ref: '#/components/parameters/StateParam'
+        - name: office_level
+          in: query
+          schema:
+            type: string
+            enum: [federal, state, local]
+        - name: office_title
+          in: query
+          schema: { type: string }
+          description: Partial match
+        - name: party
+          in: query
+          schema: { type: string }
+        - name: district_id
+          in: query
+          schema: { type: string }
+          description: OCD-ID of the district
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        "200":
+          description: Paginated officials list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Official'
+
+  /officials/{id}:
+    get:
+      tags: [Officials]
+      summary: Get a single official
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Official detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Official'
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /districts:
+    get:
+      tags: [Districts]
+      summary: List districts
+      parameters:
+        - $ref: '#/components/parameters/StateParam'
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [federal, state, local]
+        - name: office_type
+          in: query
+          schema:
+            type: string
+            enum: [house, senate, governor, state_upper, state_lower, county, municipal, school_board, special]
+        - name: fips_code
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        "200":
+          description: Paginated districts list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/District'
+
+  /districts/{id}:
+    get:
+      tags: [Districts]
+      summary: Get a single district (without boundary geometry)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: District metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/District'
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /districts/{id}/boundary:
+    get:
+      tags: [Districts]
+      summary: Get GeoJSON boundary for a district
+      description: >
+        Returns the GeoJSON polygon for the district boundary.
+        This is a separate endpoint to avoid bloating list/detail payloads
+        with large geometry objects — lazy-load only when the map view needs it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: GeoJSON boundary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  district_id: { type: string }
+                  ocd_division_id: { type: string }
+                  geojson:
+                    type: object
+                    description: GeoJSON Feature object
+                  source: { type: string }
+                  vintage: { type: string, example: "2022" }
+        "404":
+          description: District not found or no boundary data available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
