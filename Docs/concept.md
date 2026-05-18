@@ -128,6 +128,38 @@ The goal is to ingest data from heterogeneous sources and output a unified, quer
 
 ---
 
+## Scheduled Ingestion
+
+Background data ingestion uses **Google Cloud Scheduler** (not Celery Beat) to trigger jobs via authenticated HTTP POST to internal Django endpoints. This is required for Cloud Run compatibility — Celery Beat is a long-running process that does not survive Cloud Run scale-to-zero events.
+
+| Job | Endpoint | Interval |
+|---|---|---|
+| Election sync | `POST /internal/tasks/sync-elections/` | Every 6 hours |
+| Results polling | `POST /internal/tasks/poll-results/` | Daily 06:00 UTC |
+
+Cloud Scheduler authenticates using OIDC (GCP service account). Local development uses a shared secret fallback (`INTERNAL_TASK_TOKEN` env var). Celery workers handle actual task execution and run as a separate Cloud Run service.
+
+See **ADR-002** for the full scheduler architecture, security model, idempotency strategy, and local dev setup.
+
+---
+
+## Deployment Target
+
+The API is a **standalone service** (separate from the CivicMirror front-end app), following the same pattern as the SeaQuacks project: a dedicated API container runs alongside the main application.
+
+| Component | Google Cloud service |
+|---|---|
+| Django/DRF API | Cloud Run (HTTP service) |
+| Celery workers | Cloud Run (min-instances=1) or Cloud Run Jobs |
+| PostgreSQL | Cloud SQL |
+| Redis (Celery broker) | Cloud Memorystore |
+| Scheduled triggers | Cloud Scheduler (OIDC) |
+| Secrets | Secret Manager |
+
+Local development uses `docker-compose.dev.yaml` with PostgreSQL, Redis, Django, and Celery worker — matching the SeaQuacks local compose pattern.
+
+---
+
 ## Roadmap
 
 - [ ] Define canonical data schema / JSON structure
