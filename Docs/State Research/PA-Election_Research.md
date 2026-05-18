@@ -48,3 +48,8 @@ Pennsylvania provides election results through the Department of State's electio
 - Major swing state with high data demand
 - Detailed mail-in ballot tracking data
 - PA Open Data portal provides the most programmatic-friendly access
+---
+
+## Source Coverage Analysis
+
+Pennsylvania is one of the strongest state sources in this batch, with a Socrata/SODA API via `data.pa.gov` providing programmatic access to election results, voter registration, and turnout data. However, ballot measures and judicial retention results are structurally distinct and may require separate query paths, and candidate biographical/contact data, official/incumbent records, and district boundary GeoJSON are absent from the state API. Supplement with **Google Civic Information API** (candidates, officials, district boundaries by address), **Ballotpedia** (ballot measures, candidate bios, incumbency), **OpenStates** (PA state legislative data), and **OpenFEC** (federal candidates and campaign finance). The Socrata endpoint at `data.pa.gov` is the recommended primary integration path for programmatic election result access.

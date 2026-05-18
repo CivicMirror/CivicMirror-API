@@ -57,3 +57,8 @@ No public REST API identified. Historical database provides searchable web inter
 - Lieutenant Governor requires majority of votes (not just plurality)
 - Recount results published separately
 - Voting age population calculated from U.S. Census data
+---
+
+## Source Coverage Analysis
+
+Vermont's SOS website provides a searchable archive and downloadable Excel files for historical election results, and uniquely includes "past ballot questions" data — giving it slightly better ballot measure coverage than most small states. The state's 246-town governance structure (no county government) adds significant complexity to jurisdiction and district mapping. No API, live results feed, or candidate profile information is documented. Supplement with **Google Civic Information API** (candidates, officials, district boundaries), **Ballotpedia** (ballot measure classification and detail, candidate bios, incumbency), **OpenStates** (Vermont legislative data), and **OpenFEC** (federal candidates). Town-level FIPS/OCD-ID normalization will require careful attention given the absence of a county layer.

@@ -56,3 +56,9 @@ No public REST API identified. Data access is through:
 - Alaska's ranked-choice voting system means CVR data is particularly valuable
 - CSV format provides precinct-level granularity
 - Historical depth is excellent (back to 1958) but older data may be PDF-only
+
+---
+
+## Source Coverage Analysis
+
+Alaska's Division of Elections provides excellent historical depth (results back to 1958) and uniquely valuable JSON Cast Vote Record data for RCV transparency, but the source is download-only (CSV, PDF, JSON) with no public API or real-time feed. Alaska's Top-4 Primary and Ranked-Choice General add election type complexity not well-captured in the current source. Ballot measures, candidate metadata, official/incumbent data, and geographic district boundaries are all absent from the state source. Fill these gaps with **Google Civic Information API** (candidates, districts, election type nuance), **Ballotpedia** (ballot measures, candidate bios, Alaska RCV rules), **OpenStates** (state legislative incumbents), **OpenFEC** (federal candidate data), and **MEDSL** for normalized historical results. Investigate whether Alaska uses **Clarity Elections** for election night live reporting.

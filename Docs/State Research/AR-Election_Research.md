@@ -47,3 +47,9 @@ No public REST API identified. Data access is through:
 - Historical data organized by county and polling location within ZIP downloads
 - Contact email provided for data requests
 - Coverage spans 2012–present on new reporting site; older data in archival formats
+
+---
+
+## Source Coverage Analysis
+
+Arkansas's Secretary of State provides election results via ZIP file downloads (2012–present) and PDF archives, but coverage is limited to vote tallies by county and polling location. An ongoing vendor transition introduces reliability risk for current-cycle data, and the source entirely lacks ballot measure details, candidate biographical information, district boundary data, and incumbent metadata. **Google Civic API** and **Ballotpedia** should be used to fill candidate, official, and ballot measure gaps; **MEDSL** provides normalized historical result CSVs as a cross-reference; during the transition period, **Ballotpedia** certified result data can serve as a fallback. Direct contact with the SOS office (`electionsemail@sos.arkansas.gov`) may be necessary for custom data requests.

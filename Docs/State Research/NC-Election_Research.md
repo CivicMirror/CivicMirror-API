@@ -73,3 +73,9 @@ No formal REST API, but the **public FTP site** provides bulk data downloads equ
 - Voter history files linkable to registration files for comprehensive analysis
 - Data files updated weekly (Saturdays) for voter registration and history
 - One of the best state election data systems nationwide
+
+---
+
+## Source Coverage Analysis
+
+North Carolina is one of the strongest state sources in the country, providing 30+ years of precinct-level historical results, GIS/boundary files, live election night results (updated every 5–10 minutes), voter registration snapshots, and voter history data — all via a well-documented public FTP site. Primary gaps are structured ballot measure metadata (type classification), candidate contact/bio/platform information, and explicit incumbency/term data, which are not provided by the state source. These gaps can be filled using **Ballotpedia** (ballot measure type and detail, candidate bios, incumbency), **Google Civic Information API** (candidate contact info, office/term data, district lookups), **OpenStates** (NC General Assembly legislative data), and **OpenFEC** (federal candidate campaign finance). NC's own GIS files and live dashboard reduce reliance on external sources for boundary data and real-time results.

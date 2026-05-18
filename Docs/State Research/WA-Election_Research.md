@@ -72,3 +72,8 @@ No dedicated REST API identified. Extensive downloadable data and searchable web
 - Unofficial results posted by county clerks within 4 hours of polls closing
 - Daily ballot statistics tracking during election period
 - EAVS survey data available through EAC
+---
+
+## Source Coverage Analysis
+
+Washington is one of the stronger state sources for geographic data and structured downloads — GIS precinct shapefiles are publicly available, daily ballot-return tabulations are published during active voting periods, and results exports are well-organized. However, ballot measure data is critically absent for CivicMirror purposes: Washington is one of the most active initiative states in the US, and its frequent statewide referendums, initiatives, and advisory votes are not explicitly covered in the state source documentation. Supplement with **Ballotpedia** (ballot measures, candidate bios, incumbency) as the highest-priority supplementary source; **Google Civic Information API** (candidates, district boundaries, election types); **OpenStates** (WA state legislative incumbents); **OpenFEC** (federal candidates); and **MEDSL** for certified historical results.

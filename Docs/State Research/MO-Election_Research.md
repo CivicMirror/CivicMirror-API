@@ -37,3 +37,9 @@ No public REST API identified.
 
 - 114 counties + City of St. Louis (independent city)
 - Results organized by election year and type
+
+---
+
+## Source Coverage Analysis
+
+Missouri's SOS source covers only historical election results (voter turnout statistics, county-level results by year/type) and provides no structured API, live results feed, ballot measure data, or candidate metadata. Missouri's prolific ballot initiative culture makes the ballot measure gap especially significant. All candidate metadata, incumbent/official data, and district boundary information must be sourced externally: use **Ballotpedia** for ballot measures and candidate bios, **Google Civic Information API** for candidate/district/election type data, **OpenStates** for state legislative incumbents, **OpenFEC** for federal candidates, and **MEDSL** for normalized historical results.

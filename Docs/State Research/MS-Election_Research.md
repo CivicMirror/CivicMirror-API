@@ -37,3 +37,9 @@ No public REST API identified.
 
 - 82 counties
 - Results organized by election type and year
+
+---
+
+## Source Coverage Analysis
+
+Mississippi's SOS source is among the weakest for machine-readable data in this research set: results are available primarily as HTML web pages and PDF reports, with no public API, no confirmed CSV downloads, and no real-time results feed. Virtually all structured data requirements must be met by supplementary sources. Use **Ballotpedia** for ballot measures and candidate bios, **Google Civic Information API** for candidate/district/election type data, **OpenStates** for state legislative incumbents, **OpenFEC** for federal candidate data, **MEDSL** for normalized machine-readable historical results, and check whether Mississippi counties use **Clarity Elections** (`results.enr.clarityelections.com`) for live election night data.

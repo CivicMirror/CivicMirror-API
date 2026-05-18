@@ -36,3 +36,9 @@ No public REST API identified.
 
 - 56 counties
 - Small population allows for relatively simple data structure
+
+---
+
+## Source Coverage Analysis
+
+Montana's SOS source provides canvass reports and limited CSV exports for election results, but coverage is primarily PDF-centric and lacks an API, live results feed, ballot measure data, or candidate metadata. Montana has an active ballot initiative process, making the ballot measure gap especially relevant. Gaps should be filled using **Ballotpedia** (ballot measures, candidate bios), **Google Civic Information API** (candidates, districts, election types), **OpenStates** (state legislative incumbents), **OpenFEC** (federal candidates), and **MEDSL** for normalized historical CSV data. Verify whether Montana counties or the SOS use **Clarity Elections** for live election night reporting.

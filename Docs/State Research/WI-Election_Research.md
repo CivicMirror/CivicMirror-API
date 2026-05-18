@@ -68,3 +68,8 @@ No public REST API identified. No statewide election night feed exists. Associat
 - Local election results maintained by municipal officials
 - Counties must post unofficial results within 2 hours of polls closing (by law)
 - OpenElections project provides pre-processed data on GitHub
+---
+
+## Source Coverage Analysis
+
+Wisconsin has the most decentralized election administration system in the country — 72 independent county clerks and no statewide live results feed — making it the most difficult state for real-time integration. Ward-by-ward XLSX downloads and OpenElections CSVs provide a foundation for historical data, but no API exists, ballot measure data is not explicitly covered, and candidate biographical/contact information and incumbent metadata are absent. **Google Civic Information API** and **Ballotpedia** are the recommended supplements for candidate profiles, ballot measures, and officials; **OpenStates** covers Wisconsin legislative incumbents; and **OpenFEC** adds federal candidate data. Because no statewide live results exist, an AP wire feed or county-by-county Clarity Elections survey is required for election night coverage.

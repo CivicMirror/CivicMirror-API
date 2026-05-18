@@ -58,3 +58,8 @@ No public REST API identified.
 - GoVoteTN app provides voter information portal
 - County totals split into district ranges for download
 - Division of Elections manages statewide data
+---
+
+## Source Coverage Analysis
+
+Tennessee's SOS provides web-based tabular election results for General and Primary elections and an election night reporting dashboard (`elections.tn.gov`), making it one of the few states in this batch with a documented live results feed from the state. However, ballot measure data, candidate biographical/contact information, official/incumbent records, and district GeoJSON are absent from the state source. Supplement with **Google Civic Information API** (candidates, districts, official incumbency), **Ballotpedia** (ballot measures, candidate bios, and incumbency), **OpenStates** (TN state legislative data), and **OpenFEC** (federal candidate and campaign finance data). Verify that the `elections.tn.gov` live system uses a structured data API (not just web display) to enable direct polling.

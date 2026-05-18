@@ -54,3 +54,9 @@ Connecticut provides election results through multiple channels: a historical el
 - Historical depth is exceptional (1787–present)
 - EMS system used for all elections since August 2018
 - Municipal results available from 2001 onward in the historical database
+
+---
+
+## Source Coverage Analysis
+
+Connecticut offers strong historical depth (1787–present via `electionhistory.ct.gov`) and a Socrata/SODA API via `data.ct.gov` for structured programmatic access to voter turnout and results, with real-time town-by-town reporting through the EMS system. However, the Socrata dataset's coverage of ballot measures, primaries, and special elections requires verification, and all candidate biographical data, contact information, platform statements, incumbent metadata, and district GeoJSON are absent. **Google Civic API** and **Ballotpedia** should supply candidate and official detail; **OpenStates** covers state legislative incumbents; and **MEDSL** provides normalized historical result CSVs for cross-validation. The Socrata endpoint at `data.ct.gov` is the recommended integration path for programmatic access.

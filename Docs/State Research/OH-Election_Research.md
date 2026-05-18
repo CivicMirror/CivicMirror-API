@@ -66,3 +66,8 @@ No traditional REST API, but the DATA Act portal provides:
 - Ohio is one of 8 states with fully decentralized election administration
 - Precinct-level data available as XLSX
 - 8+ million voter records in system
+---
+
+## Source Coverage Analysis
+
+Ohio's SOS provides a dedicated DATA Act transparency portal, precinct-level XLSX downloads, a live election night dashboard (`liveresults.ohiosos.gov`), and access to voter registration data — making it one of the more complete state sources in this batch for live results and historical election data. However, ballot measures are not clearly documented as a structured data category (they may be embedded in the XLSX under "Issues"), pre-2016 precinct data is inconsistent, and candidate biographical/contact data, platform statements, official/incumbent records, and GeoJSON district boundaries are absent. Supplement with **Google Civic Information API** (candidates, districts, official incumbency), **Ballotpedia** (ballot measures, candidate bios, and incumbency confirmation), **OpenStates** (Ohio state legislative data), and **OpenFEC** (federal candidates and campaign finance).

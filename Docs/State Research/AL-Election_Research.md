@@ -47,3 +47,9 @@ No public REST API identified. Data access is through:
 - Election night site and certified results are on different subdomains
 - No programmatic API or structured data feed was identified
 - Excel files require manual download or URL construction based on naming patterns
+
+---
+
+## Source Coverage Analysis
+
+Alabama's primary data source (Secretary of State Excel downloads and the `alabamavotes.gov` election night portal) covers historical certified results and basic party-delineated vote tallies but leaves significant gaps relative to CivicMirror requirements. Ballot measures, candidate contact and biographical information, incumbent status, and district boundary data (GeoJSON/FIPS) are entirely absent from state-provided files. These gaps should be filled using **Google Civic API** (officials, districts, ballot measures by address), **Ballotpedia** (candidate profiles and ballot measure text), **OpenStates** (state legislative data), and **MEDSL** (historical result normalization). Real-time election night data format should be verified on the next available election before relying on the export function.

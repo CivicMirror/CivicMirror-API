@@ -56,3 +56,8 @@ No public REST API identified. Data access is through:
 - Local/unofficial results not reported to State Board
 - County-by-county data available from 1998 onward
 - Voter file available with history for qualified requestors
+---
+
+## Source Coverage Analysis
+
+Illinois's State Board of Elections is one of the stronger state sources in this batch, explicitly covering all four required election types (Primary, General, Consolidated, Special) from 2009 onward with county-level results and a voter file with 15-election history. However, ballot measures, candidate biographical/contact data, official/incumbent records, and geographic boundary data are entirely absent, and live results are fragmented across 108 independent election authorities. **Ballotpedia** and **Google Civic Information API** are the primary recommended supplements for candidate profiles, ballot measures, and district boundaries; **OpenStates** covers state legislative incumbents; and individual election authority websites (or a **Clarity Elections** aggregation) should be evaluated for live result ingestion.

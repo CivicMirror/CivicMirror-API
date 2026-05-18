@@ -47,3 +47,8 @@ No public REST API identified.
 - County websites provide local/county race results
 - Precinct-level data limited to statewide/legislative contests at state level
 - Office established 1869 (territorial secretary)
+---
+
+## Source Coverage Analysis
+
+Wyoming provides PDF and Excel election result downloads including precinct-by-precinct data, write-ins, undervotes, and overvotes, and notably includes judicial retentions and ballot issues within the same download structure — giving it slightly better ballot measure coverage than comparable small states. However, the state source has no REST API, no candidate profiles, no officials/incumbency data, and no district boundary files; local and county-level results require visiting individual county websites. Gaps in candidate data, structured ballot measure type classification, officials/incumbents, and district boundaries should be supplemented using **Google Civic Information API** (elections, candidates, district lookups), **Ballotpedia** (ballot measure type detail, candidate bios, incumbency), **OpenStates** (Wyoming state legislative data), and **OpenFEC** (federal candidate and campaign finance filings). Live election night results are not available from the state source and should be investigated via **Clarity Elections** or covered post-election through **MEDSL**.

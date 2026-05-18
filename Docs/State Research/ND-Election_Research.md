@@ -34,3 +34,9 @@ No public REST API identified.
 - 53 counties
 - No voter registration requirement (only state without it)
 - Voter ID required at polls instead
+
+---
+
+## Source Coverage Analysis
+
+North Dakota's SOS website provides county-level historical results via downloadable files, but offers no API, no structured election-type metadata, no ballot measure data, and no candidate profile information. The state's unique characteristic of having no voter registration requirement (the only such state in the US) means some voter-derived supplementary data approaches used elsewhere will not apply. All gaps in candidate data, ballot measures, officials/incumbents, and district boundaries should be filled using **Google Civic Information API** (elections, candidates, district boundaries by address), **Ballotpedia** (ballot measures, candidate bios, incumbency), **OpenStates** (ND state legislative data), and **OpenFEC** (federal candidate and finance filings). Live election night results are not available from the state source and should be investigated via **Clarity Elections** or covered post-election through **MEDSL**.

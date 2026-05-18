@@ -55,3 +55,8 @@ Hawaii provides election results through the Office of Elections website with bo
 - Four counties: Hawaii, Maui, Kauai, City & County of Honolulu
 - Historical coverage from 1992 to present
 - Contact: elections@hawaii.gov / (808) 453-8683
+---
+
+## Source Coverage Analysis
+
+Hawaii's primary source (Office of Elections + Open Data Portal) provides strong historical results coverage (1992–2024) for Primary and General elections at the precinct level, accessible via CKAN API and text file downloads. However, it does not expose Special election data, ballot measures, candidate biographical or contact information, incumbent/official records, or geographic boundary data. These gaps should be filled with **Google Civic Information API** (candidates, officials, districts), **Ballotpedia** (ballot measures, candidate profiles), and **OpenFEC** for federal candidate finance and contact data. Batch election-night runs partially satisfy near-real-time needs but a Clarity Elections integration (if applicable to Hawaii counties) should be investigated for live reporting.

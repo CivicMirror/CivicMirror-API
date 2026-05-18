@@ -32,3 +32,9 @@ No public REST API identified.
 
 - 17 counties (including Carson City as independent city)
 - Clark County (Las Vegas) contains majority of voters
+
+---
+
+## Source Coverage Analysis
+
+Nevada's SOS website provides county- and precinct-level historical results via downloadable reports, but offers no API, no structured election-type categorization, no ballot measure data, and no candidate profile information. Clark County (containing the majority of Nevada voters) may have independent reporting infrastructure, but no **Clarity Elections** integration is currently documented. Gaps across candidate data, ballot measures, officials/incumbents, GeoJSON boundaries, and live results should be filled using **Google Civic Information API** (elections, candidates, districts by address), **Ballotpedia** (ballot measures, candidate bios, incumbency), **OpenStates** (state legislative data), and **OpenFEC** (federal campaign finance and candidate filings). Live election night coverage should be investigated via **Clarity Elections** at the county level for Clark and Washoe counties.
