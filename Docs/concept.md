@@ -70,6 +70,41 @@ The following are target sources for aggregation. This list is not exhaustive an
 | [OpenFEC (FEC API)](https://api.open.fec.gov/developers/) | Federal | REST/JSON | Campaign finance, candidates, filings |
 | [MIT Election Data Lab](https://electionlab.mit.edu/data) | Federal, State | CSV/JSON | Historical results |
 | [EAVS (EAC)](https://www.eac.gov/research-and-data/election-administration-voting-survey) | State | CSV | Election admin statistics |
+| [Clarity Elections (SOE Software)](https://www.soesoftware.com/product/clarity-election-night-reporting/) | State, Local | XML/JSON | Live ENR for 40+ states via `results.enr.clarityelections.com` |
+
+---
+
+## Clarity Elections — Results Ingestion
+
+[Clarity Elections](https://www.soesoftware.com/product/clarity-election-night-reporting/) (by SOE Software, now Scytl) powers election night reporting for roughly 40 states and hundreds of counties. Results sites are recognizable by URLs beginning with `https://results.enr.clarityelections.com/{STATE}/{electionId}/`.
+
+### How Clarity Works
+
+Results are published in two formats:
+- **ZIP + XML** (`detailxml.zip`) — full precinct-level detail; the canonical format
+- **JSON API** — summary-level results; lighter weight, good for live polling
+
+The data version is exposed at `/{state}/{electionId}/current_ver.txt`. Always fetch this first and re-fetch the data only when the version changes (efficient live polling).
+
+### Useful Libraries
+
+| Repo | PyPI | Description |
+|---|---|---|
+| [`openelections/clarify`](https://github.com/openelections/clarify) | `clarify` | Discovers sub-jurisdiction URLs and parses Clarity XML into Python objects (`Jurisdiction`, `Parser`, `Contest`, `Result`). Handles state → county → precinct hierarchy. |
+| [`washingtonpost/elex-clarity`](https://github.com/washingtonpost/elex-clarity) | `elex-clarity` | CLI tool for fetching and formatting Clarity results at state, county, or precinct level; outputs normalized JSON; supports local file parsing for testing. |
+
+> **Note:** [`clearcontracts.github.io/clarity-api`](https://clearcontracts.github.io/clarity-api/) documents a blockchain/DAO governance platform that also uses the "Clarity" name — it is **not** related to election night reporting.
+
+### Integration Strategy
+
+- Use `clarify` (`Jurisdiction` class) to walk the state → county → precinct hierarchy and locate `detailxml.zip` URLs for detailed results
+- Use `elex-clarity` as a reference implementation for JSON-based live polling and result normalization
+- Cache `current_ver.txt` value; skip re-fetch if unchanged (reduces load, avoids rate limits)
+- Result type should be `UNOFFICIAL` during live reporting; only promote to `OFFICIAL` via an explicit admin action or a confirmed certification signal
+
+### States Known to Use Clarity
+
+WV, CO, IA, SC, GA (partial), and others. Access varies — some states return 403; consult `Docs/State Research/` for per-state access status.
 
 ---
 

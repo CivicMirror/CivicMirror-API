@@ -46,3 +46,9 @@ No public REST API identified. Data access is through:
 - Ranked-choice voting used for federal elections
 - Electoral votes split by congressional district (2 districts + 2 at-large)
 - Town-level granularity for results
+
+---
+
+## Source Coverage Analysis
+
+Maine's primary data source (maine.gov/sos) covers historical election results and RCV round-by-round Cast Vote Records well, but provides no structured data for ballot measures, candidate metadata (contact, party affiliation, platform), official/incumbent information, or geographic district boundaries. No public REST API or real-time results feed exists. Gaps should be filled with **Google Civic Information API** (candidates, districts, election types), **Ballotpedia** (ballot measures, candidate bios), **OpenStates** (state legislative incumbents and terms), **OpenFEC** (federal candidate finance/contact data), and **MEDSL** for normalized historical results. **Clarity Elections** does not appear to be in use for Maine.

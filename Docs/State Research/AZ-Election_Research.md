@@ -53,3 +53,9 @@ No REST API identified, but the XML feed provides equivalent functionality for r
 - County-level detail requires visiting individual county websites for some data
 - The FTP feed is the recommended approach for programmatic access
 - Update frequency capped at once per 2 minutes during election night
+
+---
+
+## Source Coverage Analysis
+
+Arizona offers one of the most developer-friendly state data feeds — a structured XML/FTP feed updating every two minutes on election night at the summary and precinct levels — making it excellent for live results integration. However, the feed is scoped to vote tallies and does not include candidate biographical data, contact information, platform statements, district boundary GeoJSON, or incumbent metadata. **Ballotpedia** and **Google Civic API** should supplement candidate, ballot measure, and official data; **Google Civic API** also provides district/jurisdiction GeoJSON. The XML schema should be reviewed on the next election to confirm ballot measure contest inclusion and enumerate supported election types.

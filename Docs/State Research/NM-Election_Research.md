@@ -32,3 +32,9 @@ No public REST API identified.
 
 - 33 counties
 - Results available after canvass certification
+
+---
+
+## Source Coverage Analysis
+
+New Mexico's SOS website provides canvass-level certified results via PDF/CSV downloads, with no public REST API, no ballot measure data, and no candidate profile information. The research file notes "election night reporting" exists but does not identify the platform — this should be investigated for potential **Clarity Elections** (`results.enr.clarityelections.com`) integration. All gaps in candidate data, ballot measures, officials/incumbents, and GeoJSON boundaries should be supplemented using **Google Civic Information API**, **Ballotpedia** (ballot measures, candidate bios, incumbency), **OpenStates** (state legislative data), and **OpenFEC** (federal races). Follow-up research is needed to confirm the election night reporting platform and whether structured live data is accessible.

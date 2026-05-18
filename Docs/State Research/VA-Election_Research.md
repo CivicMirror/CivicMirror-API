@@ -77,3 +77,8 @@ Virginia has one of the more comprehensive election data systems in the nation. 
 - Odd-year election state (governor, legislature in odd years)
 - Rich historical data going back to 1789
 - VPAP provides excellent third-party data analysis
+---
+
+## Source Coverage Analysis
+
+Virginia is one of the most capable state sources in the country, providing JSON result files updated every 60 seconds on election night, shapefile and geodatabase district boundaries, a searchable historical results database back to 1789, candidate filing lists, and a robust companion data layer from the Virginia Public Access Project (VPAP). Primary gaps are deep candidate biographical/contact data, platform statements, and explicit official/incumbent term-date records, which the ELECT system does not publish in bulk. These gaps can be filled using **Google Civic Information API** (candidate contact, office/term data), **Ballotpedia** (candidate bios, ballot measure classification, incumbency), **OpenStates** (Virginia General Assembly legislative data), and **OpenFEC** (federal candidate campaign finance). Virginia's own JSON real-time feed and GIS geodatabases significantly reduce reliance on external sources for results and boundaries.

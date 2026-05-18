@@ -33,3 +33,9 @@ No public REST API identified.
 - 21 counties
 - County clerk offices manage elections locally
 - Results organized by election year and type
+
+---
+
+## Source Coverage Analysis
+
+New Jersey's Division of Elections provides county-level certified results organized by election year and type, but no public REST API, no ballot measure data, and no candidate profile information are available from the state source. The county-clerk-managed election model means live results may exist at individual county levels (potentially via **Clarity Elections**), but this is not currently documented. Candidate data, ballot measures, officials/incumbents, and district boundaries should be supplemented using **Google Civic Information API** (elections, candidates, district lookups), **Ballotpedia** (ballot measures, candidate bios, incumbency), **OpenStates** (NJ legislative data), and **OpenFEC** (federal races and campaign finance). Live/real-time coverage should be investigated at the county level for **Clarity Elections** adoption across NJ's 21 county clerks.

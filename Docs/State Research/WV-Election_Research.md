@@ -66,3 +66,8 @@ No public REST API identified. Online Data Services portal provides downloadable
 - Color-coded result status: Gray=Unavailable, Yellow=Unofficial, Green=Official
 - Voter data usage restricted (no commercial/charitable solicitation)
 - Pre-2008 historical data in Blue Book format
+---
+
+## Source Coverage Analysis
+
+West Virginia's SOS online portal covers election results 2008–present and provides candidate search tools (2012–present), offering better-than-average candidate name data for a state without a public API. However, ballot measure data, candidate biographical/contact details, official/incumbent records, district boundaries, and a real-time live results feed are all absent from the state source. WV is a confirmed Clarity Elections state (see `WV-Results-Adapter-Plan.md`) and the Clarity adapter is the highest-priority live data integration target for this state. Supplement remaining gaps with **Google Civic Information API** (candidates, districts, election types), **Ballotpedia** (ballot measures, candidate bios, incumbency), **OpenStates** (WV legislative data), **OpenFEC** (federal candidates), and **MEDSL** for pre-2008 historical results.

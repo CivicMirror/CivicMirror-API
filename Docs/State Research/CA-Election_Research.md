@@ -125,3 +125,9 @@ Official documentation available as PDF:
 - County-level results available; precinct data available through flat files
 - SOS only certifies state and federal contests; local results via county elections offices
 - Campaign finance data available separately through CAL-ACCESS at https://cal-access.sos.ca.gov/
+
+---
+
+## Source Coverage Analysis
+
+California's Secretary of State provides one of the most comprehensive state election APIs in the US — a live REST API with JSON/CSV output covering statewide results, ballot measures, and a basic incumbent flag — making it a strong primary source for election results. Key gaps remain: candidate contact information, biographical data, platform statements, and district GeoJSON/FIPS boundaries are not provided by the SOS API, and local (sub-state) results require separate county-level access or use of CEDA. **Google Civic API** fills district, incumbent detail, and candidate contact gaps; **Ballotpedia** provides candidate profiles and platform data; **OpenStates** covers state legislative detail; and **OpenFEC** supplements federal campaign finance. Note that API endpoint contest IDs change each election cycle and must be refreshed from `json-endpoints.csv` on `media.sos.ca.gov`.

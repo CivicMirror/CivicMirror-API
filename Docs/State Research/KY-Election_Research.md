@@ -41,3 +41,8 @@ No public REST API identified. Data access is through:
 - 120 counties in Kentucky
 - State Board of Elections oversees election administration
 - Campaign finance data through Registry of Election Finance
+---
+
+## Source Coverage Analysis
+
+Kentucky's State Board of Elections portal provides county- and precinct-level historical results and a separate Registry of Election Finance for campaign data, but the state source as currently documented is the least detailed in this batch — election type enumeration, ballot measure data, candidate profiles, official/incumbent records, and geographic boundaries are all absent, and no live results feed is identified. This file should be revisited for completeness. In the interim, **Google Civic Information API** and **Ballotpedia** are the primary recommended supplements for all missing data categories; **OpenStates** covers Kentucky legislative incumbents; and **Clarity Elections** should be specifically investigated given Kentucky's 120-county structure.

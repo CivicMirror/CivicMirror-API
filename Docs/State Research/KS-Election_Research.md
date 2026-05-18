@@ -51,3 +51,8 @@ No public REST API identified. Data access is through:
 - Results in PDF format include official vote totals with candidate names, votes, and percentages
 - Advance mail ballot tracking by party affiliation available since 2020
 - Kansas allows provisional ballots for any reason (higher percentage than national average)
+---
+
+## Source Coverage Analysis
+
+Kansas's SOS site offers precinct-level PDF and Excel vote results from 2004 onward across 105 counties, with useful party-level registration and advance voting statistics, but the source is one of the thinner in this batch — ballot measures, candidate biographical data, official records, and geographic boundaries are entirely absent, and no live results feed exists. **Google Civic Information API** and **Ballotpedia** are essential supplements for candidate profiles, ballot measures, and district boundaries; **OpenStates** covers state legislative incumbents; and the absence of a real-time feed means **Clarity Elections** integrations at the county level should be investigated, particularly given Kansas's high provisional-ballot usage.

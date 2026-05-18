@@ -65,3 +65,9 @@ No public REST API identified. Data access is through:
 - County election officials have 60 days post-election to record all voting credit (per O.C.G.A. 21-2-215(i))
 - Turnout numbers may increase in small increments for several days post-election
 - CVR (Cast Vote Record) data published by some counties
+
+---
+
+## Source Coverage Analysis
+
+Georgia's Election Data Hub and partial Clarity Elections usage provide reasonable coverage for modern election results and real-time turnout tracking, but pre-2012 results are locked in PDFs and the state source entirely lacks ballot measure data, candidate biographical information, district GeoJSON, and incumbent metadata. The partial Clarity Elections integration (`results.enr.clarityelections.com`) should be mapped to specific election cycles to determine when to use Clarity vs. the data hub as the ingestion source. **Google Civic API** fills district, official, and candidate contact gaps; **Ballotpedia** provides candidate profiles and ballot measure content; **MEDSL** provides normalized historical CSVs as a PDF-free substitute for pre-2012 data; and **OpenStates** covers state legislative incumbents.

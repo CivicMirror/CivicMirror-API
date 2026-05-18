@@ -58,3 +58,8 @@ No public REST API identified. Data access is through:
 - Precinct-level data available in Excel format
 - Pre-2004 data available upon request
 - Contact: election@ks.gov (Kansas) — Iowa: sos.iowa.gov
+---
+
+## Source Coverage Analysis
+
+Iowa's Secretary of State site offers precinct-level vote totals (Excel by county) and archived historical results, and notably lists Precinct and District Shapefiles as available — making it one of the stronger sources for geographic boundary data in this batch, though GeoJSON/FIPS format needs confirmation. The state source provides no ballot measure data, candidate profiles, or official/incumbent records, and exposes no live results feed. **Google Civic Information API** and **Ballotpedia** should be used to fill candidate, ballot measure, and official gaps; the shapefile availability should be verified and converted to GeoJSON, and **Clarity Elections** checked at the county level for live reporting.

@@ -62,3 +62,9 @@ Michigan provides election results through the Secretary of State's website with
 - Board of State Canvassers certifies results
 - Paper ballot / optical scan system statewide
 - Member of ERIC (Electronic Registration Information Center)
+
+---
+
+## Source Coverage Analysis
+
+Michigan has notable data infrastructure: the community-built **michiganelections.io** REST API (by Citizen Labs) provides programmatic access to elections, ballot proposals, voter registrations, and candidate positions — making Michigan better covered than most states for ballot measures and basic candidate data. However, gaps remain in official incumbent/term-date data, geographic district boundaries (GeoJSON/FIPS), and deep candidate metadata (contact info, platform statements). These gaps should be supplemented with **Google Civic Information API** (districts, candidate contact), **Ballotpedia** (candidate bios, ballot measure classification), **OpenStates** (state legislative incumbents), and **MEDSL** for normalized historical results.

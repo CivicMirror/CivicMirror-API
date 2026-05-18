@@ -50,3 +50,8 @@ No public REST API identified. Data access is through:
 - Vote center system adopted by nearly half of counties since 2001
 - Voter file access: $5,000 annual subscription fee for computerized access
 - Limited to political parties, media organizations, and elected officials
+---
+
+## Source Coverage Analysis
+
+Indiana's SOS archive and IndianaVoters portal provide reasonable historical coverage (2002–2024) and uniquely reference "candidate lists" and "public questions" — giving partial coverage of candidate names and ballot measures that most peer states lack. However, full candidate contact, biography, party, and platform data are absent, as are official/incumbent records and geographic boundary data, and no live results feed is identified. **Google Civic Information API** and **Ballotpedia** are the recommended supplements for complete candidate profiles and ballot measure taxonomy; **OpenStates** covers state legislative incumbents; and county election boards should be assessed for **Clarity Elections** live reporting capability.

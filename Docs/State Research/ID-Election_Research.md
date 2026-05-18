@@ -57,3 +57,8 @@ No public REST API identified. Data access is through:
 - Canvass database is the best tool for historical lookups
 - Election night reporting begins after 9 PM MST
 - Local district/race results available through county election offices
+---
+
+## Source Coverage Analysis
+
+Idaho's VoteIdaho.gov platform and legacy SOS archive provide excellent historical coverage (1990–2024) through a searchable Canvass database and downloadable ZIP/Excel files for Primary and General elections, but Special elections, ballot measures, candidate profiles, official records, and geographic boundary data are entirely absent from the state source. The platform migration from sos.idaho.gov to voteidaho.gov should be monitored for API additions. **Google Civic Information API** and **Ballotpedia** are the recommended supplementary sources for candidate data, ballot measures, and officials; **OpenFEC** covers federal candidates; and local county election offices should be checked for **Clarity Elections** live reporting.

@@ -48,3 +48,9 @@ No public REST API identified. Data access is through:
 - 87 counties
 - Election Day voter registration available
 - Strong tradition of high voter turnout
+
+---
+
+## Source Coverage Analysis
+
+Minnesota is one of the stronger state sources in this group: GIS district shapefiles are directly available, real-time election night results are served via a dedicated portal, and historical CSV/Excel data is well-organized. The primary gaps are candidate metadata (contact information, party affiliation, platform statements) and ballot measure data, neither of which is covered by the SOS results portal. These gaps should be filled using **Google Civic Information API** (candidate data, election type metadata), **Ballotpedia** (ballot measures, candidate bios), **OpenStates** (state legislative incumbents and bills), and **OpenFEC** for federal candidate finance and contact data.

@@ -52,3 +52,9 @@ No public REST API identified. Data access is through:
 - Results can be filtered by race, district, county
 - Archive goes back to 1940 with increasing detail in modern elections
 - Three counties only (New Castle, Kent, Sussex) simplifies geographic data
+
+---
+
+## Source Coverage Analysis
+
+Delaware's primary data source provides CSV downloads for historical results (1940–2025) with multi-view options (statewide, by district, by county) but offers no live election night feed, no ballot measure data, and no candidate biographical or contact information. The state's small size (three counties, predictable URL patterns) makes CSV scraping straightforward, but the absence of real-time data is a notable gap — **Clarity Elections** should be investigated to determine if any Delaware county uses the platform. **Google Civic API** fills district, incumbent, and candidate contact gaps; **Ballotpedia** provides candidate profiles and ballot measure content; **OpenStates** covers state legislative officials; and **MEDSL** provides historical result normalization.

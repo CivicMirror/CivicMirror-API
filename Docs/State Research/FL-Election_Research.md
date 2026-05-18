@@ -71,3 +71,9 @@ No dedicated REST API identified, but multiple structured download endpoints:
 - 67 county Supervisors of Elections submit data to state
 - Turnout data extends back to 1954
 - Public records law means email addresses to DOS are public records
+
+---
+
+## Source Coverage Analysis
+
+Florida's election data infrastructure is among the most comprehensive in the country, with explicitly typed election archives (General, Primary, Presidential Preference Primary, Special) from 1978, precinct-level data from 2012, and multiple structured download formats. Gaps remain in candidate biographical and contact data, incumbent metadata, district GeoJSON, and confirmation of ballot measure as a distinct structured data category — ballot measure data should be confirmed by reviewing the Election Watch file layout documentation. **Google Civic API** fills district, official, and candidate contact gaps; **Ballotpedia** provides candidate profiles and confirmed ballot measure text; **OpenStates** supplements state legislative data; **OpenFEC** adds federal campaign finance; and **EAVS/EAC** data (already referenced in the research notes) provides election administration statistics.

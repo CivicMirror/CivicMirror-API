@@ -61,3 +61,8 @@ No public REST API identified. Data available through formal request process.
 - Large data files (~150MB for statewide voter registration)
 - Some data classified as "private" under Utah law
 - Voter date-of-birth restrictions (day/month not provided)
+---
+
+## Source Coverage Analysis
+
+Utah's election data is primarily accessible via the Lt. Governor's election portal in Excel/CSV format, but the state requires paid data requests for many detailed datasets, creating a cost barrier for comprehensive ingestion. The state is also a primarily vote-by-mail jurisdiction with early reporting patterns. No API, live feed, ballot measure data, or candidate profile information is documented for free public access. Supplement with **Google Civic Information API** (candidates, districts, election types), **Ballotpedia** (ballot measures, candidate bios, incumbency), **OpenStates** (UT state legislative data), and **OpenFEC** (federal candidates). For result data, **MEDSL** provides a cost-free alternative to UT's paid downloads for historical election result normalization.

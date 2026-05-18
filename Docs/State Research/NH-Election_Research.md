@@ -32,3 +32,9 @@ No public REST API identified.
 
 - 10 counties, but results organized by town/ward
 - 234 towns, cities, and unincorporated places
+
+---
+
+## Source Coverage Analysis
+
+New Hampshire's SOS website provides town-level historical results via downloadable files, but has no API, no structured election-type metadata, no ballot measure data, and no candidate profile information. The state's unique town/ward-based (rather than county-based) governance structure adds integration complexity, particularly for district and boundary mapping. All gaps in candidate info, ballot measures, officials/incumbents, and district boundaries should be supplemented with **Google Civic Information API** (elections, candidate info, boundary lookups by address), **Ballotpedia** (ballot measures, candidate bios, incumbency status), **OpenStates** (state legislative data), and **OpenFEC** (federal candidate and finance data). Live election night results are not available from the state source and should be investigated via **Clarity Elections** or covered post-election through **MEDSL**.

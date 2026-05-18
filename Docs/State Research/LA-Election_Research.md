@@ -46,3 +46,8 @@ No public REST API identified. Data access is through:
 - Unique "jungle primary" system — all candidates on single ballot
 - Runoff elections common
 - Registration data includes party and race breakdowns
+---
+
+## Source Coverage Analysis
+
+Louisiana's SOS portal provides historical results and voter registration data broken down by party and race across 64 parishes, and the state's distinctive "jungle primary" / top-two runoff system is an important data-modeling note — the CivicMirror election type taxonomy should accommodate a "Non-Partisan Open / Jungle Primary" subtype for Louisiana. Ballot measures, candidate profiles, official/incumbent records, and parish geographic boundaries are all absent from the state source, and no live results feed is documented. **Google Civic Information API** and **Ballotpedia** are recommended to fill candidate and ballot measure gaps; **OpenStates** covers Louisiana legislative incumbents; and individual parish election offices should be assessed for **Clarity Elections** live result feeds.
