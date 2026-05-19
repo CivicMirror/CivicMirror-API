@@ -2,21 +2,34 @@
 
 This guide covers deploying CivicMirror API to Google Cloud Run with Cloud SQL (PostgreSQL), Cloud Memorystore (Redis), and Cloud Scheduler.
 
+## Project architecture
+
+Both the CivicMirror frontend and this API backend share the **`civicmirror-2026`** GCP project. The project has three Cloud Run services:
+
+| Service | Description |
+|---|---|
+| `civicmirror-frontend` | CivicMirror web app (existing) |
+| `civicmirror-backend` | This Django/Celery API (new) |
+| `civicmirror-worker` | Celery worker for background tasks (new) |
+
+Shared infrastructure (Cloud SQL, Memorystore, Artifact Registry) is reused where it already exists.
+
 ---
 
 ## Prerequisites
 
-- `gcloud` CLI installed and authenticated
+- `gcloud` CLI installed and authenticated (`gcloud auth login`)
 - Docker installed
-- GCP project created; billing enabled
+- Already a member of the `civicmirror-2026` GCP project
 - GitHub repository: `tokendad/CivicMirror-API`
 
 ```bash
-export PROJECT_ID=civicmirror-prod
+export PROJECT_ID=civicmirror-2026
 export REGION=us-central1
 export REPO=civicmirror-api
-export API_SERVICE=civicmirror-api
+export API_SERVICE=civicmirror-backend
 export WORKER_SERVICE=civicmirror-worker
+export FRONTEND_SERVICE=civicmirror-frontend   # existing frontend service
 export SCHEDULER_SA=civicmirror-scheduler
 
 gcloud config set project $PROJECT_ID
@@ -26,6 +39,8 @@ gcloud config set run/region $REGION
 ---
 
 ## 1. Enable APIs
+
+Most of these are already enabled if the frontend is deployed. Run to be safe — enabling an already-enabled API is a no-op.
 
 ```bash
 gcloud services enable \
@@ -69,12 +84,12 @@ gcloud sql users create civicmirror \
 
 # Note the connection name:
 gcloud sql instances describe civicmirror-db --format='value(connectionName)'
-# → civicmirror-prod:us-central1:civicmirror-db
+# → civicmirror-2026:us-central1:civicmirror-db
 ```
 
 Set `DATABASE_URL` as:
 ```
-postgresql://civicmirror:<password>@/civicmirror_api?host=/cloudsql/civicmirror-prod:us-central1:civicmirror-db
+postgresql://civicmirror:<password>@/civicmirror_api?host=/cloudsql/civicmirror-2026:us-central1:civicmirror-db
 ```
 
 ---
@@ -160,7 +175,7 @@ gcloud run jobs create civicmirror-migrate \
   --command=docker-entrypoint.sh \
   --args=migrate \
   --service-account=$SA_EMAIL \
-  --set-cloudsql-instances=civicmirror-prod:us-central1:civicmirror-db \
+  --set-cloudsql-instances=civicmirror-2026:us-central1:civicmirror-db \
   --set-secrets="DATABASE_URL=database-url:latest,SECRET_KEY=django-secret-key:latest" \
   --region=$REGION
 
@@ -175,7 +190,7 @@ gcloud run deploy $API_SERVICE \
   --memory=512Mi \
   --cpu=1 \
   --timeout=60 \
-  --set-cloudsql-instances=civicmirror-prod:us-central1:civicmirror-db \
+  --set-cloudsql-instances=civicmirror-2026:us-central1:civicmirror-db \
   --set-secrets="\
 SECRET_KEY=django-secret-key:latest,\
 DATABASE_URL=database-url:latest,\
@@ -210,7 +225,7 @@ gcloud run deploy $WORKER_SERVICE \
   --cpu=1 \
   --command=docker-entrypoint.sh \
   --args=worker \
-  --set-cloudsql-instances=civicmirror-prod:us-central1:civicmirror-db \
+  --set-cloudsql-instances=civicmirror-2026:us-central1:civicmirror-db \
   --set-secrets="\
 SECRET_KEY=django-secret-key:latest,\
 DATABASE_URL=database-url:latest,\
