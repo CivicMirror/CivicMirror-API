@@ -38,6 +38,7 @@ The CivicMirror frontend project (`/data/Projects/CivicMirror/backend`) already 
 ### Pending ADRs to write during build
 - **ADR-003**: API auth model — API key (X-Api-Key header) vs. Cloud Run service-to-service OIDC. **Proposed: API key stored in Secret Manager**, checked by middleware. Simple, testable, correct for single-consumer internal API.
 - **ADR-004**: Worker topology — Celery workers (Cloud Run service, min-instances=1) vs. Cloud Run Jobs. **Defer decision** until first adapters are built and runtime duration is known.
+- **ADR-005**: VIP email monitoring — Gmail API + Cloud Pub/Sub fast-path sync trigger. **Accepted.** See `Docs/ADRs/ADR-005-VIP-Email-Monitoring.md`.
 
 ---
 
@@ -302,6 +303,32 @@ GET  /health/                            ← no auth, Cloud Run health check
 - GitHub Actions workflow: lint → test → build Docker → push to Artifact Registry → deploy to Cloud Run
 - Separate jobs for API service and Celery worker
 
+### 6.7 VIP Email Monitoring (Fast-Path Sync Trigger)
+
+**Decision:** ADR-005 (Accepted). Supplements — does not replace — scheduled polling.
+
+**How it works:** Subscribe `civicmirror-vip@gmail.com` to the VIP Community Google Group (`groups.google.com/g/vip-community`). The Gmail API pushes new message notifications to a Cloud Pub/Sub topic, which triggers `POST /internal/tasks/sync-from-email/`. The endpoint parses the EID from the email body (`EID\s+(\d+)`) and immediately enqueues `sync_election_races.delay(eid)`.
+
+**Why:** VIP community emails are posted when election data goes live in the Civic API. This reduces detection latency from up to 6 hours (scheduled poll) to ~2–10 minutes.
+
+**Implementation tasks:**
+- Create dedicated Gmail account; subscribe to `vip-community@googlegroups.com`
+- Create Cloud Pub/Sub topic `civicmirror-vip-email` and push subscription
+- Implement `SyncFromEmailView` at `POST /internal/tasks/sync-from-email/` (ADR-002 auth)
+- Implement `extract_eid_from_gmail_message()` parser with `re.compile(r"\bEID\s+(\d+)\b")`
+- Store `GMAIL_SERVICE_ACCOUNT_JSON` + `VIP_GMAIL_WATCH_TOPIC` + `GMAIL_WATCH_USER_ID` in Secret Manager
+- Cloud Scheduler job: `POST /internal/tasks/renew-gmail-watch/` daily at 00:00 UTC (watch expires every 7 days)
+- Add to CI/CD: alert if no EIDs extracted over a rolling 14-day window (catches format changes)
+
+**Env vars added:**
+```
+GMAIL_SERVICE_ACCOUNT_JSON   # Secret Manager
+VIP_GMAIL_WATCH_TOPIC        # projects/{project}/topics/civicmirror-vip-email
+GMAIL_WATCH_USER_ID          # civicmirror-vip@gmail.com
+```
+
+See `Docs/ADRs/ADR-005-VIP-Email-Monitoring.md` for full architecture, parser code, and risk mitigation.
+
 ---
 
 ## Phased Delivery Summary
@@ -313,7 +340,7 @@ GET  /health/                            ← no auth, Cloud Run health check
 | 3 | REST API + auth | CivicMirror frontend integration |
 | 4 | Clarity adapters + results | Official result display |
 | 5 | OpenStates + FEC + orchestrator | Candidate enrichment |
-| 6 | Docker + Cloud Run + CI/CD | Production launch |
+| 6 | Docker + Cloud Run + CI/CD + VIP email fast-path | Production launch |
 
 **Minimum viable integration point:** After Phase 3, the CivicMirror frontend can switch from its embedded backend to this API.
 
