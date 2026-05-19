@@ -1,0 +1,158 @@
+from datetime import date
+from unittest.mock import Mock, patch
+
+import pytest
+from celery.exceptions import Retry
+
+from elections.models import Candidate, Election, Race
+from integrations.openstates.client import OpenStatesForbiddenError, OpenStatesRateLimitError
+from integrations.openstates.tasks import US_STATES, sync_openstates_all_states, sync_openstates_legislators
+from ops.models import SyncLog
+
+
+@pytest.mark.django_db
+def test_sync_openstates_legislators_skips_unchanged_records():
+    raw_person = {
+        'id': 'os-1',
+        'name': 'Alex Smith',
+        'current_role': {
+            'org_classification': 'upper',
+            'district': '5',
+            'jurisdiction': 'ocd-division/country:us/state:ca/sldu:5',
+        },
+    }
+
+    with (
+        patch('integrations.openstates.tasks.OpenStatesClient') as mock_client_cls,
+        patch('integrations.openstates.tasks.SourceRecordStore') as mock_store_cls,
+        patch('integrations.openstates.tasks.CandidateMatcher') as mock_matcher_cls,
+    ):
+        mock_client_cls.return_value.list_people_all_pages.return_value = [raw_person]
+        mock_store_cls.return_value.upsert.return_value = (Mock(), False)
+
+        result = sync_openstates_legislators('CA')
+
+    sync_log = SyncLog.objects.get(task_name='sync_openstates_legislators', address_label='CA')
+    assert result['updated'] == 0
+    assert sync_log.records_updated == 0
+    assert sync_log.records_skipped == 1
+    mock_matcher_cls.return_value.enrich.assert_not_called()
+
+
+@pytest.mark.django_db
+@patch('integrations.openstates.tasks.OpenStatesClient')
+def test_sync_openstates_legislators_updates_matching_candidate(mock_client_cls):
+    election = Election.objects.create(
+        name='California General Election',
+        election_date=date(2026, 11, 3),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state='CA',
+        source_id='ca-2026-general',
+        status=Election.Status.UPCOMING,
+    )
+    race = Race.objects.create(
+        election=election,
+        race_type=Race.RaceType.CANDIDATE,
+        office_title='State Senate District 5',
+        jurisdiction='California',
+        geography_scope='district',
+        source=Race.Source.CIVIC_API,
+        vote_method=Race.VoteMethod.SINGLE_CHOICE,
+        canonical_key='ca-senate-5',
+        normalized_office_title='state senate district 5',
+    )
+    candidate = Candidate.objects.create(race=race, name='Alex Smith')
+    mock_client_cls.return_value.list_people_all_pages.return_value = [
+        {
+            'id': 'os-1',
+            'name': 'Alex Smith',
+            'party': [{'name': 'Democratic', 'end_date': ''}],
+            'current_role': {
+                'title': 'Senator',
+                'org_classification': 'upper',
+                'district': '5',
+                'jurisdiction': 'ocd-division/country:us/state:ca/sldu:5',
+            },
+            'image': 'https://example.com/alex.jpg',
+            'links': [{'url': 'https://alex.example.com'}],
+            'email': 'alex@example.com',
+            'offices': [{'voice': '555-0100', 'address': '123 Capitol Ave'}],
+        }
+    ]
+
+    result = sync_openstates_legislators('CA')
+
+    candidate.refresh_from_db()
+    sync_log = SyncLog.objects.get(task_name='sync_openstates_legislators', address_label='CA')
+    assert result['updated'] == 1
+    assert candidate.openstates_person_id == 'os-1'
+    assert candidate.party == 'Democratic'
+    assert candidate.website_url == 'https://alex.example.com'
+    assert candidate.source_metadata['openstates']['person_id'] == 'os-1'
+    assert sync_log.records_updated == 1
+    assert sync_log.records_skipped == 0
+
+
+@pytest.mark.django_db
+def test_sync_openstates_legislators_skips_missing_person_id():
+    with patch('integrations.openstates.tasks.OpenStatesClient') as mock_client_cls:
+        mock_client_cls.return_value.list_people_all_pages.return_value = [{'name': 'No ID'}]
+
+        result = sync_openstates_legislators('CA')
+
+    assert result['skipped'] == 1
+    sync_log = SyncLog.objects.get(task_name='sync_openstates_legislators', address_label='CA')
+    assert sync_log.records_skipped == 1
+
+
+@pytest.mark.django_db
+def test_sync_openstates_legislators_skips_people_without_current_role():
+    with patch('integrations.openstates.tasks.OpenStatesClient') as mock_client_cls:
+        mock_client_cls.return_value.list_people_all_pages.return_value = [{'id': 'os-2', 'name': 'Alex', 'current_role': None}]
+
+        result = sync_openstates_legislators('CA')
+
+    assert result['skipped'] == 1
+    sync_log = SyncLog.objects.get(task_name='sync_openstates_legislators', address_label='CA')
+    assert sync_log.records_skipped == 1
+
+
+@pytest.mark.django_db
+def test_sync_openstates_legislators_marks_failed_on_forbidden():
+    with patch('integrations.openstates.tasks.OpenStatesClient') as mock_client_cls:
+        mock_client_cls.return_value.list_people_all_pages.side_effect = OpenStatesForbiddenError('forbidden')
+
+        with pytest.raises(OpenStatesForbiddenError):
+            sync_openstates_legislators('CA')
+
+    sync_log = SyncLog.objects.get(task_name='sync_openstates_legislators', address_label='CA')
+    assert sync_log.status == SyncLog.Status.FAILED
+    assert sync_log.last_error == 'forbidden'
+
+
+@pytest.mark.django_db
+def test_sync_openstates_legislators_retries_on_rate_limit():
+    with (
+        patch('integrations.openstates.tasks.OpenStatesClient') as mock_client_cls,
+        patch.object(sync_openstates_legislators, 'retry', side_effect=Retry()) as mock_retry,
+    ):
+        mock_client_cls.return_value.list_people_all_pages.side_effect = OpenStatesRateLimitError('Too many requests')
+
+        with pytest.raises(Retry):
+            sync_openstates_legislators('CA')
+
+    sync_log = SyncLog.objects.get(task_name='sync_openstates_legislators', address_label='CA')
+    assert sync_log.status == SyncLog.Status.COMPLETED_WITH_WARNINGS
+    assert sync_log.error_count == 1
+    assert mock_retry.call_args.kwargs['countdown'] == 600
+
+
+@patch('integrations.openstates.tasks.sync_openstates_legislators.apply_async')
+def test_sync_openstates_all_states_queues_all_states_with_countdown(mock_apply_async):
+    sync_openstates_all_states()
+
+    assert mock_apply_async.call_count == len(US_STATES) == 50
+    countdowns = [call.kwargs['countdown'] for call in mock_apply_async.call_args_list]
+    assert countdowns[0] == 0
+    assert countdowns[-1] == (len(US_STATES) - 1) * 60
+    assert countdowns == [index * 60 for index in range(len(US_STATES))]

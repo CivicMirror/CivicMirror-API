@@ -116,6 +116,8 @@ INSTALLED_APPS += [
     'results',
     'ops',
     'integrations.civic',
+    'integrations.openstates',
+    'integrations.fec',
     'internal',
     'api',
 ]
