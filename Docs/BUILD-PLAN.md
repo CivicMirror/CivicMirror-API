@@ -11,7 +11,7 @@
 | 3 — REST API | ✅ Complete | `b13826b` |
 | 4 — State Results Adapters | ✅ Complete | — |
 | 5 — Additional Data Sources | ✅ Complete | — |
-| 6 — Production Readiness | 🔲 Pending | — |
+| 6 — Production Readiness | ✅ Complete (6.7 pending access) | `219a623`→ |
 
 ---
 
@@ -288,7 +288,7 @@ GET  /health/                            ← no auth, Cloud Run health check
 
 ---
 
-## Phase 6 — Production Readiness 🔲 Pending
+## Phase 6 — Production Readiness ✅ Complete (6.7 pending VIP group access)
 
 **Note:** ADR-003 (API auth) was completed in Phase 3. ADR-004 (worker topology) is pending Phase 4 runtime data.
 
