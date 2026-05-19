@@ -9,7 +9,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
   AR_REPO: civicmirror-images
   IMAGE_NAME: backend
@@ -22,7 +21,8 @@ jobs:
     name: Build & Push Image
     runs-on: ubuntu-latest
     outputs:
-      image: ${{ steps.image.outputs.image }}
+      # Pass only the SHA so the image URL can be reconstructed without embedding a secret
+      sha: ${{ github.sha }}
 
     permissions:
       contents: read
@@ -41,12 +41,10 @@ jobs:
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
       - name: Build and push image
-        id: image
         run: |
-          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
           docker build -t "$IMAGE" ./backend
           docker push "$IMAGE"
-          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
   # ── Run migrations ──────────────────────────────────────────────────────────
   migrate:
@@ -67,8 +65,9 @@ jobs:
 
       - name: Update migration job image
         run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.sha }}"
           gcloud run jobs update civicmirror-migrate \
-            --image="${{ needs.build.outputs.image }}" \
+            --image="$IMAGE" \
             --region="${{ env.REGION }}"
 
       - name: Execute migrations
@@ -95,11 +94,12 @@ jobs:
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
       - name: Deploy API service
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.API_SERVICE }}
-          region: ${{ env.REGION }}
-          image: ${{ needs.build.outputs.image }}
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.sha }}"
+          gcloud run deploy ${{ env.API_SERVICE }} \
+            --region="${{ env.REGION }}" \
+            --image="$IMAGE" \
+            --quiet
 
   # ── Deploy Worker service ───────────────────────────────────────────────────
   deploy-worker:
@@ -120,18 +120,19 @@ jobs:
 
       - name: Deploy Worker service
         run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.sha }}"
           gcloud run deploy ${{ env.WORKER_SERVICE }} \
             --region="${{ env.REGION }}" \
-            --image="${{ needs.build.outputs.image }}" \
+            --image="$IMAGE" \
             --command="/app/docker-entrypoint.sh,worker" \
-            --service-account="cloudrun-runtime@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
+            --service-account="cloudrun-runtime@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
             --min-instances=1 \
             --max-instances=3 \
             --cpu=1 \
             --memory=512Mi \
             --no-allow-unauthenticated \
             --ingress=internal \
-            --vpc-connector="projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/civicmirror-connector" \
+            --vpc-connector="projects/${{ secrets.GCP_PROJECT_ID }}/locations/${{ env.REGION }}/connectors/civicmirror-connector" \
             --vpc-egress=private-ranges-only \
             --set-env-vars="DJANGO_SETTINGS_MODULE=config.settings.prod" \
             --set-secrets="DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,DJANGO_SECRET_KEY=DJANGO_SECRET_KEY:latest,OPENSTATES_API_KEY=OPENSTATES_API_KEY:latest,FEC_API_KEY=FEC_API_KEY:latest,CIVIC_API_KEY=CIVIC_API_KEY:latest,INTERNAL_TASK_TOKEN=INTERNAL_TASK_TOKEN:latest" \
