@@ -115,6 +115,8 @@ INSTALLED_APPS += [
     'elections',
     'results',
     'ops',
+    'integrations.civic',
+    'internal',
 ]
 
 MIDDLEWARE = [
