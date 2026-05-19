@@ -49,7 +49,7 @@ The Django API service runs in a separate Cloud Run Service with `min-instances=
 
 | Service | Image | CMD | min-instances | Memory |
 |---|---|---|---|---|
-| `civicmirror-api` | `civicmirror-api:$SHA` | `api` | 0 | 512 MB |
+| `civicmirror-backend` | `civicmirror-api:$SHA` | `api` | 0 | 512 MB |
 | `civicmirror-worker` | `civicmirror-api:$SHA` | `worker` | 1 | 512 MB |
 
 Both services use the same Docker image tag (built once in CI, deployed to both services). The entrypoint selects the correct process based on the `CMD` argument.
