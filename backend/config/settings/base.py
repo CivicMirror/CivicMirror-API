@@ -83,6 +83,7 @@ environ.Env.read_env(BASE_DIR / '.env')
 HAS_DRF_SPECTACULAR = importlib.util.find_spec('drf_spectacular') is not None
 HAS_DJANGO_FILTERS = importlib.util.find_spec('django_filters') is not None
 HAS_WHITENOISE = importlib.util.find_spec('whitenoise') is not None
+HAS_CORSHEADERS = importlib.util.find_spec('corsheaders') is not None
 
 
 def _csv_env(name: str, default: Optional[list[str]] = None) -> list[str]:
@@ -98,6 +99,28 @@ SECRET_KEY = env('DJANGO_SECRET_KEY', default='django-insecure-change-me-in-prod
 DEBUG = env.bool('DJANGO_DEBUG', default=False)
 ALLOWED_HOSTS = _csv_env('DJANGO_ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
+# CORS — allow the frontend origin(s) to call this API directly.
+# In production, set CORS_ALLOWED_ORIGINS env var to a comma-separated list of
+# origins, e.g. "https://civicmirror.welshrd.com,https://www.civicmirror.welshrd.com".
+# Defaults allow local development only.
+CORS_ALLOWED_ORIGINS: list[str] = _csv_env(
+    'CORS_ALLOWED_ORIGINS',
+    default=['http://localhost:5173', 'http://localhost:4173'],
+)
+# Allow X-Api-Key header in preflight responses.
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-api-key',
+]
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -111,6 +134,8 @@ if HAS_DRF_SPECTACULAR:
     INSTALLED_APPS.append('drf_spectacular')
 if HAS_DJANGO_FILTERS:
     INSTALLED_APPS.append('django_filters')
+if HAS_CORSHEADERS:
+    INSTALLED_APPS.append('corsheaders')
 INSTALLED_APPS += [
     'elections',
     'results',
@@ -127,6 +152,8 @@ MIDDLEWARE = [
 ]
 if HAS_WHITENOISE:
     MIDDLEWARE.append('whitenoise.middleware.WhiteNoiseMiddleware')
+if HAS_CORSHEADERS:
+    MIDDLEWARE.append('corsheaders.middleware.CorsMiddleware')
 MIDDLEWARE += [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
