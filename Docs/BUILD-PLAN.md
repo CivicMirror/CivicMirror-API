@@ -2,7 +2,16 @@
 
 **Repo:** `tokendad/CivicMirror-API` (`/data/Projects/API-CivicMirror`)
 **Companion app:** `/data/Projects/CivicMirror` (the frontend; its backend is our primary reference)
-**Status:** Pre-development — no `backend/` directory exists yet.
+**Status:** Phase 3 complete — REST API live. Beginning Phase 4 (Clarity results adapters).
+
+| Phase | Status | Commit |
+|---|---|---|
+| 1 — Project Foundation | ✅ Complete | initial scaffold |
+| 2 — Google Civic API Integration | ✅ Complete | `9a87cf1` |
+| 3 — REST API | ✅ Complete | `b13826b` |
+| 4 — State Results Adapters | 🔲 Next | — |
+| 5 — Additional Data Sources | 🔲 Pending | — |
+| 6 — Production Readiness | 🔲 Pending | — |
 
 ---
 
@@ -35,10 +44,12 @@ The CivicMirror frontend project (`/data/Projects/CivicMirror/backend`) already 
 | Internal task endpoints (ADR-002) | |
 | SyncLog observability model | |
 
-### Pending ADRs to write during build
-- **ADR-003**: API auth model — API key (X-Api-Key header) vs. Cloud Run service-to-service OIDC. **Proposed: API key stored in Secret Manager**, checked by middleware. Simple, testable, correct for single-consumer internal API.
-- **ADR-004**: Worker topology — Celery workers (Cloud Run service, min-instances=1) vs. Cloud Run Jobs. **Defer decision** until first adapters are built and runtime duration is known.
-- **ADR-005**: VIP email monitoring — Gmail API + Cloud Pub/Sub fast-path sync trigger. **Accepted.** See `Docs/ADRs/ADR-005-VIP-Email-Monitoring.md`.
+### ADRs
+- **ADR-001**: API endpoint structure — ✅ Accepted
+- **ADR-002**: Cloud Scheduler → HTTP → Celery — ✅ Accepted
+- **ADR-003**: API auth (X-Api-Key) — ✅ Written & accepted (Phase 3)
+- **ADR-004**: Worker topology (Celery service vs. Cloud Run Jobs) — 🔲 Defer until Phase 4 runtime data
+- **ADR-005**: VIP email monitoring — ✅ Accepted
 
 ---
 
@@ -63,7 +74,7 @@ The CivicMirror frontend project (`/data/Projects/CivicMirror/backend`) already 
 
 ---
 
-## Phase 1 — Project Foundation
+## Phase 1 — Project Foundation ✅ Complete
 
 **Goal:** Working Django project with models, admin, migrations, and local dev environment.
 
@@ -115,7 +126,7 @@ The CivicMirror frontend project (`/data/Projects/CivicMirror/backend`) already 
 
 ---
 
-## Phase 2 — Google Civic API Integration
+## Phase 2 — Google Civic API Integration ✅ Complete (`9a87cf1`)
 
 **Goal:** Elections and races syncing from Google Civic API on a schedule.
 
@@ -154,9 +165,17 @@ The CivicMirror frontend project (`/data/Projects/CivicMirror/backend`) already 
 
 ---
 
-## Phase 3 — REST API (ADR-001)
+## Phase 3 — REST API (ADR-001) ✅ Complete (`b13826b`)
 
 **Goal:** Full read API serving CivicMirror frontend. All endpoints under `/api/v1/`.
+
+**Delivered:**
+- `GET /api/v1/elections/`, `/races/`, `/candidates/`, `/ballot-measures/`, `/districts/`, `/lookup/`
+- `HasAPIKey` DRF permission (`X-Api-Key` header) on all viewsets; `GET /health/` unauthenticated
+- django-filter filtersets on all resources; page-number pagination
+- OpenAPI schema at `/api/schema/`; Swagger UI at `/api/docs/` (DEBUG only)
+- `ADR-003-API-Auth.md` — X-Api-Key over OIDC for single-consumer internal API
+- 51 tests passing (27 Phase 2 + 24 Phase 3)
 
 ### 3.1 API Key Authentication
 - Write ADR-003
@@ -209,7 +228,7 @@ GET  /health/                            ← no auth, Cloud Run health check
 
 ---
 
-## Phase 4 — State Results Adapters
+## Phase 4 — State Results Adapters 🔲 Next
 
 **Goal:** Official election results ingested from Clarity Elections for CO and WV.
 
@@ -243,7 +262,7 @@ GET  /health/                            ← no auth, Cloud Run health check
 
 ---
 
-## Phase 5 — Additional Data Sources
+## Phase 5 — Additional Data Sources 🔲 Pending
 
 **Goal:** Enrich election data with OpenStates (state legislative) and OpenFEC (federal candidates).
 
@@ -269,7 +288,9 @@ GET  /health/                            ← no auth, Cloud Run health check
 
 ---
 
-## Phase 6 — Production Readiness
+## Phase 6 — Production Readiness 🔲 Pending
+
+**Note:** ADR-003 (API auth) was completed in Phase 3. ADR-004 (worker topology) is pending Phase 4 runtime data.
 
 **Goal:** Deploy to Google Cloud Run. CivicMirror frontend can point to new API.
 
