@@ -11,7 +11,8 @@ concurrency:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
-  REPO: civicmirror-api
+  AR_REPO: civicmirror-images
+  IMAGE_NAME: backend
   API_SERVICE: civicmirror-backend
   WORKER_SERVICE: civicmirror-worker
 
@@ -42,7 +43,7 @@ jobs:
       - name: Build and push image
         id: image
         run: |
-          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.REPO }}:${{ github.sha }}"
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
           docker build -t "$IMAGE" ./backend
           docker push "$IMAGE"
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"

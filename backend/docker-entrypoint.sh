@@ -11,6 +11,16 @@ case "$1" in
       --error-logfile -
     ;;
   worker)
+    # Cloud Run requires a process listening on PORT; run a minimal health
+    # server in the background alongside the Celery worker.
+    python3 -c "
+import http.server, os
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200); self.end_headers(); self.wfile.write(b'ok')
+    def log_message(self, *a): pass
+http.server.HTTPServer(('0.0.0.0', int(os.environ.get('PORT', 8080))), H).serve_forever()
+" &
     exec celery -A config worker \
       --loglevel "${CELERY_LOG_LEVEL:-INFO}" \
       --concurrency "${CELERY_CONCURRENCY:-2}"
