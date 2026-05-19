@@ -117,6 +117,7 @@ INSTALLED_APPS += [
     'ops',
     'integrations.civic',
     'internal',
+    'api',
 ]
 
 MIDDLEWARE = [
@@ -232,6 +233,17 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'CivicMirror API',
     'DESCRIPTION': 'Internal election data aggregation API for CivicMirror.',
     'VERSION': '1.0.0',
+    'SCHEMA_PATH_PREFIX': '/api/v1/',
+    'SECURITY': [{'ApiKeyAuth': []}],
+    'APPEND_COMPONENTS': {
+        'securitySchemes': {
+            'ApiKeyAuth': {
+                'type': 'apiKey',
+                'in': 'header',
+                'name': 'X-Api-Key',
+            }
+        }
+    },
 }
 
 CIVICMIRROR_API_KEY = env('CIVICMIRROR_API_KEY', default='')
