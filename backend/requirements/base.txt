@@ -1,0 +1,15 @@
+Django>=4.2,<5.0
+djangorestframework
+django-environ
+drf-spectacular
+celery[redis]
+redis
+requests
+gunicorn
+whitenoise[brotli]
+psycopg2-binary
+django-filter
+zipcodes
+google-auth
+google-auth-httplib2
+google-api-python-client
