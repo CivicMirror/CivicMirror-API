@@ -1,7 +1,7 @@
-from pathlib import Path
-from typing import Optional
 import importlib.util
 import os
+from pathlib import Path
+from typing import Optional
 from urllib.parse import urlparse
 
 try:

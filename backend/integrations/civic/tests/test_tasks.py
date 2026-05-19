@@ -1,7 +1,8 @@
-import pytest
 from unittest.mock import MagicMock, patch
 
-from elections.models import Election, Race, Candidate, MeasureOption
+import pytest
+
+from elections.models import Candidate, Election, MeasureOption, Race
 from ops.models import SyncLog
 
 

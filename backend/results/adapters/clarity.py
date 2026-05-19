@@ -21,6 +21,7 @@ from typing import Optional
 
 import requests
 from django.core.cache import cache
+
 from elections.models import Election
 from results.models import OfficialResult
 

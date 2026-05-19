@@ -3,6 +3,7 @@ from datetime import date, timedelta
 import pytest
 from django.utils import timezone
 
+from elections.models import Election, Race
 from integrations.civic.mappers import (
     extract_contest_title,
     infer_election_status,
@@ -13,7 +14,6 @@ from integrations.civic.mappers import (
     parse_jurisdiction_level,
     parse_state_from_ocd,
 )
-from elections.models import Election, Race
 
 
 def test_parse_state_from_ocd():

@@ -5,13 +5,13 @@ Unit tests for results tasks:
   - _process_race_results: candidate match, measure coercion, office_title
     filtering, certification guard, partial match handling
 """
+from unittest.mock import MagicMock, call, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, call
 from django.utils import timezone
 
-from elections.models import Election, Race, Candidate, MeasureOption
+from elections.models import Candidate, Election, MeasureOption, Race
 from results.models import OfficialResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -157,7 +157,7 @@ def test_ingest_unchanged_skips_db_work():
 def test_ingest_version_cache_written_after_db_success():
     election = make_election()
     race = make_race(election)
-    candidate = Candidate.objects.create(race=race, name="ALICE SMITH")
+    _ = Candidate.objects.create(race=race, name="ALICE SMITH")
 
     row = make_result_row(candidate_name="ALICE SMITH", office_title="U.S. Senate")
     result = make_adapter_result(rows=[row], source_version="371599")
@@ -286,7 +286,7 @@ def test_process_race_office_title_filter_skips_no_match():
     """When feed has office_titles but none matches this race, skip + mark partial."""
     election = make_election()
     race = make_race(election, office_title="U.S. Senate")
-    candidate = Candidate.objects.create(race=race, name="Alice")
+    _ = Candidate.objects.create(race=race, name="Alice")
 
     # Row belongs to a DIFFERENT contest
     row = make_result_row(candidate_name="Alice", office_title="GOVERNOR")
@@ -326,7 +326,7 @@ def test_process_race_no_office_titles_uses_all_rows():
 def test_process_race_unofficial_result_sets_pending_not_certified():
     election = make_election()
     race = make_race(election)
-    candidate = Candidate.objects.create(race=race, name="Alice Smith")
+    _ = Candidate.objects.create(race=race, name="Alice Smith")
 
     row = make_result_row(
         candidate_name="Alice Smith",
@@ -348,7 +348,7 @@ def test_process_race_unofficial_result_sets_pending_not_certified():
 def test_process_race_official_result_sets_certified():
     election = make_election()
     race = make_race(election)
-    candidate = Candidate.objects.create(race=race, name="Alice Smith")
+    _ = Candidate.objects.create(race=race, name="Alice Smith")
 
     row = make_result_row(
         candidate_name="Alice Smith",

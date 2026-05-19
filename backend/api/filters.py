@@ -1,5 +1,5 @@
 import django_filters
-from django_filters import CharFilter, DateFilter, NumberFilter, BooleanFilter
+from django_filters import BooleanFilter, CharFilter, DateFilter, NumberFilter
 
 from elections.models import Candidate, DistrictRecord, Election, Race
 

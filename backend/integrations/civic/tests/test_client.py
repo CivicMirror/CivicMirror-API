@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from integrations.civic.client import CivicAPIClient
 from integrations.civic.exceptions import CivicAPIForbidden, CivicAPIRetryableError
