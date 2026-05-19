@@ -101,3 +101,79 @@ def test_poll_results_valid_token(client, internal_token):
         )
     assert response.status_code == 202
     assert response.json()["task_id"] == "def-456"
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_openstates_valid_token(client, internal_token):
+    with patch("internal.views.sync_openstates_all_states") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "ghi-789"
+        mock_task.delay.return_value = mock_result
+        response = client.post(
+            "/internal/tasks/sync-openstates/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert response.status_code == 202
+    assert response.json()["task_id"] == "ghi-789"
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_openstates_idempotency(client, internal_token):
+    with patch("internal.views.sync_openstates_all_states") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "ghi-789"
+        mock_task.delay.return_value = mock_result
+
+        first = client.post(
+            "/internal/tasks/sync-openstates/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+        second = client.post(
+            "/internal/tasks/sync-openstates/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert first.status_code == 202
+    assert first.json()["task_id"] == "ghi-789"
+    assert second.status_code == 202
+    assert second.json()["status"] == "already_running"
+    mock_task.delay.assert_called_once()
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_fec_valid_token(client, internal_token):
+    with patch("internal.views.sync_fec_candidates") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "jkl-012"
+        mock_task.delay.return_value = mock_result
+        response = client.post(
+            "/internal/tasks/sync-fec/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert response.status_code == 202
+    assert response.json()["task_id"] == "jkl-012"
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_fec_idempotency(client, internal_token):
+    with patch("internal.views.sync_fec_candidates") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "jkl-012"
+        mock_task.delay.return_value = mock_result
+
+        first = client.post(
+            "/internal/tasks/sync-fec/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+        second = client.post(
+            "/internal/tasks/sync-fec/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert first.status_code == 202
+    assert first.json()["task_id"] == "jkl-012"
+    assert second.status_code == 202
+    assert second.json()["status"] == "already_running"
+    mock_task.delay.assert_called_once()
