@@ -119,8 +119,20 @@ jobs:
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
       - name: Deploy Worker service
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.WORKER_SERVICE }}
-          region: ${{ env.REGION }}
-          image: ${{ needs.build.outputs.image }}
+        run: |
+          gcloud run deploy ${{ env.WORKER_SERVICE }} \
+            --region="${{ env.REGION }}" \
+            --image="${{ needs.build.outputs.image }}" \
+            --command="/app/docker-entrypoint.sh,worker" \
+            --service-account="cloudrun-runtime@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
+            --min-instances=1 \
+            --max-instances=3 \
+            --cpu=1 \
+            --memory=512Mi \
+            --no-allow-unauthenticated \
+            --ingress=internal \
+            --vpc-connector="projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/civicmirror-connector" \
+            --vpc-egress=private-ranges-only \
+            --set-env-vars="DJANGO_SETTINGS_MODULE=config.settings.prod" \
+            --set-secrets="DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,DJANGO_SECRET_KEY=DJANGO_SECRET_KEY:latest,OPENSTATES_API_KEY=OPENSTATES_API_KEY:latest,FEC_API_KEY=FEC_API_KEY:latest,CIVIC_API_KEY=CIVIC_API_KEY:latest,INTERNAL_TASK_TOKEN=INTERNAL_TASK_TOKEN:latest" \
+            --quiet
