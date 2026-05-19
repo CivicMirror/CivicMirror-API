@@ -2,15 +2,15 @@
 
 **Repo:** `tokendad/CivicMirror-API` (`/data/Projects/API-CivicMirror`)
 **Companion app:** `/data/Projects/CivicMirror` (the frontend; its backend is our primary reference)
-**Status:** Phase 3 complete — REST API live. Beginning Phase 4 (Clarity results adapters).
+**Status:** Phase 4 complete — Clarity Elections adapters live. Beginning Phase 5 (Additional Data Sources).
 
 | Phase | Status | Commit |
 |---|---|---|
 | 1 — Project Foundation | ✅ Complete | initial scaffold |
 | 2 — Google Civic API Integration | ✅ Complete | `9a87cf1` |
 | 3 — REST API | ✅ Complete | `b13826b` |
-| 4 — State Results Adapters | 🔲 Next | — |
-| 5 — Additional Data Sources | 🔲 Pending | — |
+| 4 — State Results Adapters | ✅ Complete | — |
+| 5 — Additional Data Sources | 🔲 Next | — |
 | 6 — Production Readiness | 🔲 Pending | — |
 
 ---
@@ -228,7 +228,7 @@ GET  /health/                            ← no auth, Cloud Run health check
 
 ---
 
-## Phase 4 — State Results Adapters 🔲 Next
+## Phase 4 — State Results Adapters ✅ Complete
 
 **Goal:** Official election results ingested from Clarity Elections for CO and WV.
 
