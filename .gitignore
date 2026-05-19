@@ -5,3 +5,10 @@ __pycache__/
 *.py[cod]
 *.pyo
 
+# Django dev artifacts
+*.sqlite3
+backend/db.sqlite3
+backend/staticfiles/
+
+# Env files
+.env
