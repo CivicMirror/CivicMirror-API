@@ -1,6 +1,7 @@
 import pytest
-from elections.models import Candidate, Election, MeasureOption, Race
+
 from api.serializers import ElectionSerializer, RaceDetailSerializer
+from elections.models import Candidate, Election, MeasureOption, Race
 
 
 @pytest.mark.django_db

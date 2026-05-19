@@ -9,8 +9,8 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
-from results.adapters.registry import get_adapter
 from results.adapters import list_supported_states
+from results.adapters.registry import get_adapter
 
 logger = logging.getLogger(__name__)
 

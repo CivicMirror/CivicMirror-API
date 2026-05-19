@@ -2,12 +2,12 @@
 Unit tests for the ClarityAdapter (JSON API path).
 HTTP calls are fully mocked — no network required.
 """
+from unittest.mock import MagicMock, PropertyMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 
-from results.adapters.clarity import ClarityAdapter, _safe_int, _safe_float, _is_winner
 from results.adapters.base import AdapterResult
-
+from results.adapters.clarity import ClarityAdapter, _is_winner, _safe_float, _safe_int
 
 # ---------------------------------------------------------------------------
 # Parsing helpers

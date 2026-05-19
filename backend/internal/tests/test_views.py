@@ -1,7 +1,8 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from django.test import Client, override_settings
 from django.core.cache import cache
+from django.test import Client, override_settings
 
 
 @pytest.fixture(autouse=True)

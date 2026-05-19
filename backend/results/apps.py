@@ -7,4 +7,4 @@ class ResultsConfig(AppConfig):
 
     def ready(self):
         # Import concrete adapters so @register runs at Django startup.
-        from results.adapters import wv, co  # noqa: F401
+        from results.adapters import co, wv  # noqa: F401

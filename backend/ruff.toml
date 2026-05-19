@@ -1,15 +1,14 @@
-[tool.ruff]
 line-length = 120
 target-version = "py313"
 
-[tool.ruff.lint]
+[lint]
 select = ["E", "F", "W", "I"]
 ignore = [
     "E501",  # line too long — handled by formatter
     "F401",  # unused imports in __init__.py re-exports
-    "W503",  # line break before binary operator
 ]
 exclude = ["*/migrations/*", ".venv", "build"]
 
-[tool.ruff.lint.per-file-ignores]
+[lint.per-file-ignores]
 "*/__init__.py" = ["F401"]
+"config/settings/*.py" = ["F401", "F403", "F405"]

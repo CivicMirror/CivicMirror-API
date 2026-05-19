@@ -7,7 +7,6 @@ from django.utils import timezone
 from elections.models import Election
 
 
-
 def get_race_ttl(election_date: date) -> timedelta:
     days_until = (election_date - date.today()).days
     if days_until > 30:

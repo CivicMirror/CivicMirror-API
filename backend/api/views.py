@@ -1,13 +1,13 @@
 import logging
 
 from django.db.models import Count
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ReadOnlyModelViewSet
-from django_filters.rest_framework import DjangoFilterBackend
 
 from elections.models import Candidate, DistrictRecord, Election, Race
 from results.models import OfficialResult

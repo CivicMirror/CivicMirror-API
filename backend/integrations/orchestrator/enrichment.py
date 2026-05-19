@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from elections.models import Candidate
+
 
 def _is_blank(value):
     return value in (None, '')
@@ -16,7 +21,7 @@ def _has_higher_priority(field: str, incoming_source: str, current_source: str |
     return priorities.index(incoming_source) < priorities.index(current_source)
 
 
-def get_fields_to_update(candidate: 'Candidate', source: str, payload: dict) -> dict:
+def get_fields_to_update(candidate: Candidate, source: str, payload: dict) -> dict:
     from .candidate_matcher import FIELD_PRIORITY
 
     updates: dict = {}
