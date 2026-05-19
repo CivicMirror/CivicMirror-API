@@ -5,3 +5,4 @@ pytest-cov
 factory-boy
 faker
 ipython
+ruff
