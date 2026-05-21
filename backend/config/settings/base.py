@@ -140,6 +140,7 @@ INSTALLED_APPS += [
     'elections',
     'results',
     'ops',
+    'community',
     'integrations.civic',
     'integrations.openstates',
     'integrations.fec',
@@ -283,6 +284,10 @@ CIVIC_API_KEY = env('CIVIC_API_KEY', default='')
 FEC_API_KEY = env('FEC_API_KEY', default='')
 OPENSTATES_API_KEY = env('OPENSTATES_API_KEY', default='')
 GITHUB_TOKEN = env('GITHUB_TOKEN', default='')
+
+# Firebase Authentication
+FIREBASE_AUTH_ENABLED = env.bool('FIREBASE_AUTH_ENABLED', default=True)
+FIREBASE_CREDENTIALS_FILE = env('FIREBASE_CREDENTIALS_FILE', default='')
 
 CIVIC_API_BASE = env('CIVIC_API_BASE', default='https://www.googleapis.com/civicinfo/v2')
 CIVIC_HTTP_TIMEOUT_SECONDS = env.int('CIVIC_HTTP_TIMEOUT_SECONDS', default=10)

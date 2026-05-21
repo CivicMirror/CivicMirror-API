@@ -73,6 +73,8 @@ class RaceViewSet(ReadOnlyModelViewSet):
     search_fields = ['office_title', 'jurisdiction']
     ordering_fields = ['office_title', 'election__election_date']
     ordering = ['office_title']
+    # Restrict pk routing to integers so static prefixes (community, ext) route correctly.
+    lookup_value_regex = r'\d+'
 
     def get_queryset(self):
         qs = Race.objects.select_related('election')

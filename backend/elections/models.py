@@ -72,6 +72,7 @@ class Race(models.Model):
         CIVIC_API = 'civic_api', 'Civic API'
         OPENELECTIONS = 'openelections', 'OpenElections'
         MEDSL = 'medsl', 'MEDSL'
+        COMMUNITY = 'community', 'Community'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'
@@ -126,6 +127,7 @@ class Race(models.Model):
         default=MatchConfidence.VERIFIED,
         blank=True,
     )
+    submitted_by_uid = models.CharField(max_length=128, blank=True, db_index=True)
 
     objects = models.Manager()
 
