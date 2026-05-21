@@ -8,16 +8,44 @@ from django.utils.crypto import constant_time_compare
 logger = logging.getLogger(__name__)
 
 
+def _verify_oidc_token(token: str) -> bool:
+    """Verify a Google OIDC JWT issued by Cloud Scheduler."""
+    audience = getattr(settings, "SCHEDULER_OIDC_AUDIENCE", "")
+    expected_sa = getattr(settings, "SCHEDULER_SA_EMAIL", "")
+    if not audience:
+        return False
+
+    try:
+        from google.auth.transport import requests as google_requests
+        from google.oauth2 import id_token
+
+        payload = id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            audience=audience,
+        )
+        if expected_sa and payload.get("email") != expected_sa:
+            logger.warning(
+                "scheduler.trigger.auth_failed reason=unexpected_sa email=%s",
+                payload.get("email"),
+            )
+            return False
+        return True
+    except Exception as exc:
+        logger.warning(
+            "scheduler.trigger.auth_failed reason=oidc_verification_failed error=%s",
+            exc,
+        )
+        return False
+
+
 def require_internal_task_token(view_func):
     """
-    Decorator that validates the Authorization: Bearer <token> header.
+    Validate the Authorization: Bearer <token> header.
 
-    Phase 2: shared-secret validation only (INTERNAL_TASK_TOKEN env var).
-    Phase 6: add OIDC verification for Google Cloud Scheduler in production.
-
-    Rules:
-    - In production (DEBUG=False) with no INTERNAL_TASK_TOKEN configured, ALL requests are rejected.
-    - With INTERNAL_TASK_TOKEN set, only matching tokens are accepted.
+    Accepts either:
+    1. Shared-secret (INTERNAL_TASK_TOKEN) — local dev and manual triggers.
+    2. Google OIDC JWT (SCHEDULER_OIDC_AUDIENCE) — Cloud Scheduler in production.
     """
     @functools.wraps(view_func)
     def _wrapped(request, *args, **kwargs):
@@ -29,15 +57,13 @@ def require_internal_task_token(view_func):
         token = auth_header[len("Bearer "):]
         expected = getattr(settings, "INTERNAL_TASK_TOKEN", "")
 
-        if not expected:
-            # TODO Phase 6: attempt OIDC verification here before rejecting.
-            logger.warning("scheduler.trigger.auth_failed reason=no_token_configured")
-            return JsonResponse({"error": "Unauthorized"}, status=401)
+        if expected and constant_time_compare(token, expected):
+            return view_func(request, *args, **kwargs)
 
-        if not constant_time_compare(token, expected):
-            logger.warning("scheduler.trigger.auth_failed reason=token_mismatch")
-            return JsonResponse({"error": "Unauthorized"}, status=401)
+        if _verify_oidc_token(token):
+            return view_func(request, *args, **kwargs)
 
-        return view_func(request, *args, **kwargs)
+        logger.warning("scheduler.trigger.auth_failed reason=token_mismatch")
+        return JsonResponse({"error": "Unauthorized"}, status=401)
 
     return _wrapped
