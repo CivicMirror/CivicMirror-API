@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from . import views
@@ -10,6 +10,9 @@ router.register('candidates', views.CandidateViewSet, basename='candidate')
 router.register('ballot-measures', views.BallotMeasureViewSet, basename='ballot-measure')
 router.register('districts', views.DistrictViewSet, basename='district')
 
-urlpatterns = router.urls + [
+# Community/user routes come FIRST to prevent DRF router from swallowing
+# "community" and "ext" as {pk} values.
+urlpatterns = [
+    path('', include('community.urls')),
     path('lookup/', views.LookupView.as_view(), name='api-lookup'),
-]
+] + router.urls
