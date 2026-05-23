@@ -22,6 +22,15 @@ from typing import Optional
 import requests
 from django.core.cache import cache
 
+# CloudFront in front of Clarity Elections blocks the default python-requests
+# User-Agent with a 403.  A browser UA resolves it.
+_CLARITY_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    )
+}
+
 from elections.models import Election
 from results.models import OfficialResult
 
@@ -92,7 +101,7 @@ class ClarityAdapter(StateResultsAdapter):
         # --- Fetch current version ------------------------------------------------
         ver_url = f"{results_url}current_ver.txt"
         try:
-            ver_resp = requests.get(ver_url, timeout=self.FETCH_TIMEOUT_SHORT)
+            ver_resp = requests.get(ver_url, timeout=self.FETCH_TIMEOUT_SHORT, headers=_CLARITY_HEADERS)
             ver_resp.raise_for_status()
         except requests.RequestException as exc:
             logger.error("ClarityAdapter: failed to fetch version for election %s: %s", election_id, exc)
@@ -116,7 +125,7 @@ class ClarityAdapter(StateResultsAdapter):
         # --- Fetch summary.json ---------------------------------------------------
         summary_url = f"{results_url}{current_ver}/json/en/summary.json"
         try:
-            data_resp = requests.get(summary_url, timeout=self.FETCH_TIMEOUT_LONG)
+            data_resp = requests.get(summary_url, timeout=self.FETCH_TIMEOUT_LONG, headers=_CLARITY_HEADERS)
             data_resp.raise_for_status()
         except requests.RequestException as exc:
             logger.error("ClarityAdapter: failed to fetch summary for election %s: %s", election_id, exc)

@@ -36,7 +36,7 @@ class OpenStatesClient:
         if not self.api_key:
             raise OpenStatesForbiddenError('OPENSTATES_API_KEY is not configured.')
 
-        jurisdiction = f"ocd-division/country:us/state:{(state or '').lower()}"
+        jurisdiction = f"ocd-jurisdiction/country:us/state:{(state or '').lower()}/government"
         params = {
             'jurisdiction': jurisdiction,
             'page': page,
