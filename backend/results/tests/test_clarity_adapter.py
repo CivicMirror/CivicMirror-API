@@ -281,5 +281,22 @@ def test_fetch_results_http_error_propagates(mock_requests, mock_election, mock_
 
 
 @pytest.mark.django_db
+def test_fetch_results_sends_browser_user_agent(mock_requests, mock_election, mock_cache):
+    """Both HTTP calls must include the browser User-Agent to bypass CloudFront blocking."""
+    ver_response = MagicMock()
+    ver_response.text = "371599"
+    summary_response = MagicMock()
+    summary_response.json.return_value = SUMMARY_JSON
+    mock_requests.get.side_effect = [ver_response, summary_response]
+
+    ConcreteClarity().fetch_results("2026-05-13", 1)
+
+    for call in mock_requests.get.call_args_list:
+        headers = call[1].get("headers", {})
+        assert "User-Agent" in headers
+        assert "Mozilla" in headers["User-Agent"]
+
+
+@pytest.mark.django_db
 def test_version_cache_key():
     assert ConcreteClarity.version_cache_key(42) == "clarity:ver:42"
