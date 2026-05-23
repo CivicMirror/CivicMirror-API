@@ -23,11 +23,12 @@ class RaceFilterSet(django_filters.FilterSet):
     certification_status = CharFilter()
     state = CharFilter(field_name='election__state', lookup_expr='iexact')
     geography_scope = CharFilter(lookup_expr='iexact')
+    jurisdiction_level = CharFilter(field_name='election__jurisdiction_level')
     source = CharFilter()
 
     class Meta:
         model = Race
-        fields = ['election', 'race_type', 'race_status', 'certification_status', 'geography_scope', 'source']
+        fields = ['election', 'race_type', 'race_status', 'certification_status', 'geography_scope', 'jurisdiction_level', 'source']
 
 
 class CandidateFilterSet(django_filters.FilterSet):
