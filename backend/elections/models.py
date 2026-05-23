@@ -34,7 +34,7 @@ class Election(models.Model):
         on_delete=models.SET_NULL,
         related_name='elections',
     )
-    results_url = models.URLField(blank=True)
+    results_url = models.URLField(blank=True, default='')
 
     class Meta:
         indexes = [models.Index(fields=['source_id'])]
