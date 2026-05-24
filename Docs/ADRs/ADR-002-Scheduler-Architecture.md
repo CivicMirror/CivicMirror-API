@@ -1,16 +1,24 @@
 # ADR-002: Scheduler Architecture — Cloud Scheduler over Celery Beat
 
 ## Status
-Accepted
+Accepted — Revised 2026-05-24 to reflect live production configuration
+
+### Revision Notes
+Original ADR documented two jobs and a proposed OIDC service account (`civicmirror-scheduler`). Actual deployment uses `cloudrun-runtime` for all Cloud Run services and has grown to five scheduled jobs. `sync_elections` was also implemented as a Cloud Run Job (ADR Option B) rather than the Django endpoint path (ADR Option A). This revision brings the ADR current.
+
+---
 
 ## Context
 
-CivicMirror API requires periodic background ingestion:
+CivicMirror API requires periodic background ingestion from five data sources:
 
-| Job | Trigger | Source |
-|---|---|---|
-| `sync_elections` | Every 6 hours | Google Civic API |
-| `poll_pending_results` | Daily 06:00 UTC | Clarity Elections (state results) |
+| GCP Job Name | Schedule (UTC) | Django Endpoint / Mechanism | Source |
+|---|---|---|---|
+| `sync-elections-hourly` | Every hour | Cloud Run Job → `manage.py sync_elections` | Google Civic API |
+| `sync-openstates` | Daily 02:00 | `POST /internal/tasks/sync-openstates/` | OpenStates API |
+| `sync-fec` | Every 6 hours | `POST /internal/tasks/sync-fec/` | OpenFEC API |
+| `sync-sc-vrems` | Daily 01:00 | `POST /internal/tasks/sync-sc-vrems/` | SC VREMS (Clarity Elections) |
+| `poll-pending-results` | Daily 06:00 | `POST /internal/tasks/poll-results/` | All state results adapters |
 
 The original plan used **Celery Beat** as the scheduler. Celery Beat is a long-running process that maintains an internal clock and fires tasks on a configured schedule.
 
@@ -26,30 +34,40 @@ The companion SeaQuacks project (Node.js/Express, Cloud Run) uses an in-process 
 
 ## Decision
 
-Replace Celery Beat with **Google Cloud Scheduler → protected HTTP endpoint → Celery task**.
+Replace Celery Beat with **Google Cloud Scheduler**, using one of two trigger mechanisms depending on job characteristics:
 
-### How it works
+### Path A — Cloud Scheduler → OIDC POST → Django endpoint → Celery (standard pattern)
+
+Used by: `sync-openstates`, `sync-fec`, `sync-sc-vrems`, `poll-pending-results`
 
 1. The Django API exposes internal trigger endpoints (not public):
-   - `POST /internal/tasks/sync-elections/`
+   - `POST /internal/tasks/sync-openstates/`
+   - `POST /internal/tasks/sync-fec/`
+   - `POST /internal/tasks/sync-sc-vrems/`
    - `POST /internal/tasks/poll-results/`
-2. Google Cloud Scheduler fires an authenticated POST to the appropriate endpoint at the configured interval.
+2. Google Cloud Scheduler fires an authenticated OIDC POST to the endpoint.
 3. The Django view validates the caller identity, enqueues the Celery task (`.delay()`), and returns `202 Accepted` immediately.
 4. Celery workers process the task asynchronously.
 
-The enqueue step is fast (milliseconds) — Cloud Scheduler's HTTP timeout is never a concern.
+### Path B — Cloud Scheduler → Cloud Run Job (batch pattern)
+
+Used by: `sync-elections-hourly`
+
+Cloud Scheduler triggers the `civicmirror-sync-elections` Cloud Run Job directly via the Cloud Run Jobs API. The job runs `python manage.py sync_elections`, which calls `sync_elections()` synchronously and exits. No Celery, no Redis for this job — appropriate because election list sync is fast and idempotent.
+
+**Note:** This was the Option B evaluation path described in the original ADR. It is retained for `sync_elections` because the task completes reliably in under 2 minutes. Other jobs use Path A because they fan out work to Celery (race syncs, result polling) and benefit from async workers.
 
 ---
 
 ## Endpoint Security
 
-### Production: Cloud Scheduler OIDC (preferred)
+### Production: Cloud Scheduler OIDC
 
-Cloud Scheduler supports OIDC token authentication using a dedicated GCP service account. Django verifies the token in a middleware layer:
+Cloud Scheduler uses OIDC token authentication via the `cloudrun-runtime` GCP service account (shared with the API and worker Cloud Run services). Django verifies the token:
 
 ```
 Cloud Scheduler
-  └─ service account: civicmirror-scheduler@<project>.iam.gserviceaccount.com
+  └─ service account: cloudrun-runtime@civicmirror-2026.iam.gserviceaccount.com
   └─ role: roles/run.invoker (on the API Cloud Run service)
   └─ OIDC token → Authorization: Bearer <token>
 
@@ -60,7 +78,7 @@ Django middleware
   └─ 401 on any mismatch; no logging of token contents
 ```
 
-This approach never involves a shared secret and tokens are short-lived (1 hour max).
+**Note:** The original ADR proposed a dedicated `civicmirror-scheduler` service account. The live deployment uses `cloudrun-runtime` for all services. A dedicated scheduler service account would be preferable for least-privilege but is not a blocking issue — tracked as future hardening.
 
 ### Local development: Shared secret fallback
 
@@ -149,12 +167,14 @@ Celery task ID is returned in the 202 response body: `{"task_id": "<uuid>"}`.
 
 ## Deployment Checklist (Cloud Run)
 
-- [ ] Create GCP service account `civicmirror-scheduler@<project>.iam.gserviceaccount.com`
-- [ ] Grant `roles/run.invoker` on the API Cloud Run service
-- [ ] Configure Cloud Scheduler jobs with OIDC auth pointing to the service account
-- [ ] Set `INTERNAL_TASK_TOKEN` in Secret Manager (local/CI only; not deployed to Cloud Run)
-- [ ] Set `MIN_INSTANCES=1` on Celery worker Cloud Run service
-- [ ] Configure Cloud Scheduler retry: max 1 retry, min interval 5 minutes
+- [x] Service account `cloudrun-runtime@civicmirror-2026.iam.gserviceaccount.com` used for all services
+- [x] `roles/run.invoker` granted on the API Cloud Run service
+- [x] Cloud Scheduler jobs configured with OIDC auth (Path A jobs)
+- [x] `civicmirror-sync-elections` Cloud Run Job configured (Path B)
+- [x] `INTERNAL_TASK_TOKEN` in Secret Manager (local dev fallback)
+- [x] `min-instances=1` on Celery worker (`civicmirror-worker`)
+- [ ] Cloud Scheduler retry policy: max 1 retry, min 5-minute interval (not yet enforced — all jobs currently have unlimited retries)
+- [ ] Dedicated `civicmirror-scheduler` service account (future hardening)
 
 ---
 
@@ -176,5 +196,5 @@ Celery task ID is returned in the 202 response body: `{"task_id": "<uuid>"}`.
 ## Related Decisions
 
 - ADR-001: API Endpoint Structure
-- ADR-003 (future): Celery vs. Cloud Run Jobs — worker topology final decision
-- ADR-004 (future): Authentication model (public read / authenticated write)
+- ADR-003: API Authentication Model
+- ADR-004: Worker Topology (Celery vs. Cloud Run Jobs)
