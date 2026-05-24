@@ -1,5 +1,15 @@
 # West Virginia Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Complete | Google Civic API `/elections` sync; 14 races via `voterinfo` |
+| Stage 1 — Race Creation | ✅ Complete | 14 races in production DB via Civic API |
+| Stage 2 — Results Ingestion | ✅ Complete | Clarity Elections adapter live (`results/adapters/wv.py`) |
+
+> **Full Coverage** — WV is the only state with all three stages fully operational.
+
 **Site:** https://sos.wv.gov/elections/Pages/HistElecResults.aspx
 **Online Results:** https://apps.sos.wv.gov/elections/results/
 **Download:** https://apps.sos.wv.gov/elections/results/download.aspx
