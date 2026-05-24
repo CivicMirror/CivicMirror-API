@@ -1,5 +1,15 @@
 # Iowa Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Bootstrap only | Google Civic API; bootstrap path active post-election |
+| Stage 2 — Results Ingestion | ✅ Adapter built | Clarity Elections adapter built (`results/adapters/ia.py`); needs `results_url` in admin |
+
+---
+
 **Site:** https://sos.iowa.gov/elections/results/index.html
 **Archived Results:** https://sos.iowa.gov/elections/results/archive.html
 **Operated by:** Iowa Secretary of State

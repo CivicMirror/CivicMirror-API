@@ -1,5 +1,15 @@
 # New Mexico Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | CSV/PDF (Clarity unverified) — no adapter built |
+
+---
+
 **Site:** https://www.sos.state.nm.us/voting-and-elections/election-results/
 **Operated by:** New Mexico Secretary of State
 **Researched:** March 4, 2026

@@ -1,5 +1,15 @@
 # Georgia Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | Partial Clarity (returns 403 remotely) — no adapter built |
+
+---
+
 **Site:** https://sos.ga.gov/page/georgia-election-results
 **Election Data Hub:** https://sos.ga.gov/election-data-hub
 **Turnout Hub:** https://sos.ga.gov/page/election-data-hub-turnout

@@ -1,5 +1,15 @@
 # North Carolina Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | FTP + GIS (own system) — no adapter built |
+
+---
+
 **Site:** https://www.ncsbe.gov/results-data
 **Election Results:** https://www.ncsbe.gov/results-data/election-results
 **Historical Data:** https://www.ncsbe.gov/results-data/election-results/historical-election-results-data

@@ -1,5 +1,15 @@
 # New York Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | NYENR + OpenElections — no adapter built |
+
+---
+
 **Site:** https://elections.ny.gov/election-results
 **Elections Database:** https://results.elections.ny.gov/
 **Election Night Results:** https://nyenr.elections.ny.gov/

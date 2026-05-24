@@ -1,5 +1,15 @@
 # Rhode Island Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | 39-municipality model — no adapter built |
+
+---
+
 **Site:** https://www.elections.ri.gov/elections/results/
 **Operated by:** Rhode Island Board of Elections
 **Researched:** March 4, 2026

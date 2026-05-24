@@ -1,5 +1,15 @@
 # Nebraska Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API; nonpartisan unicameral legislature |
+| Stage 2 — Results Ingestion | ❌ No adapter | PDF/Excel (Clarity unverified) — no adapter built |
+
+---
+
 **Site:** https://sos.nebraska.gov/elections/election-results
 **Operated by:** Nebraska Secretary of State
 **Researched:** March 4, 2026

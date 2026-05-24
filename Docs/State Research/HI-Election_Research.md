@@ -1,5 +1,15 @@
 # Hawaii Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | CKAN API available; adapter not built |
+
+---
+
 **Site:** https://elections.hawaii.gov/election-results/
 **Open Data:** https://opendata.hawaii.gov/
 **Operated by:** Hawaii Office of Elections

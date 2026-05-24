@@ -1,5 +1,15 @@
 # Ohio Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | DATA Act + live dashboard (own system) — no adapter built |
+
+---
+
 **Site:** https://www.ohiosos.gov/elections/election-results-and-data/
 **Data Dashboard:** https://www.ohiosos.gov/elections/voters/ohio-election-results-data/
 **DATA Act Portal:** https://data.ohiosos.gov/voter

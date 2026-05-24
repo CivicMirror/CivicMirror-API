@@ -1,5 +1,15 @@
 # Washington Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | Downloads + GIS (own system) — no adapter built |
+
+---
+
 **Site:** https://www.sos.wa.gov/elections/data-research/election-data-and-maps/election-results-and-voters-pamphlets
 **Data/Statistics:** https://www.sos.wa.gov/elections/data-research/election-data-and-maps/reports-data-and-statistics
 **Results Search:** https://www.sos.wa.gov/elections/results_search.aspx

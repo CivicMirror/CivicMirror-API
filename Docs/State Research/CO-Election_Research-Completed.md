@@ -1,5 +1,15 @@
 # Colorado Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Complete | Google Civic API |
+| Stage 1 — Race Creation | ✅ Races in prod | Google Civic API; races confirmed in production DB |
+| Stage 2 — Results Ingestion | ✅ Complete | Clarity Elections adapter live (`results/adapters/co.py`) |
+
+---
+
 **Site:** https://www.sos.state.co.us/pubs/elections/resultsData.html
 **Historical Database:** https://historicalelectiondata.coloradosos.gov/
 **Operated by:** Colorado Secretary of State

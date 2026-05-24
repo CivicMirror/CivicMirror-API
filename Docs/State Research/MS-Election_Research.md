@@ -1,5 +1,15 @@
 # Mississippi Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | HTML/PDF only — no adapter built (weakest machine-readable state) |
+
+---
+
 **Site:** https://www.sos.ms.gov/elections-voting
 **Results:** https://www.sos.ms.gov/elections-voting/election-results
 **Operated by:** Mississippi Secretary of State

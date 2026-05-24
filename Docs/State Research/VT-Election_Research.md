@@ -1,5 +1,15 @@
 # Vermont Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API; no county government |
+| Stage 2 — Results Ingestion | ❌ No adapter | Excel + searchable DB — no adapter built |
+
+---
+
 **Site:** https://sos.vermont.gov/elections/election-info-resources/elections-results-data/
 **Historical Database:** https://electionarchive.vermont.gov/
 **Operated by:** Vermont Secretary of State (Sarah Copeland Hanzas)

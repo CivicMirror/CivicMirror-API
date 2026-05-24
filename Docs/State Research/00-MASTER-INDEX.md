@@ -62,7 +62,7 @@ AL, AK, AR, DE, GA, HI, ID, IN, IA, KS, KY, LA, ME, MD, MN, MS, MO, MT, NE, NV, 
 | AZ | Arizona | AZ-Election_Research.md | azsos.gov/elections (FTP feed) |
 | AR | Arkansas | AR-Election_Research.md | sos.arkansas.gov/elections |
 | CA | California | CA-Election_Research.md | api.sos.ca.gov (REST API) |
-| CO | Colorado | CO-Election_Research.md | historicalelectiondata.coloradosos.gov |
+| CO | Colorado | CO-Election_Research-Completed.md ✅ | historicalelectiondata.coloradosos.gov |
 | CT | Connecticut | CT-Election_Research.md | data.ct.gov (Socrata API) |
 | DE | Delaware | DE-Election_Research.md | elections.delaware.gov |
 | FL | Florida | FL-Election_Research.md | dos.myflorida.com/elections |
@@ -105,6 +105,27 @@ AL, AK, AR, DE, GA, HI, ID, IN, IA, KS, KY, LA, ME, MD, MN, MS, MO, MT, NE, NV, 
 | WV | West Virginia | WV-Election_Research-Completed.md ✅ | apps.sos.wv.gov/elections |
 | WI | Wisconsin | WI-Election_Research.md | elections.wi.gov |
 | WY | Wyoming | WY-Election_Research.md | sos.wyo.gov/elections |
+
+---
+
+## CivicMirror Integration Coverage
+
+Tracks Stage 1 (Election + Race Creation) and Stage 2 (Results Ingestion) implementation status per state.
+
+| Code | State | Stage 1 — Election Creation | Stage 1 — Race Creation | Stage 2 — Results Ingestion |
+|------|-------|----------------------------|-------------------------|-----------------------------|
+| **WV** | West Virginia | ✅ Complete | ✅ Complete (14 races in prod) | ✅ Complete — Clarity adapter (`wv.py`) |
+| **CO** | Colorado | ✅ Complete | ✅ Complete (races in prod) | ✅ Complete — Clarity adapter (`co.py`) |
+| **SC** | South Carolina | ✅ Available | ⚠️ Bootstrap only (post-election) | ✅ Adapter built — Clarity (`sc.py`) |
+| **IA** | Iowa | ✅ Available | ⚠️ Bootstrap only (post-election) | ✅ Adapter built — Clarity (`ia.py`) |
+| **CA** | California | ✅ Available | ✅ 38 races in prod (Civic API + SOS REST) | ❌ No adapter |
+| **PA** | Pennsylvania | ✅ Available | ⚠️ Blocked (2026 data not yet published) | ❌ Pending Socrata adapter |
+| **MI** | Michigan | ✅ Available | ⚠️ Blocked (`michiganelections.io` 503) | ❌ Pending API recovery |
+| All others | — | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter |
+
+**Full Coverage** (all three stages ✅): **WV**, **CO**  
+**Adapter built, bootstrap path**: **SC**, **IA** (need `results_url` set in Django admin)  
+**Blocked adapters**: PA (data publication ~2-4 weeks), MI (API 503)
 
 ---
 

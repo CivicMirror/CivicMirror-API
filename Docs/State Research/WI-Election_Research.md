@@ -1,5 +1,15 @@
 # Wisconsin Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | XLSX ward-by-ward — no statewide live feed; no adapter built |
+
+---
+
 **Site:** https://elections.wi.gov/elections/election-results
 **Archive:** https://elections.wi.gov/elections/election-results/results-all
 **Data:** https://elections.wi.gov/statistics-data

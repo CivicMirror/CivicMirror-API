@@ -1,5 +1,15 @@
 # Maryland Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | CSV downloads (Clarity unverified) — no adapter built |
+
+---
+
 **Site:** https://elections.maryland.gov/elections/results_data/
 **Operated by:** Maryland State Board of Elections
 **Researched:** March 4, 2026

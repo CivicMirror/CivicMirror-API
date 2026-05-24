@@ -1,5 +1,15 @@
 # Wyoming Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | PDF/Excel (Clarity unverified) — no adapter built |
+
+---
+
 **Site:** https://sos.wyo.gov/elections/electionresults.aspx
 **Operated by:** Wyoming Secretary of State
 **Researched:** March 4, 2026

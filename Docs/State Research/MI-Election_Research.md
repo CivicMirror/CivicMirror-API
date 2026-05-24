@@ -1,5 +1,15 @@
 # Michigan Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Blocked | Google Civic API; community REST API (`michiganelections.io`) returning 503 |
+| Stage 2 — Results Ingestion | ❌ No adapter | michiganelections.io 503 — adapter blocked |
+
+---
+
 **Site:** https://www.michigan.gov/sos/elections/election-results-and-data
 **Third-Party API:** https://michiganelections.io/
 **Voting Dashboard:** https://www.michigan.gov/sos/elections/election-results-and-data/voter-participation-dashboard

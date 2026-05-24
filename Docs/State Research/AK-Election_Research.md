@@ -1,5 +1,15 @@
 # Alaska Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API; RCV elections may not map cleanly |
+| Stage 2 — Results Ingestion | ❌ No adapter | No Clarity; own system |
+
+---
+
 **Site:** https://www.elections.alaska.gov/election-results/  
 **Operated by:** Alaska Division of Elections  
 **Researched:** March 4, 2026  
