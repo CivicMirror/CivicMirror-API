@@ -146,6 +146,13 @@ jobs:
             --oidc-token-audience="$NEW_BASE" \
             --quiet
 
+          gcloud scheduler jobs update http sync-sc-vrems \
+            --location="${{ env.REGION }}" \
+            --uri="${NEW_BASE}/internal/tasks/sync-sc-vrems/" \
+            --oidc-service-account-email="$SA" \
+            --oidc-token-audience="$NEW_BASE" \
+            --quiet
+
   # ── Deploy Worker service ───────────────────────────────────────────────────
   deploy-worker:
     name: Deploy Worker
