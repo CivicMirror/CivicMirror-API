@@ -73,6 +73,7 @@ class Race(models.Model):
         OPENELECTIONS = 'openelections', 'OpenElections'
         MEDSL = 'medsl', 'MEDSL'
         COMMUNITY = 'community', 'Community'
+        RESULTS_ADAPTER = 'results_adapter', 'Results Adapter'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'

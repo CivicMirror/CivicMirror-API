@@ -20,6 +20,9 @@ def ingest_official_results(self, state: str, election_id: int):
     """
     Fetch and upsert official results for all races in the given election.
     Retries hourly; gives up after 12 attempts (12 hours post-trigger).
+
+    When no races exist for the election, auto-bootstraps Race/Candidate/
+    MeasureOption rows from the result data before processing results.
     """
     from elections.models import Election, Race
 
@@ -35,6 +38,21 @@ def ingest_official_results(self, state: str, election_id: int):
         return
 
     adapter = adapter_class()
+
+    # If no races exist, clear any stale version cache so the adapter performs
+    # a full fetch.  A prior run may have cached the version while races were
+    # still empty (loop body never executed), causing all future calls to
+    # short-circuit on unchanged=True without ever bootstrapping.
+    if not Race.objects.filter(election=election).exists():
+        if hasattr(adapter, 'version_cache_key'):
+            stale_key = adapter.version_cache_key(election_id)
+            if cache.get(stale_key):
+                logger.info(
+                    "ingest_official_results: clearing stale version cache for election %s (%s) — no races exist",
+                    election_id, state,
+                )
+                cache.delete(stale_key)
+
     try:
         result = adapter.fetch_results(election.election_date, election_id)
     except Exception as exc:
@@ -57,17 +75,130 @@ def ingest_official_results(self, state: str, election_id: int):
         Race.objects.filter(election=election).update(certification_status=certification_status)
         return
 
-    races = Race.objects.filter(election=election).select_related('election')
+    races = list(Race.objects.filter(election=election).select_related('election'))
+    if not races:
+        races = _bootstrap_races_from_results(election, result, state)
+
     for race in races:
         _process_race_results(race, result, state)
 
-    # Write version to cache only after all DB work succeeds (prevents skipping on retry).
-    if result.source_version and hasattr(adapter, 'version_cache_key'):
+    # Write version to cache only after successful DB work AND races were processed.
+    # Gating on `races` prevents caching a version that corresponds to an empty-race state.
+    if races and result.source_version and hasattr(adapter, 'version_cache_key'):
         cache.set(
             adapter.version_cache_key(election_id),
             result.source_version,
             timeout=adapter.VERSION_CACHE_TIMEOUT,
         )
+
+
+# Keywords that indicate a ballot measure race when found in the office_title.
+_MEASURE_TITLE_KEYWORDS = frozenset({
+    'amendment', 'measure', 'proposition', 'prop', 'question',
+    'referendum', 'initiative', 'bond', 'levy', 'renewal',
+    'ordinance', 'resolution',
+})
+
+
+def _is_measure_race(office_title: str) -> bool:
+    """Return True when office_title keywords indicate a ballot measure."""
+    normalized = office_title.strip().lower()
+    return any(kw in normalized for kw in _MEASURE_TITLE_KEYWORDS)
+
+
+def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
+    """
+    Auto-create Race, Candidate, and MeasureOption rows from result data when
+    none exist for the election.  Runs inside a serialised transaction so that
+    concurrent Celery workers cannot create duplicate races.
+
+    Returns the list of races available for processing (newly created, or
+    those created by a concurrent worker that won the lock).
+    """
+    from elections.models import Candidate, Election, MeasureOption, Race
+
+    rows_by_office: dict[str, list] = {}
+    for row in adapter_result.rows:
+        title = (row.office_title or '').strip()
+        if not title:
+            continue
+        rows_by_office.setdefault(title, []).append(row)
+
+    if not rows_by_office:
+        logger.warning(
+            "_bootstrap_races_from_results: no office_titles in result rows for election %s; cannot bootstrap",
+            election.pk,
+        )
+        return []
+
+    with transaction.atomic():
+        # Lock the election row to serialise concurrent bootstrap attempts.
+        Election.objects.select_for_update().filter(pk=election.pk).get()
+
+        existing = list(Race.objects.filter(election=election).select_related('election'))
+        if existing:
+            # Another worker already bootstrapped while we waited for the lock.
+            logger.info(
+                "_bootstrap_races_from_results: races already exist for election %s; skipping bootstrap",
+                election.pk,
+            )
+            return existing
+
+        created_races = []
+        for office_title, rows in rows_by_office.items():
+            race_type = (
+                Race.RaceType.MEASURE if _is_measure_race(office_title)
+                else Race.RaceType.CANDIDATE
+            )
+            race = Race.objects.create(
+                election=election,
+                race_type=race_type,
+                office_title=office_title,
+                jurisdiction=election.state or '',
+                geography_scope='statewide',
+                certification_status=Race.CertificationStatus.RESULTS_PENDING,
+                source=Race.Source.RESULTS_ADAPTER,
+                race_status=Race.RaceStatus.ACTIVE,
+                match_confidence=Race.MatchConfidence.LOW,
+                source_metadata={'bootstrapped_from': 'results_adapter', 'state': state},
+            )
+            created_races.append(race)
+            logger.info(
+                "_bootstrap_races_from_results: created %s race %s ('%s') for election %s",
+                race_type, race.pk, office_title, election.pk,
+            )
+
+            if race_type == Race.RaceType.CANDIDATE:
+                names_seen: set[str] = set()
+                for row in rows:
+                    name = (row.candidate_name or '').strip()
+                    if not name or name in names_seen:
+                        continue
+                    names_seen.add(name)
+                    Candidate.objects.create(
+                        race=race,
+                        name=name,
+                        candidate_status=(
+                            Candidate.CandidateStatus.WRITE_IN
+                            if row.is_write_in_aggregate
+                            else Candidate.CandidateStatus.RUNNING
+                        ),
+                    )
+            else:
+                labels_seen: set[str] = set()
+                for row in rows:
+                    # Clarity sets candidate_name for measure choices; fall back to it.
+                    label = (row.option_label or row.candidate_name or '').strip()
+                    if not label or label in labels_seen:
+                        continue
+                    labels_seen.add(label)
+                    MeasureOption.objects.create(race=race, option_label=label)
+
+    logger.info(
+        "_bootstrap_races_from_results: bootstrapped %d races for election %s (%s)",
+        len(created_races), election.pk, state,
+    )
+    return created_races
 
 
 def _process_race_results(race, adapter_result, state: str):

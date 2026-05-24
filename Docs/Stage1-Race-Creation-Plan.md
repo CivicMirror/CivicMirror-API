@@ -1,7 +1,7 @@
 # Stage 1 Race Creation — Research & Build Plan
 
 **Created:** 2026-05-23  
-**Status:** Research complete, implementation not started  
+**Status:** P1 ✅ P2 ✅ P4-IA ✅ — P3 (PA) blocked on data, P4-MI blocked on 503  
 **Problem:** Many elections in the DB have 0 associated races because the Google Civic API has no data for most state primaries.
 
 ---
@@ -54,7 +54,7 @@ Current Stage 1 sources:        Current Stage 2 sources:
 | `backend/results/adapters/wv.py` | **Active** Clarity Stage 2 adapter |
 | `backend/results/adapters/co.py` | **Active** Clarity Stage 2 adapter |
 | `backend/results/adapters/clarity.py` | Generic Clarity base adapter |
-| `backend/results/tasks.py` | `ingest_official_results` — iterates **existing** races only |
+| `backend/results/tasks.py` | `ingest_official_results` — now auto-bootstraps races when 0 exist |
 | `backend/integrations/openstates/client.py` | `list_people()` only — no elections/candidates endpoint |
 
 ---
@@ -68,8 +68,10 @@ Current Stage 1 sources:        Current Stage 2 sources:
 | **OpenStates v3** | ❌ No | Only `/people` endpoint — current legislators, no elections |
 | **michiganelections.io** | ✅ Potentially | `/positions`, `/proposals` endpoints; **offline for maintenance as of 2026-05-23** |
 | **PA Socrata (data.pa.gov)** | ⚠️ Post-election | Results data — can retroactively bootstrap races |
-| **Clarity Elections** | ⚠️ Post-election | Results data — can bootstrap races if task is extended |
-| **SC Clarity** | ❓ Unverified | `concept.md` lists SC as Clarity state; SCVotes.gov doesn't confirm |
+| **Clarity Elections** | ✅ Self-bootstrapping | bootstrap added to `ingest_official_results` (P2 ✅) |
+| **SC Clarity** | ✅ Confirmed | HTTP 200 on ENR infrastructure; adapter built |
+| **IA Clarity** | ✅ Confirmed | HTTP 200, live 2025/2026 data; adapter built (P4-IA ✅) |
+| **NM, MT, CT, MD, NJ, NE** | ❌ 404 | All return 404 — not on Clarity infrastructure |
 | **OR SOS** | ❌ Files only | No API; PDF/CSV downloads |
 | **AL SOS** | ❌ Files only | No API; Excel/portal |
 | **NE SOS** | ❌ Files only | No API; possibly county-level Clarity (unverified) |
@@ -103,20 +105,23 @@ This makes the Clarity adapter self-bootstrapping — it can populate an empty e
 - `backend/results/apps.py` — `sc` added to `ResultsConfig.ready()` imports
 - **Admin action required:** Set `results_url` on the SC election in Django admin once SC publishes their Clarity link (watch `https://scvotes.gov` on/before Jun 9)
 
-### 🟠 Priority 2 — Extend Clarity adapter to bootstrap races
-- Modify `backend/results/tasks.py` `ingest_official_results`:
-  - If `Race.objects.filter(election=election).count() == 0`: auto-create from ResultRows
-- Benefits WV and CO immediately (retroactive fill); SC/IA/NM when confirmed
-- Test: add test for race-bootstrap path in `backend/results/tests/`
+### 🟠 Priority 2 — Clarity self-bootstrap ✅ BUILT (2026-05-24)
+- `backend/results/tasks.py` — `ingest_official_results` now calls `_bootstrap_races_from_results()` when no races exist
+- `_bootstrap_races_from_results()`: groups result rows by `office_title`, detects race type via title keywords (amendment/measure/proposition/etc.), creates `Race`/`Candidate`/`MeasureOption` rows inside `transaction.atomic()` with `select_for_update()` serialisation
+- Stale version cache fix: if no races exist, the task clears any cached Clarity version before calling `fetch_results()` to prevent the `unchanged=True` short-circuit from blocking bootstrap
+- Version cache now only written after at least one race was processed
+- `Race.Source.RESULTS_ADAPTER` added; migration `0005` generated
+- Benefits WV, CO, SC, IA immediately (retroactive fill when `results_url` is set)
+- 11 new tests added to `backend/results/tests/test_tasks.py`
 
 ### 🟡 Priority 3 — PA Socrata adapter
 - Source: `https://data.pa.gov/` Socrata SODA API
-- Dataset ID for election results changes per cycle — must look up on data.pa.gov
-- Build `backend/integrations/pa/` as combined Stage 1+2 adapter
-- Retroactively fills the PA May 19 primary
+- **BLOCKED**: 2026 primary data (May 19) not yet published; historical dataset IDs (`9ej9-wkqp`, etc.) return 404 via SODA API
+- Dataset ID for election results changes per cycle — must look up on data.pa.gov when 2026 data drops
+- Build `backend/integrations/pa/` as combined Stage 1+2 adapter when data is available (~2-4 weeks post-election)
 
 ### 🟢 Priority 4 — Michigan adapter
-- Wait for `michiganelections.io` to come back online
+- Wait for `michiganelections.io` to come back online (503 as of 2026-05-24)
 - API endpoints:
   - `GET /api/elections/` — list elections
   - `GET /api/positions/?election_id=X` — race/office entries with candidates
@@ -124,10 +129,11 @@ This makes the Clarity adapter self-bootstrapping — it can populate an empty e
 - Build `backend/integrations/mi/` — genuine Stage 1 (pre-election capable)
 - Accept header required: `Accept: application/json; version=2.0`
 
-### 🔵 Priority 5 — Additional Clarity states (verify per election cycle)
-States to check at `results.enr.clarityelections.com/{STATE}/`:
-- IA, NM, NJ, NE (county-level), MT, CT, MD, SC (see Priority 1)
-- Each confirmed = 5-line subclass in `backend/results/adapters/`
+### 🔵 Priority 5 — Iowa Clarity adapter ✅ BUILT (2026-05-24)
+- `https://results.enr.clarityelections.com/IA/` confirmed HTTP 200; live 2025/2026 election data
+- `backend/results/adapters/ia.py` — `IowaAdapter` added (5-line Clarity subclass)
+- `backend/results/apps.py` — `ia` added to imports
+- **Verified not on Clarity:** NM, MT, CT, MD, NJ, NE — all return 404
 
 ---
 

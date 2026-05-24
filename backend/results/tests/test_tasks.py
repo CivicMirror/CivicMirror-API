@@ -363,3 +363,209 @@ def test_process_race_official_result_sets_certified():
     race.refresh_from_db()
     assert race.certification_status == Race.CertificationStatus.RESULTS_CERTIFIED
     assert race.race_status == Race.RaceStatus.ARCHIVED
+
+
+# ---------------------------------------------------------------------------
+# _bootstrap_races_from_results
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_bootstrap_creates_candidate_race():
+    election = make_election()
+    rows = [
+        make_result_row(candidate_name="ALICE SMITH", office_title="U.S. Senate"),
+        make_result_row(candidate_name="BOB JONES", office_title="U.S. Senate"),
+    ]
+    result = make_adapter_result(rows=rows)
+
+    from results.tasks import _bootstrap_races_from_results
+    created = _bootstrap_races_from_results(election, result, "WV")
+
+    assert len(created) == 1
+    race = created[0]
+    assert race.office_title == "U.S. Senate"
+    assert race.race_type == Race.RaceType.CANDIDATE
+    assert race.source == Race.Source.RESULTS_ADAPTER
+    assert race.match_confidence == Race.MatchConfidence.LOW
+    assert Candidate.objects.filter(race=race).count() == 2
+    names = set(Candidate.objects.filter(race=race).values_list('name', flat=True))
+    assert names == {"ALICE SMITH", "BOB JONES"}
+
+
+@pytest.mark.django_db
+def test_bootstrap_detects_measure_race_from_title():
+    election = make_election()
+    rows = [
+        make_result_row(candidate_name="Yes", option_label=None, office_title="Amendment 1"),
+        make_result_row(candidate_name="No", option_label=None, office_title="Amendment 1"),
+    ]
+    result = make_adapter_result(rows=rows)
+
+    from results.tasks import _bootstrap_races_from_results
+    created = _bootstrap_races_from_results(election, result, "WV")
+
+    assert len(created) == 1
+    race = created[0]
+    assert race.race_type == Race.RaceType.MEASURE
+    opts = set(MeasureOption.objects.filter(race=race).values_list('option_label', flat=True))
+    assert opts == {"Yes", "No"}
+
+
+@pytest.mark.django_db
+def test_bootstrap_multiple_offices():
+    election = make_election()
+    rows = [
+        make_result_row(candidate_name="ALICE", office_title="U.S. Senate"),
+        make_result_row(candidate_name="BOB", office_title="U.S. Senate"),
+        make_result_row(candidate_name="CAROL", office_title="Governor"),
+    ]
+    result = make_adapter_result(rows=rows)
+
+    from results.tasks import _bootstrap_races_from_results
+    created = _bootstrap_races_from_results(election, result, "WV")
+
+    assert len(created) == 2
+    titles = {r.office_title for r in created}
+    assert titles == {"U.S. Senate", "Governor"}
+
+
+@pytest.mark.django_db
+def test_bootstrap_skips_rows_with_no_office_title():
+    election = make_election()
+    rows = [
+        make_result_row(candidate_name="ALICE", office_title=None),
+        make_result_row(candidate_name="BOB", office_title="U.S. Senate"),
+    ]
+    result = make_adapter_result(rows=rows)
+
+    from results.tasks import _bootstrap_races_from_results
+    created = _bootstrap_races_from_results(election, result, "WV")
+
+    assert len(created) == 1
+    assert created[0].office_title == "U.S. Senate"
+
+
+@pytest.mark.django_db
+def test_bootstrap_returns_existing_races_when_already_bootstrapped():
+    """Idempotency: if races already exist, bootstrap returns them without creating duplicates."""
+    election = make_election()
+    existing_race = make_race(election, office_title="U.S. Senate")
+    rows = [make_result_row(candidate_name="ALICE", office_title="U.S. Senate")]
+    result = make_adapter_result(rows=rows)
+
+    from results.tasks import _bootstrap_races_from_results
+    returned = _bootstrap_races_from_results(election, result, "WV")
+
+    assert len(returned) == 1
+    assert returned[0].pk == existing_race.pk
+    assert Race.objects.filter(election=election).count() == 1
+
+
+@pytest.mark.django_db
+def test_bootstrap_write_in_candidate_status():
+    election = make_election()
+    rows = [
+        make_result_row(candidate_name="ALICE SMITH", office_title="U.S. Senate", is_write_in_aggregate=False),
+        make_result_row(candidate_name="WRITE-IN", office_title="U.S. Senate", is_write_in_aggregate=True),
+    ]
+    result = make_adapter_result(rows=rows)
+
+    from results.tasks import _bootstrap_races_from_results
+    created = _bootstrap_races_from_results(election, result, "WV")
+
+    race = created[0]
+    wi = Candidate.objects.get(race=race, name="WRITE-IN")
+    assert wi.candidate_status == Candidate.CandidateStatus.WRITE_IN
+    alice = Candidate.objects.get(race=race, name="ALICE SMITH")
+    assert alice.candidate_status == Candidate.CandidateStatus.RUNNING
+
+
+@pytest.mark.django_db
+def test_bootstrap_empty_rows_returns_empty():
+    election = make_election()
+    result = make_adapter_result(rows=[])
+
+    from results.tasks import _bootstrap_races_from_results
+    created = _bootstrap_races_from_results(election, result, "WV")
+
+    assert created == []
+    assert Race.objects.filter(election=election).count() == 0
+
+
+# ---------------------------------------------------------------------------
+# ingest_official_results: bootstrap integration
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_ingest_bootstrap_creates_races_and_results_when_none_exist():
+    """Full integration: election with no races gets bootstrapped + results stored."""
+    election = make_election()
+
+    rows = [make_result_row(candidate_name="ALICE SMITH", office_title="U.S. Senate")]
+    result = make_adapter_result(rows=rows, source_version="999")
+
+    mock_adapter_instance = MagicMock()
+    mock_adapter_instance.fetch_results.return_value = result
+    mock_adapter_instance.version_cache_key.return_value = f"clarity:ver:{election.pk}"
+    mock_adapter_instance.VERSION_CACHE_TIMEOUT = 86400 * 30
+    mock_adapter_class = MagicMock(return_value=mock_adapter_instance)
+
+    from results.tasks import ingest_official_results
+    with patch("results.tasks.get_adapter", return_value=mock_adapter_class), \
+         patch("results.tasks.cache") as mock_cache:
+        mock_cache.get.return_value = None  # no stale version
+        ingest_official_results("WV", election.pk)
+
+    # Race and candidate were bootstrapped
+    assert Race.objects.filter(election=election).count() == 1
+    race = Race.objects.get(election=election)
+    assert race.race_type == Race.RaceType.CANDIDATE
+    assert race.source == Race.Source.RESULTS_ADAPTER
+    assert Candidate.objects.filter(race=race, name="ALICE SMITH").exists()
+    # OfficialResult was written
+    assert OfficialResult.objects.filter(race=race).exists()
+
+
+@pytest.mark.django_db
+def test_ingest_clears_stale_version_cache_when_no_races():
+    """If version cache exists but there are no races, it must be cleared before fetch."""
+    election = make_election()
+
+    mock_adapter_instance = MagicMock()
+    mock_adapter_instance.fetch_results.return_value = make_adapter_result(rows=[])
+    mock_adapter_instance.version_cache_key.return_value = f"clarity:ver:{election.pk}"
+    mock_adapter_instance.VERSION_CACHE_TIMEOUT = 86400 * 30
+    mock_adapter_class = MagicMock(return_value=mock_adapter_instance)
+
+    from results.tasks import ingest_official_results
+    with patch("results.tasks.get_adapter", return_value=mock_adapter_class), \
+         patch("results.tasks.cache") as mock_cache:
+        mock_cache.get.return_value = "stale-ver-123"  # stale cached version
+        ingest_official_results("WV", election.pk)
+
+    mock_cache.delete.assert_called_once_with(f"clarity:ver:{election.pk}")
+
+
+@pytest.mark.django_db
+def test_ingest_version_cache_not_written_when_bootstrap_finds_no_rows():
+    """Version cache must NOT be written when no races were processed."""
+    election = make_election()
+
+    mock_adapter_instance = MagicMock()
+    # Adapter returns rows but bootstrap produces nothing (all titles empty)
+    mock_adapter_instance.fetch_results.return_value = make_adapter_result(
+        rows=[make_result_row(candidate_name="ALICE", office_title=None)],
+        source_version="777",
+    )
+    mock_adapter_instance.version_cache_key.return_value = f"clarity:ver:{election.pk}"
+    mock_adapter_instance.VERSION_CACHE_TIMEOUT = 86400 * 30
+    mock_adapter_class = MagicMock(return_value=mock_adapter_instance)
+
+    from results.tasks import ingest_official_results
+    with patch("results.tasks.get_adapter", return_value=mock_adapter_class), \
+         patch("results.tasks.cache") as mock_cache:
+        mock_cache.get.return_value = None
+        ingest_official_results("WV", election.pk)
+
+    # No races created, so version cache must NOT be written
+    mock_cache.set.assert_not_called()
