@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 from integrations.civic.tasks import sync_elections
 from integrations.fec.tasks import sync_fec_candidates
 from integrations.openstates.tasks import sync_openstates_all_states
+from integrations.sc_vrems.tasks import sync_sc_elections
 from results.tasks import poll_pending_results
 
 from .auth import require_internal_task_token
@@ -19,6 +20,7 @@ _SYNC_ELECTIONS_LOCK_TTL = 55 * 60   # 55 minutes — just under the 1-hour sche
 _POLL_RESULTS_LOCK_TTL = 23 * 60 * 60  # 23 hours — just under the daily window
 _SYNC_OPENSTATES_LOCK_TTL = 23 * 60 * 60  # 23 hours — just under the daily window
 _SYNC_FEC_LOCK_TTL = 6 * 60 * 60  # 6 hours — on-demand trigger dedupe window
+_SYNC_SC_VREMS_LOCK_TTL = 23 * 60 * 60  # 23 hours — daily cadence
 
 
 def _schedule_window_hourly() -> str:
@@ -100,4 +102,21 @@ def sync_fec_trigger(request):
 
     task = sync_fec_candidates.delay()
     logger.info("scheduler.trigger.enqueued task=sync_fec task_id=%s window=%s", task.id, window)
+    return JsonResponse({"task_id": task.id}, status=202)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_sc_vrems_trigger(request):
+    window = _schedule_window_daily()
+    lock_key = f"task_lock:sync_sc_vrems:{window}"
+
+    acquired = cache.add(lock_key, 1, _SYNC_SC_VREMS_LOCK_TTL)
+    if not acquired:
+        logger.info("scheduler.trigger.skipped task=sync_sc_vrems window=%s", window)
+        return JsonResponse({"status": "already_running"}, status=202)
+
+    task = sync_sc_elections.delay()
+    logger.info("scheduler.trigger.enqueued task=sync_sc_vrems task_id=%s window=%s", task.id, window)
     return JsonResponse({"task_id": task.id}, status=202)

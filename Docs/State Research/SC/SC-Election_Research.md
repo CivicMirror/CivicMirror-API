@@ -4,16 +4,52 @@
 
 | Stage | Status | Notes |
 |---|---|---|
-| Stage 1 — Election Creation | ✅ Available | Google Civic API (no SC VIP feed) |
-| Stage 1 — Race Creation | ⚠️ Bootstrap only | Google Civic API (no SC VIP feed); bootstrap path active post-election |
-| Stage 2 — Results Ingestion | ✅ Adapter built | Clarity Elections adapter built (`results/adapters/sc.py`); needs `results_url` in admin |
+| Stage 1 — Election Creation | ✅ Complete | VREMS `sync_sc_elections` task — all 3 types (General/Local/Special), 122+ elections/year |
+| Stage 1 — Race Creation | ✅ Complete | VREMS `sync_sc_races` task — primary-party partitioned races, candidate status preserved |
+| Stage 2 — Results Ingestion | ✅ Adapter built | Clarity Elections adapter (`results/adapters/sc.py`); needs `results_url` set in admin per election |
 
 ---
 
 **Site:** https://www.scvotes.gov/election-results
 **Operated by:** South Carolina Election Commission
-**Researched:** March 4, 2026 | **Updated:** May 24, 2026 (HAR analysis)
+**Researched:** March 4, 2026 | **Updated:** May 24, 2026 (HAR analysis) | **Implemented:** May 24, 2026
 **Status:** Public, no authentication required
+
+---
+
+## Implementation
+
+**Module:** `integrations/sc_vrems/`
+
+### Tasks
+
+| Task | Trigger | Schedule |
+|---|---|---|
+| `sync_sc_elections` | `POST /internal/tasks/sync-sc-vrems/` | Daily (Cloud Scheduler) |
+| `sync_sc_races` | Queued by `sync_sc_elections` | Staggered 2s apart per election |
+
+### What `sync_sc_elections` does
+1. Calls VREMS `GetYearsByElectionType` + `GetElections` for all 3 types
+2. Upserts `Election` records (source_id format: `vrems_sc_{electionId}`)
+3. Skips race sync for referendums (`filingPeriodBeginDate == null`) — Election record still created
+4. Skips race sync for elections where filing period hasn't opened yet — will pick up on next daily run
+5. Queues `sync_sc_races` for each eligible election with a 2-second stagger
+
+### What `sync_sc_races` does
+1. Calls VREMS `CandidateSearch` POST for the given `electionId`
+2. Groups candidates into races: partitioned by party for primaries; merged by party for generals
+3. Upserts `Race` + `Candidate` records
+4. Stores raw VREMS `status` (e.g. `Elected`, `Defeated In Primary`) in `Candidate.source_metadata["vrems_status"]`
+5. Idempotent — safe to re-run
+
+### Notes on referendum elections
+Referendum elections (`filingPeriodBeginDate == null`) get `Election` records created but no `Race` records.
+Full ballot measure coverage requires a future investigation of `electionhistory.scvotes.gov`.
+
+### Notes on results (Stage 3)
+The Clarity ENR adapter (`results/adapters/sc.py`) is ready. ENR IDs and VREMS IDs use independent
+numbering systems — the `results_url` for each election must be set manually in Django admin after
+results are posted at `https://www.enr-scvotes.org/SC/{enr_id}/`.
 
 ---
 
