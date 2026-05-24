@@ -102,7 +102,7 @@ AL, AK, AR, DE, GA, HI, ID, IN, IA, KS, KY, LA, ME, MD, MN, MS, MO, MT, NE, NV, 
 | VT | Vermont | VT-Election_Research.md | electionarchive.vermont.gov |
 | VA | Virginia | VA-Election_Research.md | elections.virginia.gov (JSON/CSV) |
 | WA | Washington | WA-Election_Research.md | sos.wa.gov/elections |
-| WV | West Virginia | WV-Election_Research.md | apps.sos.wv.gov/elections |
+| WV | West Virginia | WV-Election_Research-Completed.md ✅ | apps.sos.wv.gov/elections |
 | WI | Wisconsin | WI-Election_Research.md | elections.wi.gov |
 | WY | Wyoming | WY-Election_Research.md | sos.wyo.gov/elections |
 
