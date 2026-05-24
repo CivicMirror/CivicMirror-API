@@ -75,6 +75,7 @@ class Race(models.Model):
         COMMUNITY = 'community', 'Community'
         RESULTS_ADAPTER = 'results_adapter', 'Results Adapter'
         SC_VREMS = 'sc_vrems', 'SC VREMS'
+        IA_SOS = 'ia_sos', 'Iowa SOS'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'

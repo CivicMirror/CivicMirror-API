@@ -8,4 +8,5 @@ urlpatterns = [
     path("tasks/sync-openstates/", views.sync_openstates_trigger, name="internal-sync-openstates"),
     path("tasks/sync-fec/", views.sync_fec_trigger, name="internal-sync-fec"),
     path("tasks/sync-sc-vrems/", views.sync_sc_vrems_trigger, name="internal-sync-sc-vrems"),
+    path("tasks/sync-ia-sos/", views.sync_ia_sos_trigger, name="internal-sync-ia-sos"),
 ]
