@@ -300,3 +300,17 @@ def test_fetch_results_sends_browser_user_agent(mock_requests, mock_election, mo
 @pytest.mark.django_db
 def test_version_cache_key():
     assert ConcreteClarity.version_cache_key(42) == "clarity:ver:42"
+
+
+# ---------------------------------------------------------------------------
+# State adapter registration
+# ---------------------------------------------------------------------------
+
+def test_sc_adapter_registered():
+    from results.adapters.registry import get_adapter, list_supported_states
+    from results.adapters import co, sc, wv  # noqa: F401 — ensure @register runs
+    assert "SC" in list_supported_states()
+    adapter = get_adapter("SC")
+    assert adapter is not None
+    assert adapter.state == "SC"
+
