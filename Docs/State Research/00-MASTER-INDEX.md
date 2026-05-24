@@ -95,7 +95,7 @@ AL, AK, AR, DE, GA, HI, ID, IN, IA, KS, KY, LA, ME, MD, MN, MS, MO, MT, NE, NV, 
 | OR | Oregon | OR-Election_Research.md | sos.oregon.gov/elections |
 | PA | Pennsylvania | PA-Election_Research.md | data.pa.gov (Socrata API) |
 | RI | Rhode Island | RI-Election_Research.md | elections.ri.gov |
-| SC | South Carolina | SC-Election_Research.md | scvotes.gov |
+| SC | South Carolina | SC/SC-Election_Research.md | scvotes.gov + vrems.scvotes.sc.gov |
 | SD | South Dakota | SD-Election_Research.md | sdsos.gov/elections |
 | TN | Tennessee | TN-Election_Research.md | sos.tn.gov/elections/results |
 | UT | Utah | UT-Election_Research.md | electionresults.utah.gov |
@@ -116,15 +116,15 @@ Tracks Stage 1 (Election + Race Creation) and Stage 2 (Results Ingestion) implem
 |------|-------|----------------------------|-------------------------|-----------------------------|
 | **WV** | West Virginia | ✅ Complete | ✅ Complete (14 races in prod) | ✅ Complete — Clarity adapter (`wv.py`) |
 | **CO** | Colorado | ✅ Complete | ✅ Complete (races in prod) | ✅ Complete — Clarity adapter (`co.py`) |
-| **SC** | South Carolina | ✅ Available | ⚠️ Bootstrap only (post-election) | ✅ Adapter built — Clarity (`sc.py`) |
+| **SC** | South Carolina | ✅ Complete — VREMS (`sync_sc_elections`) | ✅ Complete — VREMS (`sync_sc_races`); 122 elections/2026 incl. Local | ✅ Adapter built — Clarity (`sc.py`) |
 | **IA** | Iowa | ✅ Available | ⚠️ Bootstrap only (post-election) | ✅ Adapter built — Clarity (`ia.py`) |
 | **CA** | California | ✅ Available | ✅ 38 races in prod (Civic API + SOS REST) | ❌ No adapter |
 | **PA** | Pennsylvania | ✅ Available | ⚠️ Blocked (2026 data not yet published) | ❌ Pending Socrata adapter |
 | **MI** | Michigan | ✅ Available | ⚠️ Blocked (`michiganelections.io` 503) | ❌ Pending API recovery |
 | All others | — | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter |
 
-**Full Coverage** (all three stages ✅): **WV**, **CO**  
-**Adapter built, bootstrap path**: **SC**, **IA** (need `results_url` set in Django admin)  
+**Full Coverage** (all three stages ✅): **WV**, **CO**, **SC**  
+**Adapter built, bootstrap path**: **IA** (needs `results_url` set in Django admin)  
 **Blocked adapters**: PA (data publication ~2-4 weeks), MI (API 503)
 
 ---

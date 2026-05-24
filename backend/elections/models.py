@@ -74,6 +74,7 @@ class Race(models.Model):
         MEDSL = 'medsl', 'MEDSL'
         COMMUNITY = 'community', 'Community'
         RESULTS_ADAPTER = 'results_adapter', 'Results Adapter'
+        SC_VREMS = 'sc_vrems', 'SC VREMS'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'
