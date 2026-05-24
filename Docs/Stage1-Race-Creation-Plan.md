@@ -97,11 +97,11 @@ This makes the Clarity adapter self-bootstrapping — it can populate an empty e
 
 ## Build Priority
 
-### 🔴 Priority 1 — Verify SC Clarity (SC Primary Jun 9 = ~17 days away)
-- Check `https://results.enr.clarityelections.com/SC/` for active 2026 primary
-- If confirmed: add `backend/results/adapters/sc.py` (5-line Clarity subclass)
-- Set `results_url` on SC election in Django admin
-- **Blocker:** Without this, SC will be another empty election
+### 🔴 Priority 1 — SC Clarity ✅ CONFIRMED & ADAPTER BUILT (2026-05-24)
+- `https://results.enr.clarityelections.com/SC/` returns HTTP 200; `elections.json` returns `[]` (normal pre-election state — data typically appears on or near election night)
+- `backend/results/adapters/sc.py` — `SouthCarolinaAdapter` added (5-line Clarity subclass)
+- `backend/results/apps.py` — `sc` added to `ResultsConfig.ready()` imports
+- **Admin action required:** Set `results_url` on the SC election in Django admin once SC publishes their Clarity link (watch `https://scvotes.gov` on/before Jun 9)
 
 ### 🟠 Priority 2 — Extend Clarity adapter to bootstrap races
 - Modify `backend/results/tasks.py` `ingest_official_results`:
