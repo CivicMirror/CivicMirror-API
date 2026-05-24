@@ -153,6 +153,13 @@ jobs:
             --oidc-token-audience="$NEW_BASE" \
             --quiet
 
+          gcloud scheduler jobs update http sync-ia-sos \
+            --location="${{ env.REGION }}" \
+            --uri="${NEW_BASE}/internal/tasks/sync-ia-sos/" \
+            --oidc-service-account-email="$SA" \
+            --oidc-token-audience="$NEW_BASE" \
+            --quiet
+
   # ── Update sync-elections Cloud Run Job ─────────────────────────────────────
   update-sync-elections-job:
     name: Update sync-elections job
