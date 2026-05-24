@@ -4,7 +4,7 @@
 
 `anthropic.turbovote.org` is a white-label deployment of TurboVote, a voter-information product built and operated by Democracy Works. Anthropic appears to host the site as an employee civic-engagement benefit and contributes no custom election data of its own.
 
-When a user enters a street address, the site resolves that address to one or more civic jurisdictions identified by Open Civic Data (OCD) division IDs. It then queries the Democracy Works / TurboVote elections API to retrieve upcoming elections scoped to those jurisdictions. For the Sutton, MA test address (20 Welsh Rd, Sutton, MA), the system returned a local Sutton town election record tied to the OCD ID `ocd-division/country:us/state:ma/place:sutton`. That record cited an official PDF notice posted on `suttonma.org` and carried a `qa-status: complete` flag.
+When a user enters a street address, the site resolves that address to one or more civic jurisdictions identified by Open Civic Data (OCD) division IDs. It then queries the Democracy Works / TurboVote elections API to retrieve upcoming elections scoped to those jurisdictions. For the Sutton, MA test address (<REDACTED STREET>, Sutton, MA), the system returned a local Sutton town election record tied to the OCD ID `ocd-division/country:us/state:ma/place:sutton`. That record cited an official PDF notice posted on `suttonma.org` and carried a `qa-status: complete` flag.
 
 This strongly indicates that Democracy Works manually researches and curates local election records from official government sources rather than pulling them from a Massachusetts public elections API.
 
@@ -38,10 +38,10 @@ Democracy Works publicly documents its research methodology. The organization do
 
 ## 4. Case Study: The Sutton, MA Town Election
 
-The lookup for 20 Welsh Rd, Sutton, MA provides clear evidence of the manual curation process.
+The lookup for <REDACTED STREET>, Sutton, MA provides clear evidence of the manual curation process.
 
 ### Address Resolution
-The street address is translated into its constituent jurisdictions, notably identifying the town: `ocd-division/country:us/state:ma/place:sutton`. The specific street (`20 Welsh Rd`) is not used for the local election query, as Sutton does not appear to use sub-municipal ward or precinct elections for town offices.
+The street address is translated into its constituent jurisdictions, notably identifying the town: `ocd-division/country:us/state:ma/place:sutton`. The specific street (`<REDACTED STREET>`) is not used for the local election query, as Sutton does not appear to use sub-municipal ward or precinct elections for town offices.
 
 ### The Election Record
 Querying the TurboVote API for the Sutton OCD ID returns an election record. The record includes:
