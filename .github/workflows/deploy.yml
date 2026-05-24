@@ -184,6 +184,7 @@ jobs:
             --memory=512Mi \
             --no-allow-unauthenticated \
             --ingress=internal \
+            --add-cloudsql-instances="${{ secrets.GCP_PROJECT_ID }}:${{ env.REGION }}:civicmirror-db" \
             --vpc-connector="projects/${{ secrets.GCP_PROJECT_ID }}/locations/${{ env.REGION }}/connectors/civicmirror-connector" \
             --vpc-egress=private-ranges-only \
             --set-env-vars="DJANGO_SETTINGS_MODULE=config.settings.prod" \
