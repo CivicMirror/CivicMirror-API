@@ -1,5 +1,15 @@
 # New Jersey Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | County-level downloads (Clarity unverified) — no adapter built |
+
+---
+
 **Site:** https://nj.gov/state/elections/election-information-results.shtml
 **Operated by:** New Jersey Division of Elections
 **Researched:** March 4, 2026

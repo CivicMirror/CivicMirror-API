@@ -1,5 +1,15 @@
 # Maine Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API; RCV elections require ranked-choice ballot support |
+| Stage 2 — Results Ingestion | ❌ No adapter | SOS + RCV CVR — no adapter built |
+
+---
+
 **Site:** https://www.maine.gov/sos/elections-voting/election-results-data
 **Operated by:** Maine Secretary of State
 **Researched:** March 4, 2026 · Updated: May 2026

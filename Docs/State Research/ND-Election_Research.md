@@ -1,5 +1,15 @@
 # North Dakota Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API; no voter registration — voter-derived lookups not applicable |
+| Stage 2 — Results Ingestion | ❌ No adapter | PDF/Excel downloads — no adapter built |
+
+---
+
 **Site:** https://vip.sos.nd.gov/electionresults.aspx
 **Operated by:** North Dakota Secretary of State
 **Researched:** March 4, 2026

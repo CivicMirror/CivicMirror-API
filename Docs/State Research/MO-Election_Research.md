@@ -1,5 +1,15 @@
 # Missouri Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | CSV/PDF downloads — no adapter built |
+
+---
+
 **Site:** https://www.sos.mo.gov/elections/resultsandstats
 **Operated by:** Missouri Secretary of State
 **Researched:** March 4, 2026

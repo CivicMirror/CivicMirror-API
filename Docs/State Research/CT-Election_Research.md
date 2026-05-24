@@ -1,5 +1,15 @@
 # Connecticut Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | Socrata/SODA API + EMS available; adapter not built |
+
+---
+
 **Site:** https://portal.ct.gov/SOTS/Election-Services/Election-Results/Election-Results
 **Historical Database:** https://electionhistory.ct.gov/eng
 **EMS Public Reporting:** https://ctemspublic.pcctg.net

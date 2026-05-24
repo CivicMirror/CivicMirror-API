@@ -1,5 +1,15 @@
 # Pennsylvania Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Blocked | Google Civic API; Socrata adapter planned but 2026 data not yet published (~2-4 weeks) |
+| Stage 2 — Results Ingestion | ❌ No adapter | Socrata/SODA API available; adapter blocked on 2026 data publication |
+
+---
+
 **Site:** https://www.electionreturns.pa.gov/
 **Data:** https://data.pa.gov/
 **Operated by:** Pennsylvania Department of State

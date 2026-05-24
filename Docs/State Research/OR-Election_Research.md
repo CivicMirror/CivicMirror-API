@@ -1,5 +1,15 @@
 # Oregon Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | File downloads (own system) — no adapter built |
+
+---
+
 **Site:** https://sos.oregon.gov/elections/Pages/electionhistory.aspx
 **Operated by:** Oregon Secretary of State
 **Researched:** March 4, 2026

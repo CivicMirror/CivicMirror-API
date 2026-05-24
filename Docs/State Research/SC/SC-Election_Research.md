@@ -1,5 +1,15 @@
 # South Carolina Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API (no SC VIP feed) |
+| Stage 1 — Race Creation | ⚠️ Bootstrap only | Google Civic API (no SC VIP feed); bootstrap path active post-election |
+| Stage 2 — Results Ingestion | ✅ Adapter built | Clarity Elections adapter built (`results/adapters/sc.py`); needs `results_url` in admin |
+
+---
+
 **Site:** https://www.scvotes.gov/election-results
 **Operated by:** South Carolina Election Commission
 **Researched:** March 4, 2026 | **Updated:** May 24, 2026 (HAR analysis)

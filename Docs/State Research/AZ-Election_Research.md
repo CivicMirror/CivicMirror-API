@@ -1,5 +1,15 @@
 # Arizona Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | FTP XML feed available; adapter not built |
+
+---
+
 **Site:** https://azsos.gov/elections  
 **Results Site:** https://results.arizona.vote/  
 **Operated by:** Arizona Secretary of State  

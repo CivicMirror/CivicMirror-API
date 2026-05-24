@@ -1,5 +1,15 @@
 # Alabama Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | Excel/portal only — no adapter built |
+
+---
+
 **Site:** https://www.sos.alabama.gov/alabama-votes/voter/election-data  
 **Election Night Results:** https://www2.alabamavotes.gov/electionnight/  
 **Operated by:** Alabama Secretary of State  

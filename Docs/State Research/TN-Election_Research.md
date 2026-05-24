@@ -1,5 +1,15 @@
 # Tennessee Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | ENR dashboard (own system) — no adapter built |
+
+---
+
 **Site:** https://sos.tn.gov/elections/results
 **Election Night:** https://www.elections.tn.gov/
 **Statistics:** https://sos.tn.gov/elections/statistics

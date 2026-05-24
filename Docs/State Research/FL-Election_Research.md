@@ -1,5 +1,15 @@
 # Florida Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | Structured downloads only — no adapter built |
+
+---
+
 **Site:** https://dos.fl.gov/elections/data-statistics/elections-data/
 **Election Watch:** https://floridaelectionwatch.gov/
 **Results Extract:** https://results.elections.myflorida.com/

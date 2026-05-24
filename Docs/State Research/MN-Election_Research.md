@@ -1,5 +1,15 @@
 # Minnesota Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | GIS + real-time portal (own system) — no adapter built |
+
+---
+
 **Site:** https://www.sos.state.mn.us/election-administration-campaigns/data-maps/
 **Results:** https://electionresults.sos.state.mn.us/
 **Operated by:** Minnesota Secretary of State

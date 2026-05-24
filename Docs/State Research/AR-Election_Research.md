@@ -1,5 +1,15 @@
 # Arkansas Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | ZIP download only — no adapter built |
+
+---
+
 **Site:** https://www.sos.arkansas.gov/elections  
 **Results:** https://www.sos.arkansas.gov/elections/research/election-results  
 **Operated by:** Arkansas Secretary of State  

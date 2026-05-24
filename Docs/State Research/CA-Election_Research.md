@@ -1,5 +1,15 @@
 # California Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API + CA SOS REST API |
+| Stage 1 — Race Creation | ✅ 38 races in prod | Google Civic API + CA SOS REST API; 38 races confirmed in production DB |
+| Stage 2 — Results Ingestion | ❌ No adapter | CA SOS REST API available; adapter not built |
+
+---
+
 **API Base URL:** https://api.sos.ca.gov  
 **Results Site:** https://electionresults.sos.ca.gov/  
 **Media Files:** https://media.sos.ca.gov/  

@@ -1,5 +1,15 @@
 # Illinois Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | SBE + 108 local authorities — no adapter built |
+
+---
+
 **Site:** https://www.elections.il.gov/electionoperations/ElectionVoteTotals.aspx
 **Results Search:** https://www.elections.il.gov/electionoperations/votetotalsearch.aspx
 **Operated by:** Illinois State Board of Elections

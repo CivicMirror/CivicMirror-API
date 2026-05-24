@@ -1,5 +1,15 @@
 # Nevada Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | PDF/Excel downloads — no adapter built |
+
+---
+
 **Site:** https://www.nvsos.gov/sos/elections/election-information/election-results
 **Operated by:** Nevada Secretary of State
 **Researched:** March 4, 2026

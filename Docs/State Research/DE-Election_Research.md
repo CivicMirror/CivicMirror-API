@@ -1,5 +1,15 @@
 # Delaware Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | CSV downloads only — no adapter built |
+
+---
+
 **Site:** https://elections.delaware.gov/results/
 **Archive:** https://elections.delaware.gov/elections/election_archive.shtml
 **Operated by:** Delaware Department of Elections / State Election Commissioner

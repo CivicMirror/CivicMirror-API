@@ -1,5 +1,15 @@
 # Virginia Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | JSON + GIS (own system) — no adapter built |
+
+---
+
 **Site:** https://www.elections.virginia.gov/resultsreports/election-results/
 **Historical Database:** https://historical.elections.virginia.gov/
 **Academic Database:** https://vavh.electionstats.com/

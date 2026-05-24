@@ -1,5 +1,15 @@
 # Indiana Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | SOS archive only — no adapter built |
+
+---
+
 **Site:** https://www.in.gov/sos/elections/election-commission/election-results/
 **New Portal:** https://indianavoters.in.gov/ENRHistorical/ElectionResults
 **Operated by:** Indiana Secretary of State / Indiana Election Division

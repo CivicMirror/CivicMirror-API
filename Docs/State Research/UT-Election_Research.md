@@ -1,5 +1,15 @@
 # Utah Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | Portal + paid requests barrier — no adapter built |
+
+---
+
 **Site:** https://vote.utah.gov/election-results-data-historical-information/
 **Results:** https://electionresults.utah.gov/
 **Historical:** https://vote.utah.gov/historical-election-results/

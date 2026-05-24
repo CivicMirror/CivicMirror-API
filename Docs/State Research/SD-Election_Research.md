@@ -1,5 +1,15 @@
 # South Dakota Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | Excel downloads — no adapter built |
+
+---
+
 **Site:** https://sdsos.gov/elections-voting/election-results/default.aspx
 **Operated by:** South Dakota Secretary of State
 **Researched:** March 4, 2026

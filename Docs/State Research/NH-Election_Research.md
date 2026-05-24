@@ -1,5 +1,15 @@
 # New Hampshire Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API; town-level governance complexity |
+| Stage 2 — Results Ingestion | ❌ No adapter | Town-level downloads — no adapter built |
+
+---
+
 **Site:** https://www.sos.nh.gov/elections/election-results
 **Operated by:** New Hampshire Secretary of State
 **Researched:** March 4, 2026

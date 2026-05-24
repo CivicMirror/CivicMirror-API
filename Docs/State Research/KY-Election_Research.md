@@ -1,5 +1,15 @@
 # Kentucky Election Results — Research Notes
 
+## Coverage Status
+
+| Stage | Status | Notes |
+|---|---|---|
+| Stage 1 — Election Creation | ✅ Available | Google Civic API |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
+| Stage 2 — Results Ingestion | ❌ No adapter | SBE portal (Clarity returns 403 remotely) — no adapter built |
+
+---
+
 **Site:** https://elect.ky.gov/results/
 **Operated by:** Kentucky State Board of Elections / Secretary of State
 **Researched:** March 4, 2026
