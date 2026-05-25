@@ -11,8 +11,6 @@ class UserProfile(models.Model):
     us_state = models.CharField(max_length=50, blank=True)
     gender = models.CharField(max_length=50, blank=True)
     saved_zipcode = models.CharField(max_length=10, blank=True)
-    terms_version = models.CharField(max_length=50, blank=True)
-    terms_accepted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

@@ -1,6 +1,5 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from django.utils import timezone
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
@@ -44,8 +43,6 @@ class RegisterView(APIView):
             country=request.data.get('country', ''),
             us_state=request.data.get('us_state', ''),
             gender=request.data.get('gender', ''),
-            terms_version=request.data.get('terms_version', ''),
-            terms_accepted_at=timezone.now() if request.data.get('terms_accepted') else None,
         )
         return Response(_auth_response(user, profile), status=201)
 
