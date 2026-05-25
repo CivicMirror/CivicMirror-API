@@ -146,6 +146,7 @@ INSTALLED_APPS += [
     'integrations.fec',
     'integrations.sc_vrems',
     'integrations.ia_sos',
+    'integrations.co_sos',
     'internal',
     'api',
 ]
