@@ -129,6 +129,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework.authtoken',
 ]
 if HAS_DRF_SPECTACULAR:
     INSTALLED_APPS.append('drf_spectacular')
@@ -149,6 +150,7 @@ INSTALLED_APPS += [
     'integrations.co_sos',
     'internal',
     'api',
+    'accounts',
 ]
 
 MIDDLEWARE = [
