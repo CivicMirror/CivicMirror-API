@@ -8,7 +8,6 @@ import pytest
 from elections.models import Candidate, Election, Race
 from ops.models import SyncLog
 
-
 # ------------------------------------------------------------------
 # sync_sc_elections
 # ------------------------------------------------------------------

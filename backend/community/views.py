@@ -9,9 +9,9 @@ from api.permissions import HasAPIKey, IsFirebaseAuthenticated
 from api.serializers import RaceDetailSerializer
 from elections.models import Race
 
+from .models import MockVote
 from .serializers import MyVoteSummarySerializer, UserProfileSerializer
 from .services import cast_vote, create_community_race, get_or_create_profile, get_tally
-from .models import MockVote
 
 logger = logging.getLogger(__name__)
 

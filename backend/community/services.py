@@ -10,7 +10,6 @@ from elections.models import Candidate, MeasureOption, Race
 
 from .models import MockVote, UserProfile
 
-
 # ---------------------------------------------------------------------------
 # Vote casting
 # ---------------------------------------------------------------------------
