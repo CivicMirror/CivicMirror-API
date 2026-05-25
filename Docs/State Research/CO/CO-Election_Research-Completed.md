@@ -1,11 +1,14 @@
 # Colorado Election Results — Research Notes
 
+> **Last Updated:** May 25, 2026 at 11:45 AM EDT
+
 ## Coverage Status
 
 | Stage | Status | Notes |
 |---|---|---|
-| Stage 1 — Election Creation | ✅ Complete | Google Civic API |
-| Stage 1 — Race Creation | ✅ Races in prod | Google Civic API; races confirmed in production DB |
+| Stage 1 — Election Creation | ✅ Complete | co_sos integration (`integrations/co_sos/`) |
+| Stage 1 — Race Creation | ✅ Complete | CO SOS HTML candidate list, parsed via BeautifulSoup |
+| Stage 1 — Candidate Creation | ✅ Complete | `primaryCandidates.html` (HTML table, 250+ candidates for 2026) |
 | Stage 2 — Results Ingestion | ✅ Complete | Clarity Elections adapter live (`results/adapters/co.py`) |
 
 ---
@@ -41,7 +44,26 @@ Colorado provides election results through multiple channels: a searchable histo
 - PDF downloads: Abstract of Votes Cast
 - Example: "2024 General Election precinct level results (XLSX)"
 
-### Clarity Elections (Recent)
+### Candidate Lists (New — May 2026)
+- **Primary candidate list:** https://www.coloradosos.gov/pubs/elections/vote/primaryCandidates.html
+  - HTML table: columns Candidate name | Office | District | Party | Write in?
+  - Withdrawn candidates marked with `<span style="text-decoration: line-through;">`
+  - XLSX version: `/vote/files/{year}/{year}PrimaryCandidateListOfficial.xlsx`
+  - "Last updated" timestamp shown on page (e.g. "Last updated May 5, 2026, 4:44 PM")
+  - **Status:** Parsed by `integrations/co_sos/` using BeautifulSoup; 250+ candidates for 2026
+- **General petition candidates:** https://www.coloradosos.gov/pubs/elections/vote/generalPetitionCandidates.html
+  - ⚠️ Incomplete — petition candidates only, not the full general election ballot
+  - Different table schema (Format approved | Filed | Petition withdrawn | Insufficient | Sufficient)
+  - **Status:** Deferred — not suitable as a complete general election candidate source
+- **Candidate home page:** https://www.coloradosos.gov/pubs/elections/Candidates/CandidateHome.html
+
+### CO SOS Integration Notes
+- **Election dates (statutory):** Primary = last Tuesday of June in even years; General = first Tuesday after first Monday of November
+- **Change detection:** MD5 hash of HTML response body (site does not return ETag headers reliably)
+- **Race grouping (primary):** `(office, district, party)` — separate races per party per primary
+- **Trigger:** `POST /internal/tasks/sync-co-sos/` → `sync_co_elections` → `sync_co_candidates`
+- **Cloud Scheduler:** `sync-co-sos` job, daily 03:00 UTC
+
 - Recent elections use Clarity Elections platform (results.enr.clarityelections.com/CO/)
 - Interactive results with downloadable reports
 
