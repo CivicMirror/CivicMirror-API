@@ -1,5 +1,7 @@
 # Iowa Election Results — Research Notes
 
+> **Last Updated:** May 24, 2026 at 8:39 PM EDT
+
 ## Coverage Status
 
 | Stage | Status | Notes |
