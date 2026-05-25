@@ -1,12 +1,93 @@
 # Iowa SOS 403 Error: Bypass Solutions Research
 
 **Date:** 2026-05-25  
+**Status:** ✅ **Root cause confirmed. Solution identified. Implementation pending.**
+
 **Context:** CivicMirror production worker (`civicmirror-worker` on Google Cloud Run, `us-central1`) is receiving HTTP 403 from `https://sos.iowa.gov/elections/pdf/cal3yr.pdf` when the `sync_ia_elections` Celery task runs. The error is:  
 > `IowaSosRetryableError: Iowa SOS returned 403 for https://sos.iowa.gov/elections/pdf/cal3yr.pdf`
 
 ---
 
-## Executive Summary
+## ✅ Resolution Summary (2026-05-25)
+
+All diagnostic steps were run. Root cause is confirmed as **GCP datacenter IP reputation (Layer 1)**. The chosen fix is a **Cloudflare Worker proxy** using CivicMirror's existing Cloudflare account — no new vendors or costs required.
+
+### Diagnostic Results
+
+| Test | Result | Conclusion |
+|------|--------|------------|
+| Step 1 — Full browser headers + retry backoff (commit `f6e6132`) | ❌ Still 403 on Cloud Run | Layer 4 fix insufficient |
+| Step 3 — Local machine with `requests` (plain) | ✅ 200 | Not a TLS fingerprint issue locally |
+| Step 3 — Local machine with `curl_cffi` (Chrome124) | ✅ 200 | TLS fix works locally |
+| **Local 200 + Cloud Run 403 → Layer 1 IP block confirmed** | | GCP `us-central1` IPs flagged by Akamai |
+| Cloudflare Worker proxy test (`square-sun-2813.welefort.workers.dev`) | ✅ **200, 220,872 bytes** | **CF edge IPs pass Akamai Layer 1** |
+
+### Chosen Solution: Cloudflare Worker Proxy
+
+Route all `sos.iowa.gov` fetches through a Cloudflare Worker. Cloudflare's edge IPs are CDN IPs with high legitimate traffic — confirmed to pass Akamai's Layer 1 IP reputation check.
+
+- **Cost:** $0 (Cloudflare Workers free tier = 100,000 req/day; IA SOS uses ~2/day)
+- **Latency:** ~200ms overhead (acceptable for a background sync task)
+- **No new vendors or dependencies**
+
+### Implementation Plan (to be completed)
+
+#### 1. Production Worker (`cf-worker-ia-proxy`)
+Replace the test script with a parameterized production Worker:
+```js
+// Accept target URL as query param: ?url=https://sos.iowa.gov/...
+// Validate secret from CF Worker Secrets (not hardcoded)
+// Whitelist only sos.iowa.gov domain to prevent open-proxy abuse
+```
+Deploy as a named Worker (e.g. `civicmirror-ia-proxy`) — not the test `square-sun-2813` Worker.
+
+#### 2. Cloudflare Worker Secrets
+In the Cloudflare dashboard → Worker → Settings → Variables → **Secrets**:
+- Add `PROXY_SECRET` = a strong random value (e.g. `openssl rand -hex 32`)
+
+#### 3. Cloud Run / Secret Manager
+Add two new secrets to GCP Secret Manager and mount on `civicmirror-worker`:
+```
+IA_SOS_PROXY_URL    = https://civicmirror-ia-proxy.<subdomain>.workers.dev/
+IA_SOS_PROXY_SECRET = <same value as CF Worker Secret>
+```
+
+#### 4. `ia_sos/client.py` Changes
+```python
+# In IowaSosClient.__init__():
+self._proxy_url = settings.IA_SOS_PROXY_URL   # None in local dev
+self._proxy_secret = settings.IA_SOS_PROXY_SECRET
+
+# In _get():
+if self._proxy_url:
+    resp = self._session.get(
+        self._proxy_url,
+        params={"url": url},
+        headers={"X-Proxy-Secret": self._proxy_secret},
+        timeout=self.timeout,
+    )
+else:
+    resp = self._session.get(url, timeout=self.timeout)
+```
+
+#### 5. Redis lock clear + re-trigger
+After deploying:
+```bash
+# Clear the 23h lock set this morning
+redis-cli -u $REDIS_URL DEL task_lock:sync_ia_sos:$(date +%Y-%m-%d)
+
+# Trigger via internal endpoint
+curl -X POST https://civicmirror-api-ldqimfqwsq-uc.a.run.app/internal/tasks/sync-ia-sos/ \
+  -H "Authorization: Bearer $INTERNAL_TASK_TOKEN"
+```
+
+#### 6. Test Worker script
+The test Worker used for initial validation is saved at:
+`Docs/State Research/IA/cf-worker-proxy-test.js`
+
+---
+
+## Executive Summary (Original)
 
 The 403 is caused by **Akamai Bot Manager** on `sos.iowa.gov` — **not Cloudflare**. The PDF itself is accessible; the block is applied to clients that fail Akamai's bot scoring, which evaluates IP reputation, TLS fingerprint, HTTP/2 frame characteristics, and header completeness. Three root causes compound in the CivicMirror case:
 
@@ -16,7 +97,8 @@ The 403 is caused by **Akamai Bot Manager** on `sos.iowa.gov` — **not Cloudfla
 
 A **full headless Playwright browser is NOT recommended** as the primary solution because: (a) Iowa SOS pages are server-side rendered — Playwright is not needed to find PDF URLs; (b) Playwright does not fix the IP reputation issue that may be the actual root cause from Cloud Run; (c) it adds ~1.5GB to the Docker image, requires 2–4 GiB memory, and causes 10–20s cold starts.
 
-**The recommended fix escalation is simple headers → curl_cffi → diagnostic test → residential proxy (only if IP is blocked). Playwright should be reserved for last resort.**
+**~~The recommended fix escalation is simple headers → curl_cffi → diagnostic test → residential proxy (only if IP is blocked). Playwright should be reserved for last resort.~~**
+**UPDATED: Cloudflare Worker proxy is the confirmed solution. See Resolution Summary above.**
 
 ---
 
