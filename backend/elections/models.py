@@ -20,12 +20,27 @@ class Election(models.Model):
         RESULTS_CERTIFIED = 'results_certified', 'Results Certified'
         ARCHIVED = 'archived', 'Archived'
 
+    class ElectionType(models.TextChoices):
+        GENERAL = 'general', 'General'
+        PRIMARY = 'primary', 'Primary'
+        SPECIAL = 'special', 'Special'
+        MUNICIPAL = 'municipal', 'Municipal'
+        PARTY = 'party', 'Party'
+        OTHER = 'other', 'Other'
+
     name = models.CharField(max_length=255)
     election_date = models.DateField()
+    election_type = models.CharField(
+        max_length=20,
+        choices=ElectionType.choices,
+        default=ElectionType.GENERAL,
+        blank=True,
+    )
     jurisdiction_level = models.CharField(max_length=20, choices=JurisdictionLevel.choices)
     state = models.CharField(max_length=2, null=True, blank=True)
     source_id = models.CharField(max_length=50, unique=True)
     status = models.CharField(max_length=30, default=Status.UPCOMING, choices=Status.choices)
+    source_metadata = models.JSONField(default=dict, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
     election_cycle = models.ForeignKey(
         'ElectionCycle',
@@ -77,6 +92,7 @@ class Race(models.Model):
         SC_VREMS = 'sc_vrems', 'SC VREMS'
         IA_SOS = 'ia_sos', 'Iowa SOS'
         CO_SOS = 'co_sos', 'Colorado SOS'
+        VA_ELECT = 'va_elect', 'Virginia ELECT'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'

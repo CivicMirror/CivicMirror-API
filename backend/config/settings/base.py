@@ -148,6 +148,7 @@ INSTALLED_APPS += [
     'integrations.sc_vrems',
     'integrations.ia_sos',
     'integrations.co_sos',
+    'integrations.va_elect',
     'internal',
     'api',
     'accounts',
