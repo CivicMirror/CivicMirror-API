@@ -1,5 +1,6 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.db import transaction
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
@@ -32,18 +33,19 @@ class RegisterView(APIView):
         if User.objects.filter(username=username).exists():
             return Response({'username': ['A user with that username already exists.']}, status=400)
 
-        user = User.objects.create_user(
-            username=username,
-            password=password,
-            email=request.data.get('email', ''),
-        )
-        profile = UserProfile.objects.create(
-            user=user,
-            age_range=request.data.get('age_range', ''),
-            country=request.data.get('country', ''),
-            us_state=request.data.get('us_state', ''),
-            gender=request.data.get('gender', ''),
-        )
+        with transaction.atomic():
+            user = User.objects.create_user(
+                username=username,
+                password=password,
+                email=request.data.get('email', ''),
+            )
+            profile = UserProfile.objects.create(
+                user=user,
+                age_range=request.data.get('age_range', ''),
+                country=request.data.get('country', ''),
+                us_state=request.data.get('us_state', ''),
+                gender=request.data.get('gender', ''),
+            )
         return Response(_auth_response(user, profile), status=201)
 
 
