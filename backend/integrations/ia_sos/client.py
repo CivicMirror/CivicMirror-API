@@ -4,13 +4,17 @@ Iowa Secretary of State HTTP client.
 Fetches the 3-year election calendar PDF and candidate list PDFs
 from the Iowa SOS website. No authentication required.
 
-Known access note: Iowa SOS may return 403 from automated clients without
-proper User-Agent headers. All requests include a descriptive User-Agent and
-Referer header to mimic a browser fetch. 403 is treated as retryable to
-handle transient Akamai rate-limiting.
+Known access note: Iowa SOS is protected by Akamai Bot Manager. Requests
+must include a full browser-like header set (User-Agent, Accept-Language,
+Referer, Sec-Fetch-* headers) to pass Akamai's header-shape checks. 403
+is treated as retryable with exponential backoff to handle transient
+Akamai rate-limiting. The site is server-side rendered (Drupal 10), so
+no headless browser is required to discover PDF URLs.
 """
 import logging
+import random
 import re
+import time
 
 import requests
 from bs4 import BeautifulSoup
@@ -35,13 +39,30 @@ _CANDIDATE_PDF_RE = re.compile(
 
 _RETRYABLE_STATUSES = {403, 429, 500, 502, 503, 504}
 
+# Full browser-like header set required to pass Akamai Bot Manager's
+# Layer 4 header-shape inspection. Missing headers (especially Referer,
+# Accept-Language, and Sec-Fetch-*) are strong bot signals.
 _HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (compatible; CivicMirror/1.0; "
-        "+https://civicmirror.welshrd.com)"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/pdf",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://sos.iowa.gov/elections-voting",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
+    "Cache-Control": "max-age=0",
 }
+
+# Backoff base in seconds for retryable responses; jitter added per attempt.
+_RETRY_BACKOFF_BASE = 2
 
 
 class IowaSosClient:
@@ -66,10 +87,12 @@ class IowaSosClient:
                     raise IowaSosRetryableError(
                         f"Iowa SOS returned {resp.status_code} for {url}"
                     )
+                wait = (_RETRY_BACKOFF_BASE ** attempt) + random.uniform(0, 1)
                 logger.warning(
-                    "ia_sos.client.retry attempt=%d url=%s status=%d",
-                    attempt, url, resp.status_code,
+                    "ia_sos.client.retry attempt=%d url=%s status=%d wait=%.1fs",
+                    attempt, url, resp.status_code, wait,
                 )
+                time.sleep(wait)
                 continue
 
             resp.raise_for_status()
@@ -110,10 +133,20 @@ class IowaSosClient:
 
         soup = BeautifulSoup(resp.text, "lxml")
 
-        # Look for any link to a candidate list PDF
-        for tag in soup.find_all("a", href=True):
+        # Iowa SOS (Drupal 10, SSR) stores the candidate list under the
+        # article body. Match by link text ("candidate list") since the href
+        # path uses a dated upload pattern (/sites/default/files/YYYY-MM/...)
+        # that does not contain the word "candidate" in the URL itself.
+        body = soup.select_one("article[data-history-node-id] .field--name-body")
+        search_scope = body if body else soup
+
+        for tag in search_scope.find_all("a", href=True):
             href = tag["href"]
-            if re.search(r"candidate[^/]*\.pdf", href, re.IGNORECASE):
+            if not href.lower().endswith(".pdf"):
+                continue
+            link_text = tag.get_text(strip=True).lower()
+            # Match "candidate list" link text OR href containing "candidate"
+            if "candidate list" in link_text or re.search(r"candidate", href, re.IGNORECASE):
                 full_url = href if href.startswith("http") else f"https://sos.iowa.gov{href}"
                 logger.info(
                     "ia_sos.client.candidate_pdf_found election_type=%s url=%s",
