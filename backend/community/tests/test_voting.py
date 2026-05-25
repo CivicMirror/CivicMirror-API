@@ -7,9 +7,8 @@ and a mock verify_id_token via monkeypatching api.auth.
 import pytest
 from django.test import Client
 
-from elections.models import Candidate, Election, MeasureOption, Race
 from community.models import MockVote, UserProfile
-
+from elections.models import Candidate, Election, MeasureOption, Race
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -103,8 +102,8 @@ def measure_option(db, measure_race):
 
 def _mock_verify(uid):
     """Return a patch context for api.auth that validates token → uid."""
-    from unittest.mock import MagicMock, patch
     from contextlib import ExitStack
+    from unittest.mock import MagicMock, patch
 
     mock_fb = MagicMock()
     mock_fb.get_app.return_value = MagicMock()

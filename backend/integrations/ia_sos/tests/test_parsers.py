@@ -4,12 +4,11 @@ Tests for Iowa SOS PDF parsers.
 import pytest
 
 from integrations.ia_sos.parsers import (
+    _build_election_name,
+    _infer_election_type,
     parse_calendar_pdf,
     parse_candidate_list_pdf,
-    _infer_election_type,
-    _build_election_name,
 )
-
 
 # ---------------------------------------------------------------------------
 # Minimal synthetic PDF helpers using reportlab or fallback to raw bytes
@@ -24,6 +23,7 @@ def _minimal_pdf_bytes(text: str) -> bytes:
     """
     try:
         from io import BytesIO
+
         from reportlab.lib.pagesizes import letter
         from reportlab.pdfgen import canvas
 
@@ -136,8 +136,9 @@ class TestParseCandidateListPdf:
         # This test verifies the output contract when at least one row is parsed
         try:
             from io import BytesIO
-            from reportlab.pdfgen import canvas
+
             from reportlab.lib.pagesizes import letter
+            from reportlab.pdfgen import canvas
 
             buf = BytesIO()
             c = canvas.Canvas(buf, pagesize=letter)

@@ -307,8 +307,8 @@ def test_version_cache_key():
 # ---------------------------------------------------------------------------
 
 def test_sc_adapter_registered():
-    from results.adapters.registry import get_adapter, list_supported_states
     from results.adapters import co, sc, wv  # noqa: F401 — ensure @register runs
+    from results.adapters.registry import get_adapter, list_supported_states
     assert "SC" in list_supported_states()
     adapter = get_adapter("SC")
     assert adapter is not None
@@ -316,8 +316,8 @@ def test_sc_adapter_registered():
 
 
 def test_ia_adapter_registered():
-    from results.adapters.registry import get_adapter, list_supported_states
     from results.adapters import co, ia, sc, wv  # noqa: F401 — ensure @register runs
+    from results.adapters.registry import get_adapter, list_supported_states
     assert "IA" in list_supported_states()
     adapter = get_adapter("IA")
     assert adapter is not None

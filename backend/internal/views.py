@@ -7,10 +7,10 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from integrations.civic.tasks import sync_elections
-from integrations.fec.tasks import sync_fec_candidates
-from integrations.openstates.tasks import sync_openstates_all_states
-from integrations.ia_sos.tasks import sync_ia_elections
 from integrations.co_sos.tasks import sync_co_elections
+from integrations.fec.tasks import sync_fec_candidates
+from integrations.ia_sos.tasks import sync_ia_elections
+from integrations.openstates.tasks import sync_openstates_all_states
 from integrations.sc_vrems.tasks import sync_sc_elections
 from results.tasks import poll_pending_results
 

@@ -5,4 +5,4 @@ pytest-cov
 factory-boy
 faker
 ipython
-ruff
+ruff==0.15.14

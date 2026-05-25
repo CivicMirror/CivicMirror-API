@@ -47,8 +47,8 @@ class TestResolveElectionForType:
 @pytest.mark.django_db
 class TestSyncCoElectionsTask:
     def test_seeds_election_and_queues_candidates_on_changed_page(self):
-        from integrations.co_sos.tasks import sync_co_elections
         from elections.models import Election
+        from integrations.co_sos.tasks import sync_co_elections
 
         fingerprint = "abc123"
 
@@ -118,8 +118,8 @@ class TestSyncCoCandidatesTask:
         """
 
     def test_creates_races_and_candidates(self):
+        from elections.models import Candidate, Race
         from integrations.co_sos.tasks import sync_co_candidates
-        from elections.models import Race, Candidate
 
         election = self._make_election()
 
