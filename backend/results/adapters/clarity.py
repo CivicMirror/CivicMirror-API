@@ -22,6 +22,11 @@ from typing import Optional
 import requests
 from django.core.cache import cache
 
+from elections.models import Election
+from results.models import OfficialResult
+
+from .base import AdapterResult, ResultRow, StateResultsAdapter
+
 # CloudFront in front of Clarity Elections blocks the default python-requests
 # User-Agent with a 403.  A browser UA resolves it.
 _CLARITY_HEADERS = {
@@ -30,11 +35,6 @@ _CLARITY_HEADERS = {
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     )
 }
-
-from elections.models import Election
-from results.models import OfficialResult
-
-from .base import AdapterResult, ResultRow, StateResultsAdapter
 
 logger = logging.getLogger(__name__)
 
