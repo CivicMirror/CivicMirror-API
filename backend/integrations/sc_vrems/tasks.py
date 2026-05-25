@@ -1,4 +1,5 @@
 import logging
+from datetime import date as _date
 
 from celery import shared_task
 from django.utils import timezone
@@ -19,8 +20,9 @@ from .mappers import (
 
 logger = logging.getLogger(__name__)
 
-# Sweep current year by default; expand when historical backfill is needed.
-_DEFAULT_YEARS = None  # None = all available years; set to [2026] to limit scope
+# Limit to current and next calendar year by default.
+# Pass years=[...] explicitly to sync_sc_elections for historical backfill.
+_DEFAULT_YEARS = None  # resolved dynamically at task runtime — see sync_sc_elections
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -41,7 +43,7 @@ def sync_sc_elections(self, years: list[int] | None = None):
     created_count = updated_count = queued_count = skipped_count = 0
 
     try:
-        elections = client.get_all_elections(years=years)
+        elections = client.get_all_elections(years=years or [_date.today().year, _date.today().year + 1])
         logger.info("sc_vrems.sync_elections found=%d", len(elections))
 
         for idx, vrems_election in enumerate(elections):

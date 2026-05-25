@@ -18,10 +18,21 @@ def is_referendum(election: dict) -> bool:
 
 
 def is_filing_open(election: dict) -> bool:
-    """True when the filing period has started (or is a referendum with no filing period)."""
+    """True when the filing period has started AND the election has not yet passed."""
     begin = election.get("filingPeriodBeginDate")
     if begin is None:
         return True  # referendum — will return 0 rows from CandidateSearch naturally
+
+    # Skip elections whose date has already passed — no point re-syncing daily.
+    election_date_str = election.get("electionDate")
+    if election_date_str:
+        try:
+            elec_date = date.fromisoformat(str(election_date_str)[:10])
+            if elec_date < date.today():
+                return False
+        except (ValueError, TypeError):
+            pass
+
     try:
         filing_dt = datetime.fromisoformat(begin).replace(tzinfo=timezone.utc)
         return datetime.now(timezone.utc) >= filing_dt
