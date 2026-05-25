@@ -1,6 +1,7 @@
 import logging
 
 from django.shortcuts import get_object_or_404
+from rest_framework.authentication import TokenAuthentication
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -24,18 +25,33 @@ def _get_race_by_pk(pk) -> Race:
     return get_object_or_404(Race, pk=pk)
 
 
+def _get_uid(request) -> str | None:
+    """Return a stable uid string for either Firebase or Django Token auth."""
+    if isinstance(request.auth, dict):
+        return request.auth.get('uid')
+    if request.user and request.user.is_authenticated:
+        return f'user:{request.user.pk}'
+    return None
+
+
+def _is_authenticated(request) -> bool:
+    return _get_uid(request) is not None
+
+
 # ---------------------------------------------------------------------------
 # PK-based vote/tally routes (POST /races/{pk}/vote/, GET /races/{pk}/tally/)
 # ---------------------------------------------------------------------------
 
 class PkVoteView(APIView):
     """POST /api/v1/races/{pk}/vote/"""
-    authentication_classes = [FirebaseAuthentication]
-    permission_classes = [HasAPIKey, IsFirebaseAuthenticated]
+    authentication_classes = [FirebaseAuthentication, TokenAuthentication]
+    permission_classes = [HasAPIKey]
 
     def post(self, request, pk):
+        uid = _get_uid(request)
+        if not uid:
+            return Response({'detail': 'Authentication required.'}, status=401)
         race = _get_race_by_pk(pk)
-        uid = request.auth['uid']
         result, error, status_code = cast_vote(uid=uid, race=race, payload=request.data)
         if error:
             return Response(error, status=status_code)
@@ -57,12 +73,14 @@ class PkTallyView(APIView):
 
 class ExtVoteView(APIView):
     """POST /api/v1/races/ext/{external_id}/vote/"""
-    authentication_classes = [FirebaseAuthentication]
-    permission_classes = [HasAPIKey, IsFirebaseAuthenticated]
+    authentication_classes = [FirebaseAuthentication, TokenAuthentication]
+    permission_classes = [HasAPIKey]
 
     def post(self, request, external_id):
+        uid = _get_uid(request)
+        if not uid:
+            return Response({'detail': 'Authentication required.'}, status=401)
         race = _get_race_by_canonical_key(external_id)
-        uid = request.auth['uid']
         result, error, status_code = cast_vote(uid=uid, race=race, payload=request.data)
         if error:
             return Response(error, status=status_code)
@@ -84,11 +102,13 @@ class ExtTallyView(APIView):
 
 class CommunityRaceListCreateView(APIView):
     """POST /api/v1/races/community/"""
-    authentication_classes = [FirebaseAuthentication]
-    permission_classes = [HasAPIKey, IsFirebaseAuthenticated]
+    authentication_classes = [FirebaseAuthentication, TokenAuthentication]
+    permission_classes = [HasAPIKey]
 
     def post(self, request):
-        uid = request.auth['uid']
+        uid = _get_uid(request)
+        if not uid:
+            return Response({'detail': 'Authentication required.'}, status=401)
         race, error, status_code = create_community_race(uid=uid, payload=request.data)
         if error:
             return Response(error, status=status_code)
@@ -100,12 +120,14 @@ class CommunityRaceListCreateView(APIView):
 
 class CommunityRaceDetailView(APIView):
     """PATCH /DELETE /api/v1/races/community/{id}/"""
-    authentication_classes = [FirebaseAuthentication]
-    permission_classes = [HasAPIKey, IsFirebaseAuthenticated]
+    authentication_classes = [FirebaseAuthentication, TokenAuthentication]
+    permission_classes = [HasAPIKey]
 
     def _get_owned_race(self, request, pk):
         race = get_object_or_404(Race, pk=pk, source=Race.Source.COMMUNITY)
-        uid = request.auth['uid']
+        uid = _get_uid(request)
+        if not uid:
+            return race, Response({'detail': 'Authentication required.'}, status=401)
         if race.submitted_by_uid != uid:
             return race, Response({'error': 'You do not have permission to modify this race.'}, status=403)
         return race, None
@@ -159,16 +181,20 @@ class CommunityRaceDetailView(APIView):
 
 class UserProfileView(APIView):
     """GET /PATCH /api/v1/users/me/"""
-    authentication_classes = [FirebaseAuthentication]
-    permission_classes = [HasAPIKey, IsFirebaseAuthenticated]
+    authentication_classes = [FirebaseAuthentication, TokenAuthentication]
+    permission_classes = [HasAPIKey]
 
     def get(self, request):
-        uid = request.auth['uid']
+        uid = _get_uid(request)
+        if not uid:
+            return Response({'detail': 'Authentication required.'}, status=401)
         profile = get_or_create_profile(uid)
         return Response(UserProfileSerializer(profile).data)
 
     def patch(self, request):
-        uid = request.auth['uid']
+        uid = _get_uid(request)
+        if not uid:
+            return Response({'detail': 'Authentication required.'}, status=401)
         profile = get_or_create_profile(uid)
         if 'display_name' in request.data:
             display_name = str(request.data['display_name'])[:255]
@@ -179,11 +205,13 @@ class UserProfileView(APIView):
 
 class UserVotesView(APIView):
     """GET /api/v1/users/votes/"""
-    authentication_classes = [FirebaseAuthentication]
-    permission_classes = [HasAPIKey, IsFirebaseAuthenticated]
+    authentication_classes = [FirebaseAuthentication, TokenAuthentication]
+    permission_classes = [HasAPIKey]
 
     def get(self, request):
-        uid = request.auth['uid']
+        uid = _get_uid(request)
+        if not uid:
+            return Response({'detail': 'Authentication required.'}, status=401)
         votes = (
             MockVote.objects
             .filter(uid=uid)
