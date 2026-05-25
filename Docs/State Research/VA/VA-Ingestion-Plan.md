@@ -561,11 +561,81 @@ The Enhanced Voting API always returns `"isPrimary": false` regardless of electi
 
 ---
 
+## ENR CSV Download System (Resolved ✅)
+
+The blob CSV download URL pattern was confirmed via HAR analysis on 2026-05-25.
+
+### URL Pattern
+
+```
+https://enr.elections.virginia.gov/cdn/results/{election_uuid}/{blob_name}
+```
+
+### How to construct the URL
+
+Both values come from a **single call** to the `/data` endpoint already used by the adapter:
+
+```python
+data = requests.get(f"{_ENR_BASE}/elections/Virginia/{slug}/data", timeout=60).json()
+
+# 1. Election UUID — first path segment of jurisdiction.bannerUrl
+election_uuid = data["jurisdiction"]["bannerUrl"].split("/")[0]
+# → "d2c804ee-4ec2-46bb-91d7-5b41526eab03"
+
+# 2. File blob names — from publicReportCategories[].reports[].blobName
+_CDN_BASE = "https://enr.elections.virginia.gov/cdn/results"
+for category in data.get("publicReportCategories", []):
+    for report in category.get("reports", []):
+        name = report["reportName"]   # e.g. "Election Results"
+        blob = report["blobName"]     # e.g. "Election Results_9b503992-....csv"
+        url  = f"{_CDN_BASE}/{election_uuid}/{blob}"
+```
+
+### Available CSV Files (confirmed for 2025 November General)
+
+| reportName | Columns | Primary Use |
+|---|---|---|
+| `Election Results` | 19 (see schema below) | Full precinct-level vote counts |
+| `Election Winners` | 7 (`Locality, District, Office, PoliticalParty, BallotName, Seats, CandidateId`) | Winner confirmation |
+| `Election Turnout` | 13 (turnout + registration by precinct) | Turnout analytics |
+| `EnrAbsenteeRawCSV` | 8 (absentee breakdown by demographic) | Absentee analysis |
+| `Election Change Log Report` | TBD | Audit trail |
+
+### Election Results CSV Schema (19 columns — ENR version)
+
+```
+CandidateId    | string  | "cs852"  (matches ballotOptions[].nativeId)
+CandidateName  | string  | "Abigail D. Spanberger"
+TOTAL_VOTES    | int     | 630
+Party          | string  | "Democratic"
+WriteInVote    | bit     | 0 / 1
+LocalityCode   | string  | "001" (3-digit FIPS)
+LocalityName   | string  | "ACCOMACK COUNTY"
+PrecinctId     | string  | "0101"
+PrecinctName   | string  | "101 - CHINCOTEAGUE"
+DistrictId     | string  | "ed3"
+DistrictType   | string  | "state"
+DistrictName   | string  | "Virginia"
+OfficeId       | string  | "cc535"
+OfficeTitle    | string  | "Governor"
+ElectionId     | GUID    | "8e12a3ef-b316-447a-ac23-d0beb7f3fbe8"
+ElectionType   | string  | "General"
+ElectionDate   | date    | "2025-11-04"
+ElectionName   | string  | "2025 November General"
+NumberOfSeats  | int     | 1
+```
+
+> **Note:** The ENR CSV `ElectionId` (GUID) is different from the ENR slug. The `CandidateId` (e.g. `"cs852"`) matches the `nativeId` field in `ballotOptions[]` from the JSON API — this is the join key between CSV and JSON.
+
+> **vs SBE CSV:** The ENR CSV has 19 columns vs SBE's 23-column schema. Key differences: ENR uses short IDs (`cs852`, `ed3`) vs SBE's full GUIDs; ENR covers 2023-present while SBE covers 2005-2023.
+
+---
+
 ## Gaps, Risks, and Next Steps
 
 | Gap | Risk | Recommendation |
 |---|---|---|
-| Enhanced Voting blob CSV URL unknown | Low (API JSON is sufficient) | Use browser DevTools on ENR page to capture download XHR URL; needed only for ELECTIONWINNERS/turnout CSVs |
+| ~~Enhanced Voting blob CSV URL unknown~~ | ✅ **Resolved** | CDN pattern confirmed: `enr.elections.virginia.gov/cdn/results/{uuid}/{blobName}` — both values from `/data` endpoint |
 | No `/elections/Virginia` index endpoint | Medium | Always scrape elections.virginia.gov for slug discovery; maintain a known-slugs list as fallback |
 | Slug naming inconsistency | Medium | Use scraper as source of truth; normalize by stripping `elections/` prefix from href |
 | VA Civic API race creation untested | Medium | Run `sync_election_races` against next VA election ID; validate contest coverage |
