@@ -71,7 +71,6 @@ def test_get_elections_injects_type(client):
 def test_get_all_elections_deduplicates(client):
     c, session = client
 
-    years_resp = _mock_resp(200, [{"electionYear": 2026}])
     duplicate_election = [{
         "electionId": "22598",
         "electionName": "Statewide Primary",
