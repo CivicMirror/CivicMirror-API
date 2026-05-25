@@ -218,6 +218,9 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
+# Prefetch 1 task per worker slot — prevents long SC VREMS tasks from hogging the queue
+# and avoids the "Restoring N unacknowledged messages" restart doom loop on Cloud Run.
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},

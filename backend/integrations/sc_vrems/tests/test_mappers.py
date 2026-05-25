@@ -5,6 +5,7 @@ from datetime import date
 
 import pytest
 
+from elections.models import Candidate, Election, Race
 from integrations.sc_vrems.mappers import (
     build_canonical_key,
     build_race_groups,
@@ -17,8 +18,6 @@ from integrations.sc_vrems.mappers import (
     map_jurisdiction_level,
     normalize,
 )
-from elections.models import Candidate, Election, Race
-
 
 # ------------------------------------------------------------------
 # is_referendum
@@ -36,8 +35,25 @@ def test_not_referendum_when_has_filing():
 # is_filing_open
 # ------------------------------------------------------------------
 
-def test_filing_open_for_past_date():
+def test_filing_open_for_past_date_no_election_date():
+    # Filing started in the past; no electionDate field → still considered open.
     assert is_filing_open({"filingPeriodBeginDate": "2020-01-01T00:00:00"}) is True
+
+
+def test_filing_closed_for_past_election():
+    # Filing started in the past AND election date has already passed → skip.
+    assert is_filing_open({
+        "filingPeriodBeginDate": "2024-03-01T00:00:00",
+        "electionDate": "2024-11-05T00:00:00",
+    }) is False
+
+
+def test_filing_open_for_upcoming_election():
+    # Filing started in the past, election date is in the future → sync needed.
+    assert is_filing_open({
+        "filingPeriodBeginDate": "2026-03-01T00:00:00",
+        "electionDate": "2026-11-03T00:00:00",
+    }) is True
 
 
 def test_filing_closed_for_future_date():
