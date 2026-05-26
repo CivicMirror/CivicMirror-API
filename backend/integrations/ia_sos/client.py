@@ -4,12 +4,12 @@ Iowa Secretary of State HTTP client.
 Fetches the 3-year election calendar PDF and candidate list PDFs
 from the Iowa SOS website. No authentication required.
 
-Known access note: Iowa SOS is protected by Akamai Bot Manager. Requests
-must include a full browser-like header set (User-Agent, Accept-Language,
-Referer, Sec-Fetch-* headers) to pass Akamai's header-shape checks. 403
-is treated as retryable with exponential backoff to handle transient
-Akamai rate-limiting. The site is server-side rendered (Drupal 10), so
-no headless browser is required to discover PDF URLs.
+Known access note: Iowa SOS is protected by Akamai Bot Manager. GCP Cloud
+Run IPs are flagged at Layer 1 (IP reputation) before headers are even
+evaluated. In production, all requests are routed through a Cloudflare
+Worker proxy (IA_SOS_PROXY_URL setting) whose edge IPs pass Akamai's IP
+check. In local dev (IA_SOS_PROXY_URL empty), the client hits sos.iowa.gov
+directly with full browser-like headers to pass Akamai's Layer 4 check.
 """
 import logging
 import random
@@ -18,6 +18,7 @@ import time
 
 import requests
 from bs4 import BeautifulSoup
+from django.conf import settings
 
 from .exceptions import IowaSosError, IowaSosRetryableError
 
@@ -71,11 +72,22 @@ class IowaSosClient:
         self.max_retries = max_retries
         self._session = requests.Session()
         self._session.headers.update(_HEADERS)
+        self._proxy_url = getattr(settings, "IA_SOS_PROXY_URL", "") or ""
+        self._proxy_secret = getattr(settings, "IA_SOS_PROXY_SECRET", "") or ""
 
     def _get(self, url: str, stream: bool = False) -> requests.Response:
         for attempt in range(self.max_retries + 1):
             try:
-                resp = self._session.get(url, timeout=self.timeout, stream=stream)
+                if self._proxy_url:
+                    # Route through Cloudflare Worker to bypass Akamai GCP IP block.
+                    resp = self._session.get(
+                        self._proxy_url,
+                        params={"url": url},
+                        headers={"X-Proxy-Secret": self._proxy_secret},
+                        timeout=self.timeout,
+                    )
+                else:
+                    resp = self._session.get(url, timeout=self.timeout, stream=stream)
             except requests.RequestException as exc:
                 if attempt >= self.max_retries:
                     raise IowaSosRetryableError(f"Iowa SOS GET failed: {exc}") from exc
@@ -94,6 +106,11 @@ class IowaSosClient:
                 )
                 time.sleep(wait)
                 continue
+
+            if resp.status_code == 401 and self._proxy_url:
+                raise IowaSosError(
+                    "Iowa SOS proxy returned 401 — check IA_SOS_PROXY_SECRET configuration"
+                )
 
             resp.raise_for_status()
             return resp

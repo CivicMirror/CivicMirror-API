@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+from django.test import override_settings
 
 from integrations.ia_sos.client import IowaSosClient
 from integrations.ia_sos.exceptions import IowaSosRetryableError
@@ -109,3 +110,90 @@ class TestFetchPdf:
         client = IowaSosClient()
         result = client.fetch_pdf("https://sos.iowa.gov/elections/pdf/candidates.pdf")
         assert result == b"%PDF-1.4 candidates"
+
+
+@pytest.fixture()
+def proxy_settings(settings):
+    settings.IA_SOS_PROXY_URL = "https://civicmirror-ia-proxy.test.workers.dev/"
+    settings.IA_SOS_PROXY_SECRET = "test-secret-abc"
+    return settings
+
+
+@pytest.fixture()
+def no_proxy_settings(settings):
+    settings.IA_SOS_PROXY_URL = ""
+    settings.IA_SOS_PROXY_SECRET = ""
+    return settings
+
+
+class TestProxyRouting:
+    """Verify that requests route through the CF Worker when IA_SOS_PROXY_URL is set."""
+
+    @patch("integrations.ia_sos.client.requests.Session")
+    def test_calendar_pdf_uses_proxy_url(self, MockSession, proxy_settings):
+        session = MockSession.return_value
+        session.get.return_value = _mock_response(content=b"%PDF-1.4 calendar")
+        client = IowaSosClient()
+        client.fetch_calendar_pdf()
+
+        actual_call = session.get.call_args
+        assert actual_call[0][0] == "https://civicmirror-ia-proxy.test.workers.dev/"
+
+    @patch("integrations.ia_sos.client.requests.Session")
+    def test_calendar_pdf_passes_target_url_as_param(self, MockSession, proxy_settings):
+        session = MockSession.return_value
+        session.get.return_value = _mock_response(content=b"%PDF-1.4 calendar")
+        client = IowaSosClient()
+        client.fetch_calendar_pdf()
+
+        actual_call = session.get.call_args
+        assert actual_call[1]["params"] == {"url": "https://sos.iowa.gov/elections/pdf/cal3yr.pdf"}
+
+    @patch("integrations.ia_sos.client.requests.Session")
+    def test_calendar_pdf_sends_proxy_secret_header(self, MockSession, proxy_settings):
+        session = MockSession.return_value
+        session.get.return_value = _mock_response(content=b"%PDF-1.4 calendar")
+        client = IowaSosClient()
+        client.fetch_calendar_pdf()
+
+        actual_call = session.get.call_args
+        assert actual_call[1]["headers"] == {"X-Proxy-Secret": "test-secret-abc"}
+
+    @patch("integrations.ia_sos.client.requests.Session")
+    def test_proxy_401_raises_config_error(self, MockSession, proxy_settings):
+        session = MockSession.return_value
+        session.get.return_value = _mock_response(status_code=401)
+        client = IowaSosClient(max_retries=0)
+        from integrations.ia_sos.exceptions import IowaSosError
+        with pytest.raises(IowaSosError) as exc_info:
+            client.fetch_calendar_pdf()
+        assert "401" in str(exc_info.value)
+        assert session.get.call_count == 1  # no retries on config error
+
+    @patch("integrations.ia_sos.client.requests.Session")
+    def test_proxy_500_retries_then_raises(self, MockSession, proxy_settings):
+        session = MockSession.return_value
+        session.get.side_effect = [
+            _mock_response(status_code=500),
+            _mock_response(status_code=500),
+            _mock_response(status_code=500),
+            _mock_response(status_code=500),
+        ]
+        client = IowaSosClient(max_retries=3)
+        with pytest.raises(IowaSosRetryableError):
+            client.fetch_calendar_pdf()
+        assert session.get.call_count == 4
+
+
+class TestDirectRouting:
+    """Verify that requests go directly to sos.iowa.gov when proxy is not configured."""
+
+    @patch("integrations.ia_sos.client.requests.Session")
+    def test_calendar_pdf_hits_sos_directly(self, MockSession, no_proxy_settings):
+        session = MockSession.return_value
+        session.get.return_value = _mock_response(content=b"%PDF-1.4 calendar")
+        client = IowaSosClient()
+        client.fetch_calendar_pdf()
+
+        actual_call = session.get.call_args
+        assert actual_call[0][0] == "https://sos.iowa.gov/elections/pdf/cal3yr.pdf"
