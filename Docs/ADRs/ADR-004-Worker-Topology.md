@@ -16,13 +16,15 @@ CivicMirror API uses Celery for all background ingestion tasks. Current schedule
 | `sync_sc_elections` + `sync_sc_races` | `sync-sc-vrems` | Daily 01:00 | 5–30 s + varies |
 | `sync_co_elections` + `sync_co_candidates` | `sync-co-sos` | Daily 02:00 | 10–60 s |
 | `sync_ia_elections` + `sync_ia_candidates` | `sync-ia-sos` | Daily 02:00 | 30–180 s (PDF parse + proxy) |
+| `sync_ma_elections` → `sync_ma_races` + `sync_ma_ballot_question` | `sync-ma-sos` | Daily 03:00 | 5–15 min (HTML scrape + CSV fan-out) |
+| `sync_va_elections` → `sync_va_races` | `sync-va-elect` | Daily 03:30 | 10–20 min (ENR JSON fan-out, 1–3 MB/slug) |
 
-**Registered but not yet scheduled** (manual trigger only):
+**Scheduling rationale for 03:00 / 03:30 slots:**  
+The 02:00 slot already carries 3 concurrent tasks (IA, CO, OpenStates). MA and VA each fan out to N subtasks; placing them 30 minutes apart avoids simultaneous queue drain from two heavy fan-out workloads. Both complete before `poll-pending-results` at 06:00.
 
-| Task | Integration | Notes |
-|---|---|---|
-| `sync_ma_elections`, `sync_ma_races`, `sync_ma_ballot_question` | MA SOS | Pending scheduler setup |
-| `sync_va_elections`, `sync_va_races` | VA ENR | Pending scheduler setup |
+**MA SOS data note:** `electionstats.state.ma.us` is post-certification only — no live ENR feed. Daily cadence is sufficient; data does not change intra-day.
+
+**VA ELECT data note:** Enhanced Voting API provides live ENR (`isOfficialResults` flag). During election night the data changes frequently; the `asOf` timestamp in the results adapter prevents redundant DB writes when data hasn't changed.
 
 ### Options considered
 
