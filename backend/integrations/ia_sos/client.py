@@ -6,10 +6,10 @@ from the Iowa SOS website. No authentication required.
 
 Known access note: Iowa SOS is protected by Akamai Bot Manager. GCP Cloud
 Run IPs are flagged at Layer 1 (IP reputation) before headers are even
-evaluated. In production, all requests are routed through a Cloudflare
-Worker proxy (IA_SOS_PROXY_URL setting) whose edge IPs pass Akamai's IP
-check. In local dev (IA_SOS_PROXY_URL empty), the client hits sos.iowa.gov
-directly with full browser-like headers to pass Akamai's Layer 4 check.
+evaluated. All requests are routed through the CivicMirror Cloudflare proxy
+worker (CIVICMIRROR_PROXY_URL setting) whose edge IPs pass Akamai's IP check.
+In local dev (CIVICMIRROR_PROXY_URL empty), the client falls back to direct
+requests with full browser-like headers to pass Akamai's Layer 4 check.
 """
 import logging
 import random
@@ -17,12 +17,13 @@ import re
 import time
 
 import requests
-from bs4 import BeautifulSoup
-from django.conf import settings
 
+from core.http import ProxyAuthError, UpstreamBlockedError, proxy_request
 from .exceptions import IowaSosError, IowaSosRetryableError
 
 logger = logging.getLogger(__name__)
+
+from bs4 import BeautifulSoup
 
 CALENDAR_PDF_URL = "https://sos.iowa.gov/elections/pdf/cal3yr.pdf"
 
@@ -70,24 +71,25 @@ class IowaSosClient:
     def __init__(self, timeout: int = 30, max_retries: int = 3):
         self.timeout = timeout
         self.max_retries = max_retries
-        self._session = requests.Session()
-        self._session.headers.update(_HEADERS)
-        self._proxy_url = getattr(settings, "IA_SOS_PROXY_URL", "") or ""
-        self._proxy_secret = getattr(settings, "IA_SOS_PROXY_SECRET", "") or ""
 
-    def _get(self, url: str, stream: bool = False) -> requests.Response:
+    def _get(self, url: str) -> requests.Response:
         for attempt in range(self.max_retries + 1):
             try:
-                if self._proxy_url:
-                    # Route through Cloudflare Worker to bypass Akamai GCP IP block.
-                    resp = self._session.get(
-                        self._proxy_url,
-                        params={"url": url},
-                        headers={"X-Proxy-Secret": self._proxy_secret},
-                        timeout=self.timeout,
-                    )
-                else:
-                    resp = self._session.get(url, timeout=self.timeout, stream=stream)
+                resp = proxy_request(
+                    "GET", url,
+                    headers=_HEADERS,
+                    use_proxy=True,
+                    timeout=self.timeout,
+                )
+            except ProxyAuthError as exc:
+                raise IowaSosError(
+                    "Iowa SOS proxy returned 401 — check CIVICMIRROR_PROXY_SECRET configuration"
+                ) from exc
+            except UpstreamBlockedError as exc:
+                # Non-retryable — direct 403 means GCP IP blocked; proxy must be configured.
+                raise IowaSosError(
+                    f"Iowa SOS host is blocking GCP IPs — ensure CIVICMIRROR_PROXY_URL is set: {exc}"
+                ) from exc
             except requests.RequestException as exc:
                 if attempt >= self.max_retries:
                     raise IowaSosRetryableError(f"Iowa SOS GET failed: {exc}") from exc
@@ -106,11 +108,6 @@ class IowaSosClient:
                 )
                 time.sleep(wait)
                 continue
-
-            if resp.status_code == 401 and self._proxy_url:
-                raise IowaSosError(
-                    "Iowa SOS proxy returned 401 — check IA_SOS_PROXY_SECRET configuration"
-                )
 
             resp.raise_for_status()
             return resp
@@ -169,9 +166,16 @@ class IowaSosClient:
                     "ia_sos.client.candidate_pdf_found election_type=%s url=%s",
                     election_type, full_url,
                 )
-                # HEAD request to get ETag/Last-Modified without downloading
+                # HEAD request through proxy to get ETag/Last-Modified without
+                # downloading the full PDF. Previously this bypassed the proxy;
+                # now routed through CF Worker to avoid Akamai GCP IP block.
                 try:
-                    head = self._session.head(full_url, timeout=self.timeout)
+                    head = proxy_request(
+                        "HEAD", full_url,
+                        headers=_HEADERS,
+                        use_proxy=True,
+                        timeout=self.timeout,
+                    )
                     etag = head.headers.get("ETag", "")
                     last_modified = head.headers.get("Last-Modified", "")
                 except requests.RequestException:

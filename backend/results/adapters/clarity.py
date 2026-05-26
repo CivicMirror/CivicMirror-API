@@ -18,23 +18,33 @@ from __future__ import annotations
 
 import logging
 from typing import Optional
+from urllib.parse import urlparse
 
 import requests
 from django.core.cache import cache
 
+from core.http import UpstreamBlockedError, proxy_get
 from elections.models import Election
 from results.models import OfficialResult
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
 
-# CloudFront in front of Clarity Elections blocks the default python-requests
-# User-Agent with a 403.  A browser UA resolves it.
+# Browser UA for direct requests (local dev / unblocked hosts).
+# GCP Cloud Run IPs are blocked by CloudFront regardless of UA, so blocked
+# hosts are routed through the CF Worker proxy instead (use_proxy=True).
 _CLARITY_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     )
 }
+
+# Hostnames known to block GCP datacenter IPs (CloudFront IP reputation).
+# Add new hostnames here when confirmed blocked; the proxy handles the rest.
+CLARITY_PROXY_HOSTS: frozenset[str] = frozenset({
+    "www.enr-scvotes.org",
+    "enr-scvotes.org",
+})
 
 logger = logging.getLogger(__name__)
 
@@ -98,11 +108,27 @@ class ClarityAdapter(StateResultsAdapter):
 
         results_url = raw_url.rstrip('/') + '/'
 
-        # --- Fetch current version ------------------------------------------------
+        # Route through the CF proxy for hosts blocked from GCP Cloud Run IPs.
         ver_url = f"{results_url}current_ver.txt"
+        use_proxy = urlparse(ver_url).hostname in CLARITY_PROXY_HOSTS
+
+        # --- Fetch current version ------------------------------------------------
         try:
-            ver_resp = requests.get(ver_url, timeout=self.FETCH_TIMEOUT_SHORT, headers=_CLARITY_HEADERS)
+            ver_resp = proxy_get(
+                ver_url,
+                headers=_CLARITY_HEADERS,
+                use_proxy=use_proxy,
+                timeout=self.FETCH_TIMEOUT_SHORT,
+            )
             ver_resp.raise_for_status()
+        except UpstreamBlockedError:
+            hostname = urlparse(ver_url).hostname or ver_url
+            logger.warning(
+                "ClarityAdapter: host '%s' is blocking GCP IPs (election=%s). "
+                "Add '%s' to CLARITY_PROXY_HOSTS in results/adapters/clarity.py.",
+                hostname, election_id, hostname,
+            )
+            raise
         except requests.RequestException as exc:
             logger.error("ClarityAdapter: failed to fetch version for election %s: %s", election_id, exc)
             raise
@@ -125,8 +151,21 @@ class ClarityAdapter(StateResultsAdapter):
         # --- Fetch summary.json ---------------------------------------------------
         summary_url = f"{results_url}{current_ver}/json/en/summary.json"
         try:
-            data_resp = requests.get(summary_url, timeout=self.FETCH_TIMEOUT_LONG, headers=_CLARITY_HEADERS)
+            data_resp = proxy_get(
+                summary_url,
+                headers=_CLARITY_HEADERS,
+                use_proxy=use_proxy,
+                timeout=self.FETCH_TIMEOUT_LONG,
+            )
             data_resp.raise_for_status()
+        except UpstreamBlockedError:
+            hostname = urlparse(summary_url).hostname or summary_url
+            logger.warning(
+                "ClarityAdapter: host '%s' is blocking GCP IPs (election=%s). "
+                "Add '%s' to CLARITY_PROXY_HOSTS in results/adapters/clarity.py.",
+                hostname, election_id, hostname,
+            )
+            raise
         except requests.RequestException as exc:
             logger.error("ClarityAdapter: failed to fetch summary for election %s: %s", election_id, exc)
             raise

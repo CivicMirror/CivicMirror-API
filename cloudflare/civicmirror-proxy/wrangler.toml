@@ -1,0 +1,28 @@
+name = "civicmirror-proxy"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# Deploy with:
+#   wrangler deploy
+#
+# Then set the secrets (required before the worker will accept requests):
+#   wrangler secret put PROXY_SECRET
+#   wrangler secret put ALLOWED_HOSTS
+#
+# ALLOWED_HOSTS is a comma-separated list of target hostnames, e.g.:
+#   sos.iowa.gov,www.enr-scvotes.org,enr-scvotes.org,results.enr.clarityelections.com
+#
+# After deployment, copy the worker URL to GCP Secret Manager:
+#   gcloud secrets create CIVICMIRROR_PROXY_URL --project civicmirror-2026
+#   gcloud secrets versions add CIVICMIRROR_PROXY_URL \
+#     --data-file=<(echo -n "https://civicmirror-proxy.<subdomain>.workers.dev/") \
+#     --project civicmirror-2026
+#
+#   gcloud secrets create CIVICMIRROR_PROXY_SECRET --project civicmirror-2026
+#   gcloud secrets versions add CIVICMIRROR_PROXY_SECRET \
+#     --data-file=<(echo -n "<same value as PROXY_SECRET above>") \
+#     --project civicmirror-2026
+#
+# To add a new blocked domain in the future:
+#   1. Add its hostname to the ALLOWED_HOSTS secret (re-run wrangler secret put ALLOWED_HOSTS)
+#   2. Add use_proxy=True to the relevant adapter call in the backend

@@ -295,9 +295,15 @@ FEC_API_KEY = env('FEC_API_KEY', default='')
 OPENSTATES_API_KEY = env('OPENSTATES_API_KEY', default='')
 GITHUB_TOKEN = env('GITHUB_TOKEN', default='')
 
-# Iowa SOS Cloudflare Worker proxy (bypasses Akamai GCP IP block).
-# Set IA_SOS_PROXY_URL to the CF Worker URL to enable.
-# Leave empty in local dev to hit sos.iowa.gov directly.
+# Universal Cloudflare Worker proxy (bypasses GCP datacenter IP blocks on
+# Akamai/CloudFront-protected election data sites: Iowa SOS, SC ENR, etc.).
+# Set CIVICMIRROR_PROXY_URL to the CF Worker URL to enable in production.
+# Leave empty in local dev to hit upstream hosts directly.
+CIVICMIRROR_PROXY_URL = env('CIVICMIRROR_PROXY_URL', default='')
+CIVICMIRROR_PROXY_SECRET = env('CIVICMIRROR_PROXY_SECRET', default='')
+
+# Deprecated — superseded by CIVICMIRROR_PROXY_URL / CIVICMIRROR_PROXY_SECRET.
+# Kept until IA SOS adapter migration is verified in production; retire after.
 IA_SOS_PROXY_URL = env('IA_SOS_PROXY_URL', default='')
 IA_SOS_PROXY_SECRET = env('IA_SOS_PROXY_SECRET', default='')
 
