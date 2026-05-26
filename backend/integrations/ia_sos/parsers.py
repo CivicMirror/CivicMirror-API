@@ -10,17 +10,22 @@ from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
-# Regex patterns for recognising election date lines in the calendar PDF
+# Regex patterns for recognising election date lines in the calendar PDF.
+# The Iowa SOS calendar PDF lists dates as "Month DD" with the year as a
+# standalone section heading line (e.g. "2026") — not inline on the date row.
 _DATE_RE = re.compile(
     r"""
     (?P<month>January|February|March|April|May|June|
               July|August|September|October|November|December)
     \s+
-    (?P<day>\d{1,2}),?\s+
-    (?P<year>20\d{2})
+    (?P<day>\d{1,2})
+    \b
     """,
     re.VERBOSE | re.IGNORECASE,
 )
+
+# Matches a standalone year heading line like "2025" or "  2026  "
+_YEAR_HEADING_RE = re.compile(r"^\s*(20\d{2})\s*$")
 
 _ELECTION_KEYWORDS = re.compile(
     r"\b(primary|general|special|municipal|school|city|runoff|election)\b",
@@ -75,13 +80,35 @@ def parse_calendar_pdf(pdf_bytes: bytes) -> list[dict]:
 
 
 def _parse_calendar_text(text: str) -> list[dict]:
-    """Extract election entries from a single page of calendar text."""
+    """Extract election entries from a single page of calendar text.
+
+    The Iowa SOS 3-year calendar PDF groups elections under year headings
+    ("2025", "2026", "2027").  Dates within each section are formatted as
+    "Month DD" — the year is NOT on the date row itself.  We track the
+    current section year as we scan lines.
+    """
     results = []
     lines = text.splitlines()
+    current_year: int | None = None
 
     for i, line in enumerate(lines):
+        # Detect year section headings (a line that is just a 4-digit year)
+        year_m = _YEAR_HEADING_RE.match(line)
+        if year_m:
+            current_year = int(year_m.group(1))
+            continue
+
+        if current_year is None:
+            continue
+
         date_match = _DATE_RE.search(line)
         if not date_match:
+            continue
+
+        # Skip filing period range lines (e.g. "August 11 – August 28",
+        # "February 23 – March 13") — they contain month+day but are not
+        # election dates.
+        if "–" in line or " - " in line:
             continue
 
         # Look for an election keyword on this line or adjacent lines
@@ -92,24 +119,19 @@ def _parse_calendar_text(text: str) -> list[dict]:
         try:
             from datetime import datetime
             election_date = datetime.strptime(
-                f"{date_match.group('month')} {date_match.group('day')} {date_match.group('year')}",
+                f"{date_match.group('month')} {date_match.group('day')} {current_year}",
                 "%B %d %Y",
             ).date()
         except ValueError:
             continue
 
-        year = int(date_match.group("year"))
-
-        # Infer election type from surrounding text
         election_type = _infer_election_type(context)
-
-        # Build a human-readable name
-        name = _build_election_name(context, year, election_type)
+        name = _build_election_name(context, current_year, election_type)
 
         results.append({
             "name": name,
             "election_date": election_date.isoformat(),
-            "election_year": year,
+            "election_year": current_year,
             "election_type": election_type,
             "filing_open": None,
             "filing_close": None,
@@ -136,12 +158,16 @@ def _infer_election_type(text: str) -> str:
 
 
 def _build_election_name(context: str, year: int, election_type: str) -> str:
-    # Use the first line of context that contains an election keyword
+    # Find the first short line in context that contains an election keyword
     for line in context.splitlines():
-        if _ELECTION_KEYWORDS.search(line):
-            name = line.strip()
+        line = line.strip()
+        if _ELECTION_KEYWORDS.search(line) and len(line) < 60:
+            # Strip trailing deadline/date noise (e.g. "October 7 Monday, September 22")
+            name = re.sub(r"\s+\w+\s+\d{1,2}\s+.*$", "", line).strip()
+            if not name or len(name) < 4:
+                continue
             if str(year) not in name:
-                name = f"{year} {name}"
+                name = f"{year} Iowa {name}"
             return name
     return f"{year} Iowa {election_type.title()} Election"
 
