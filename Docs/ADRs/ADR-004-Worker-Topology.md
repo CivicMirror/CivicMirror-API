@@ -5,17 +5,24 @@ Accepted
 
 ## Context
 
-CivicMirror API uses Celery for all background ingestion tasks. The workload after Phase 5:
+CivicMirror API uses Celery for all background ingestion tasks. Current scheduled workload:
 
-| Task | Trigger | Typical duration |
+| Task | Cloud Scheduler job | Schedule (UTC) | Typical duration |
+|---|---|---|---|
+| `sync_elections` + `sync_election_races` | `sync-elections-hourly` (Cloud Run Job) | Hourly | 2–5 s + 1–15 s/election |
+| `poll_pending_results` + `ingest_official_results` | `poll-pending-results` | Daily 06:00 | 5–60 s (fan-out) |
+| `sync_openstates_all_states` + `sync_openstates_legislators` | `sync-openstates` | Daily 02:00 | seconds + 30–120 s/state |
+| `sync_fec_candidates` | `sync-fec` | Every 6 hours | 60–300 s (throttled API) |
+| `sync_sc_elections` + `sync_sc_races` | `sync-sc-vrems` | Daily 01:00 | 5–30 s + varies |
+| `sync_co_elections` + `sync_co_candidates` | `sync-co-sos` | Daily 02:00 | 10–60 s |
+| `sync_ia_elections` + `sync_ia_candidates` | `sync-ia-sos` | Daily 02:00 | 30–180 s (PDF parse + proxy) |
+
+**Registered but not yet scheduled** (manual trigger only):
+
+| Task | Integration | Notes |
 |---|---|---|
-| `sync_elections` | Every 6 hours | 2–5 s (Civic API list call) |
-| `sync_election_races` | Per election, fan-out from sync_elections | 1–15 s per election |
-| `ingest_official_results` | On-demand / daily poll | 2–30 s (HTTP + DB write) |
-| `poll_pending_results` | Daily 06:00 UTC | 5–60 s (fan-out) |
-| `sync_openstates_legislators` | Daily, per state | 30–120 s (paginated API) |
-| `sync_openstates_all_states` | Daily fan-out | seconds (queues 50 sub-tasks) |
-| `sync_fec_candidates` | Per-cycle, on-demand | 60–300 s (throttled API) |
+| `sync_ma_elections`, `sync_ma_races`, `sync_ma_ballot_question` | MA SOS | Pending scheduler setup |
+| `sync_va_elections`, `sync_va_races` | VA ENR | Pending scheduler setup |
 
 ### Options considered
 
@@ -49,7 +56,7 @@ The Django API service runs in a separate Cloud Run Service with `min-instances=
 
 | Service | Image | CMD | min-instances | Memory |
 |---|---|---|---|---|
-| `civicmirror-backend` | `civicmirror-api:$SHA` | `api` | 0 | 512 MB |
+| `civicmirror-api` | `civicmirror-api:$SHA` | `api` | 0 | 512 MB |
 | `civicmirror-worker` | `civicmirror-api:$SHA` | `worker` | 1 | 512 MB |
 
 Both services use the same Docker image tag (built once in CI, deployed to both services). The entrypoint selects the correct process based on the `CMD` argument.
@@ -67,7 +74,7 @@ A single image ensures the API and worker always run identical code and dependen
 - Worker restarts are handled automatically by Cloud Run health checks.
 
 ### Negative
-- The worker service incurs a baseline ~$5–10/month cost (1 × 256 MB minimum instance).
+- The worker service incurs a baseline ~$5–10/month cost (1 × 512 MB minimum instance).
 - Worker cannot scale to zero; a runaway task loop would keep the instance alive.
 
 ## Related Decisions
