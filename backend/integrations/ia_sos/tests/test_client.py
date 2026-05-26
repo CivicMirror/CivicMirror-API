@@ -5,10 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
-from django.test import override_settings
 
 from integrations.ia_sos.client import IowaSosClient
-from integrations.ia_sos.exceptions import IowaSosRetryableError
+from integrations.ia_sos.exceptions import IowaSosError, IowaSosRetryableError
 
 
 def _mock_response(status_code=200, content=b"PDF", text="<html></html>", headers=None):
@@ -21,179 +20,129 @@ def _mock_response(status_code=200, content=b"PDF", text="<html></html>", header
     return resp
 
 
+@pytest.fixture
+def mock_proxy_request():
+    """Patch proxy_request in ia_sos.client — no network calls made."""
+    with patch("integrations.ia_sos.client.proxy_request") as m:
+        yield m
+
+
 class TestFetchCalendarPdf:
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_returns_bytes_on_success(self, MockSession):
-        session = MockSession.return_value
-        session.get.return_value = _mock_response(content=b"%PDF-1.4 calendar")
-        client = IowaSosClient()
-        result = client.fetch_calendar_pdf()
+    def test_returns_bytes_on_success(self, mock_proxy_request):
+        mock_proxy_request.return_value = _mock_response(content=b"%PDF-1.4 calendar")
+        result = IowaSosClient().fetch_calendar_pdf()
         assert result == b"%PDF-1.4 calendar"
 
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_retries_on_503(self, MockSession):
-        session = MockSession.return_value
-        session.get.side_effect = [
+    def test_retries_on_503(self, mock_proxy_request):
+        mock_proxy_request.side_effect = [
             _mock_response(status_code=503),
             _mock_response(status_code=503),
             _mock_response(status_code=503),
             _mock_response(status_code=503),  # 4th call — exceeds retries
         ]
-        client = IowaSosClient(max_retries=3)
         with pytest.raises(IowaSosRetryableError):
-            client.fetch_calendar_pdf()
+            IowaSosClient(max_retries=3).fetch_calendar_pdf()
 
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_raises_on_connection_error(self, MockSession):
-        session = MockSession.return_value
-        session.get.side_effect = requests.ConnectionError("network down")
-        client = IowaSosClient(max_retries=0)
+    def test_raises_on_connection_error(self, mock_proxy_request):
+        mock_proxy_request.side_effect = requests.ConnectionError("network down")
         with pytest.raises(IowaSosRetryableError):
-            client.fetch_calendar_pdf()
+            IowaSosClient(max_retries=0).fetch_calendar_pdf()
 
 
 class TestGetCandidatePdfInfo:
     def _html_with_link(self, href):
         return f'<html><body><a href="{href}">Candidate List</a></body></html>'
 
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_returns_pdf_info_when_found(self, MockSession):
-        session = MockSession.return_value
-        session.get.return_value = _mock_response(
-            text=self._html_with_link("/elections/pdf/candidate-list.pdf"),
-            headers={"ETag": '"abc123"', "Last-Modified": "Mon, 01 Jan 2026 00:00:00 GMT"},
-        )
-        session.head.return_value = _mock_response(
-            headers={"ETag": '"abc123"', "Last-Modified": "Mon, 01 Jan 2026 00:00:00 GMT"},
-        )
-        client = IowaSosClient()
-        result = client.get_candidate_pdf_info("primary")
+    def test_returns_pdf_info_when_found(self, mock_proxy_request):
+        mock_proxy_request.side_effect = [
+            # First call: GET the election page
+            _mock_response(
+                text=self._html_with_link("/elections/pdf/candidate-list.pdf"),
+            ),
+            # Second call: HEAD the PDF for ETag/Last-Modified
+            _mock_response(
+                headers={"ETag": '"abc123"', "Last-Modified": "Mon, 01 Jan 2026 00:00:00 GMT"},
+            ),
+        ]
+        result = IowaSosClient().get_candidate_pdf_info("primary")
         assert result is not None
         assert result["url"].endswith("candidate-list.pdf")
         assert result["etag"] == '"abc123"'
 
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_returns_none_when_no_pdf_link(self, MockSession):
-        session = MockSession.return_value
-        session.get.return_value = _mock_response(
+    def test_returns_none_when_no_pdf_link(self, mock_proxy_request):
+        mock_proxy_request.return_value = _mock_response(
             text='<html><body><p>No PDFs here</p></body></html>'
         )
-        client = IowaSosClient()
-        result = client.get_candidate_pdf_info("primary")
+        result = IowaSosClient().get_candidate_pdf_info("primary")
         assert result is None
 
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_returns_none_on_retryable_error(self, MockSession):
-        session = MockSession.return_value
-        session.get.side_effect = [
+    def test_returns_none_on_retryable_error(self, mock_proxy_request):
+        mock_proxy_request.side_effect = [
             _mock_response(status_code=403),
             _mock_response(status_code=403),
             _mock_response(status_code=403),
             _mock_response(status_code=403),
         ]
-        client = IowaSosClient(max_retries=3)
-        result = client.get_candidate_pdf_info("primary")
+        result = IowaSosClient(max_retries=3).get_candidate_pdf_info("primary")
         assert result is None
 
     def test_invalid_election_type_raises(self):
-        client = IowaSosClient()
-        from integrations.ia_sos.exceptions import IowaSosError
         with pytest.raises(IowaSosError):
-            client.get_candidate_pdf_info("municipal")
+            IowaSosClient().get_candidate_pdf_info("municipal")
 
 
 class TestFetchPdf:
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_returns_bytes(self, MockSession):
-        session = MockSession.return_value
-        session.get.return_value = _mock_response(content=b"%PDF-1.4 candidates")
-        client = IowaSosClient()
-        result = client.fetch_pdf("https://sos.iowa.gov/elections/pdf/candidates.pdf")
+    def test_returns_bytes(self, mock_proxy_request):
+        mock_proxy_request.return_value = _mock_response(content=b"%PDF-1.4 candidates")
+        result = IowaSosClient().fetch_pdf("https://sos.iowa.gov/elections/pdf/candidates.pdf")
         assert result == b"%PDF-1.4 candidates"
 
 
-@pytest.fixture()
-def proxy_settings(settings):
-    settings.IA_SOS_PROXY_URL = "https://civicmirror-ia-proxy.test.workers.dev/"
-    settings.IA_SOS_PROXY_SECRET = "test-secret-abc"
-    return settings
-
-
-@pytest.fixture()
-def no_proxy_settings(settings):
-    settings.IA_SOS_PROXY_URL = ""
-    settings.IA_SOS_PROXY_SECRET = ""
-    return settings
-
-
 class TestProxyRouting:
-    """Verify that requests route through the CF Worker when IA_SOS_PROXY_URL is set."""
+    """Verify that requests always use use_proxy=True and target sos.iowa.gov URLs."""
 
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_calendar_pdf_uses_proxy_url(self, MockSession, proxy_settings):
-        session = MockSession.return_value
-        session.get.return_value = _mock_response(content=b"%PDF-1.4 calendar")
-        client = IowaSosClient()
-        client.fetch_calendar_pdf()
+    def test_calendar_pdf_uses_proxy(self, mock_proxy_request):
+        mock_proxy_request.return_value = _mock_response(content=b"%PDF-1.4 calendar")
+        IowaSosClient().fetch_calendar_pdf()
+        call = mock_proxy_request.call_args
+        assert call[1].get("use_proxy") is True
 
-        actual_call = session.get.call_args
-        assert actual_call[0][0] == "https://civicmirror-ia-proxy.test.workers.dev/"
+    def test_calendar_pdf_targets_correct_url(self, mock_proxy_request):
+        mock_proxy_request.return_value = _mock_response(content=b"%PDF-1.4 calendar")
+        IowaSosClient().fetch_calendar_pdf()
+        call = mock_proxy_request.call_args
+        assert call[0][1] == "https://sos.iowa.gov/elections/pdf/cal3yr.pdf"
 
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_calendar_pdf_passes_target_url_as_param(self, MockSession, proxy_settings):
-        session = MockSession.return_value
-        session.get.return_value = _mock_response(content=b"%PDF-1.4 calendar")
-        client = IowaSosClient()
-        client.fetch_calendar_pdf()
-
-        actual_call = session.get.call_args
-        assert actual_call[1]["params"] == {"url": "https://sos.iowa.gov/elections/pdf/cal3yr.pdf"}
-
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_calendar_pdf_sends_proxy_secret_header(self, MockSession, proxy_settings):
-        session = MockSession.return_value
-        session.get.return_value = _mock_response(content=b"%PDF-1.4 calendar")
-        client = IowaSosClient()
-        client.fetch_calendar_pdf()
-
-        actual_call = session.get.call_args
-        assert actual_call[1]["headers"] == {"X-Proxy-Secret": "test-secret-abc"}
-
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_proxy_401_raises_config_error(self, MockSession, proxy_settings):
-        session = MockSession.return_value
-        session.get.return_value = _mock_response(status_code=401)
-        client = IowaSosClient(max_retries=0)
-        from integrations.ia_sos.exceptions import IowaSosError
+    def test_proxy_401_raises_config_error(self, mock_proxy_request):
+        from core.http import ProxyAuthError
+        mock_proxy_request.side_effect = ProxyAuthError("401")
         with pytest.raises(IowaSosError) as exc_info:
-            client.fetch_calendar_pdf()
-        assert "401" in str(exc_info.value)
-        assert session.get.call_count == 1  # no retries on config error
+            IowaSosClient(max_retries=0).fetch_calendar_pdf()
+        assert "CIVICMIRROR_PROXY_SECRET" in str(exc_info.value)
 
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_proxy_500_retries_then_raises(self, MockSession, proxy_settings):
-        session = MockSession.return_value
-        session.get.side_effect = [
+    def test_proxy_500_retries_then_raises(self, mock_proxy_request):
+        mock_proxy_request.side_effect = [
             _mock_response(status_code=500),
             _mock_response(status_code=500),
             _mock_response(status_code=500),
             _mock_response(status_code=500),
         ]
-        client = IowaSosClient(max_retries=3)
         with pytest.raises(IowaSosRetryableError):
-            client.fetch_calendar_pdf()
-        assert session.get.call_count == 4
+            IowaSosClient(max_retries=3).fetch_calendar_pdf()
+        assert mock_proxy_request.call_count == 4
 
+    def test_head_uses_proxy_for_etag(self, mock_proxy_request):
+        """HEAD request for ETag discovery must go through the proxy (not direct)."""
+        html = '<html><body><a href="/elections/pdf/candidates.pdf">Candidate List</a></body></html>'
+        mock_proxy_request.side_effect = [
+            _mock_response(text=html),
+            _mock_response(headers={"ETag": '"xyz"', "Last-Modified": "Wed, 01 Jan 2025 00:00:00 GMT"}),
+        ]
+        IowaSosClient().get_candidate_pdf_info("primary")
 
-class TestDirectRouting:
-    """Verify that requests go directly to sos.iowa.gov when proxy is not configured."""
-
-    @patch("integrations.ia_sos.client.requests.Session")
-    def test_calendar_pdf_hits_sos_directly(self, MockSession, no_proxy_settings):
-        session = MockSession.return_value
-        session.get.return_value = _mock_response(content=b"%PDF-1.4 calendar")
-        client = IowaSosClient()
-        client.fetch_calendar_pdf()
-
-        actual_call = session.get.call_args
-        assert actual_call[0][0] == "https://sos.iowa.gov/elections/pdf/cal3yr.pdf"
+        calls = mock_proxy_request.call_args_list
+        assert len(calls) == 2
+        # Second call must be HEAD
+        head_call = calls[1]
+        assert head_call[0][0] == "HEAD"
+        assert head_call[1].get("use_proxy") is True

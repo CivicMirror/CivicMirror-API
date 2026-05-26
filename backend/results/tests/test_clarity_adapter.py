@@ -2,12 +2,19 @@
 Unit tests for the ClarityAdapter (JSON API path).
 HTTP calls are fully mocked — no network required.
 """
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+import requests as req_lib
 
 from results.adapters.base import AdapterResult
-from results.adapters.clarity import ClarityAdapter, _is_winner, _safe_float, _safe_int
+from results.adapters.clarity import (
+    CLARITY_PROXY_HOSTS,
+    ClarityAdapter,
+    _is_winner,
+    _safe_float,
+    _safe_int,
+)
 
 # ---------------------------------------------------------------------------
 # Parsing helpers
@@ -176,8 +183,9 @@ def _make_election(results_url="https://results.enr.clarityelections.com/WV/1262
 
 
 @pytest.fixture
-def mock_requests():
-    with patch("results.adapters.clarity.requests") as m:
+def mock_proxy_get():
+    """Patch proxy_get in clarity module — no network calls made."""
+    with patch("results.adapters.clarity.proxy_get") as m:
         yield m
 
 
@@ -197,7 +205,7 @@ def mock_cache():
 
 
 @pytest.mark.django_db
-def test_fetch_results_no_results_url(mock_requests, mock_cache):
+def test_fetch_results_no_results_url(mock_proxy_get, mock_cache):
     with patch("results.adapters.clarity.Election") as MockElection:
         e = _make_election(results_url="")
         MockElection.objects.get.return_value = e
@@ -206,16 +214,16 @@ def test_fetch_results_no_results_url(mock_requests, mock_cache):
 
     assert result.mapping_confidence == "none"
     assert "no results_url" in result.notes
-    mock_requests.get.assert_not_called()
+    mock_proxy_get.assert_not_called()
 
 
 @pytest.mark.django_db
-def test_fetch_results_version_unchanged(mock_requests, mock_election, mock_cache):
+def test_fetch_results_version_unchanged(mock_proxy_get, mock_election, mock_cache):
     mock_cache.get.return_value = "371599"  # cached version = current
 
     ver_response = MagicMock()
     ver_response.text = "371599"
-    mock_requests.get.return_value = ver_response
+    mock_proxy_get.return_value = ver_response
 
     adapter = ConcreteClarity()
     result = adapter.fetch_results("2026-05-13", 1)
@@ -224,11 +232,11 @@ def test_fetch_results_version_unchanged(mock_requests, mock_election, mock_cach
     assert result.source_version == "371599"
     assert result.rows == []
     # summary.json should NOT have been fetched
-    assert mock_requests.get.call_count == 1
+    assert mock_proxy_get.call_count == 1
 
 
 @pytest.mark.django_db
-def test_fetch_results_new_version_parses_rows(mock_requests, mock_election, mock_cache):
+def test_fetch_results_new_version_parses_rows(mock_proxy_get, mock_election, mock_cache):
     mock_cache.get.return_value = "370000"  # outdated cached version
 
     ver_response = MagicMock()
@@ -237,7 +245,7 @@ def test_fetch_results_new_version_parses_rows(mock_requests, mock_election, moc
     summary_response = MagicMock()
     summary_response.json.return_value = SUMMARY_JSON
 
-    mock_requests.get.side_effect = [ver_response, summary_response]
+    mock_proxy_get.side_effect = [ver_response, summary_response]
 
     adapter = ConcreteClarity()
     result = adapter.fetch_results("2026-05-13", 1)
@@ -253,14 +261,14 @@ def test_fetch_results_new_version_parses_rows(mock_requests, mock_election, moc
 
 
 @pytest.mark.django_db
-def test_fetch_results_summary_as_dict_with_contests_key(mock_requests, mock_election, mock_cache):
+def test_fetch_results_summary_as_dict_with_contests_key(mock_proxy_get, mock_election, mock_cache):
     ver_response = MagicMock()
     ver_response.text = "371599"
 
     summary_response = MagicMock()
     summary_response.json.return_value = {"Contests": SUMMARY_JSON}
 
-    mock_requests.get.side_effect = [ver_response, summary_response]
+    mock_proxy_get.side_effect = [ver_response, summary_response]
 
     adapter = ConcreteClarity()
     result = adapter.fetch_results("2026-05-13", 1)
@@ -269,11 +277,8 @@ def test_fetch_results_summary_as_dict_with_contests_key(mock_requests, mock_ele
 
 
 @pytest.mark.django_db
-def test_fetch_results_http_error_propagates(mock_requests, mock_election, mock_cache):
-    import requests as req_lib
-
-    mock_requests.get.side_effect = req_lib.RequestException("timeout")
-    mock_requests.RequestException = req_lib.RequestException
+def test_fetch_results_http_error_propagates(mock_proxy_get, mock_election, mock_cache):
+    mock_proxy_get.side_effect = req_lib.RequestException("timeout")
 
     adapter = ConcreteClarity()
     with pytest.raises(req_lib.RequestException):
@@ -281,25 +286,68 @@ def test_fetch_results_http_error_propagates(mock_requests, mock_election, mock_
 
 
 @pytest.mark.django_db
-def test_fetch_results_sends_browser_user_agent(mock_requests, mock_election, mock_cache):
-    """Both HTTP calls must include the browser User-Agent to bypass CloudFront blocking."""
+def test_fetch_results_sends_browser_user_agent(mock_proxy_get, mock_election, mock_cache):
+    """Both proxy_get calls must pass a browser User-Agent (used for direct fallback)."""
     ver_response = MagicMock()
     ver_response.text = "371599"
     summary_response = MagicMock()
     summary_response.json.return_value = SUMMARY_JSON
-    mock_requests.get.side_effect = [ver_response, summary_response]
+    mock_proxy_get.side_effect = [ver_response, summary_response]
 
     ConcreteClarity().fetch_results("2026-05-13", 1)
 
-    for call in mock_requests.get.call_args_list:
+    for call in mock_proxy_get.call_args_list:
         headers = call[1].get("headers", {})
         assert "User-Agent" in headers
         assert "Mozilla" in headers["User-Agent"]
 
 
 @pytest.mark.django_db
+def test_fetch_results_uses_proxy_for_sc_enr_host(mock_proxy_get, mock_cache):
+    """SC ENR hosts (enr-scvotes.org) must trigger use_proxy=True."""
+    with patch("results.adapters.clarity.Election") as MockElection:
+        e = _make_election(results_url="https://www.enr-scvotes.org/SC/92124/")
+        MockElection.objects.get.return_value = e
+        ver_response = MagicMock()
+        ver_response.text = "242328"
+        summary_response = MagicMock()
+        summary_response.json.return_value = SUMMARY_JSON
+        mock_proxy_get.side_effect = [ver_response, summary_response]
+
+        ConcreteClarity().fetch_results("2018-11-06", 77)
+
+    for call in mock_proxy_get.call_args_list:
+        assert call[1].get("use_proxy") is True
+
+
+@pytest.mark.django_db
+def test_fetch_results_no_proxy_for_non_blocked_host(mock_proxy_get, mock_election, mock_cache):
+    """Non-blocked Clarity hosts (e.g. WV results.enr.clarityelections.com) use direct request."""
+    ver_response = MagicMock()
+    ver_response.text = "371599"
+    summary_response = MagicMock()
+    summary_response.json.return_value = SUMMARY_JSON
+    mock_proxy_get.side_effect = [ver_response, summary_response]
+
+    # Default fixture uses results.enr.clarityelections.com/WV/...
+    ConcreteClarity().fetch_results("2026-05-13", 1)
+
+    for call in mock_proxy_get.call_args_list:
+        assert call[1].get("use_proxy") is False
+
+
+@pytest.mark.django_db
 def test_version_cache_key():
     assert ConcreteClarity.version_cache_key(42) == "clarity:ver:42"
+
+
+# ---------------------------------------------------------------------------
+# CLARITY_PROXY_HOSTS constant
+# ---------------------------------------------------------------------------
+
+def test_clarity_proxy_hosts_includes_sc_enr():
+    assert "www.enr-scvotes.org" in CLARITY_PROXY_HOSTS
+    assert "enr-scvotes.org" in CLARITY_PROXY_HOSTS
 
 
 # ---------------------------------------------------------------------------
