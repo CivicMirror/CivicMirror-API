@@ -295,6 +295,12 @@ FEC_API_KEY = env('FEC_API_KEY', default='')
 OPENSTATES_API_KEY = env('OPENSTATES_API_KEY', default='')
 GITHUB_TOKEN = env('GITHUB_TOKEN', default='')
 
+# Iowa SOS Cloudflare Worker proxy (bypasses Akamai GCP IP block).
+# Set IA_SOS_PROXY_URL to the CF Worker URL to enable.
+# Leave empty in local dev to hit sos.iowa.gov directly.
+IA_SOS_PROXY_URL = env('IA_SOS_PROXY_URL', default='')
+IA_SOS_PROXY_SECRET = env('IA_SOS_PROXY_SECRET', default='')
+
 # Firebase Authentication
 FIREBASE_AUTH_ENABLED = env.bool('FIREBASE_AUTH_ENABLED', default=True)
 FIREBASE_CREDENTIALS_FILE = env('FIREBASE_CREDENTIALS_FILE', default='')

@@ -1,0 +1,13 @@
+name = "civicmirror-ia-proxy"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# Deploy with:
+#   wrangler deploy
+#
+# Then set the secret (required before the worker will accept requests):
+#   wrangler secret put PROXY_SECRET
+#
+# After deployment, copy the worker URL to GCP Secret Manager:
+#   gcloud secrets versions add IA_SOS_PROXY_URL \
+#     --data-file=<(echo -n "https://civicmirror-ia-proxy.<subdomain>.workers.dev/")
