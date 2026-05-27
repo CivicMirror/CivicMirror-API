@@ -81,7 +81,6 @@ def map_election(year: int, election_type: str) -> dict:
         "jurisdiction_level": Election.JurisdictionLevel.STATE,
         "state": "CA",
         "status": infer_election_status(election_date),
-        "source": "ca_sos",
     }
 
 
