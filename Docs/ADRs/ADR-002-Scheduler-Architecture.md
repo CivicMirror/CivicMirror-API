@@ -1,24 +1,33 @@
 # ADR-002: Scheduler Architecture — Cloud Scheduler over Celery Beat
 
 ## Status
-Accepted — Revised 2026-05-24 to reflect live production configuration
+Accepted — Revised 2026-05-27 to reflect live production configuration
 
-### Revision Notes
-Original ADR documented two jobs and a proposed OIDC service account (`civicmirror-scheduler`). Actual deployment uses `cloudrun-runtime` for all Cloud Run services and has grown to five scheduled jobs. `sync_elections` was also implemented as a Cloud Run Job (ADR Option B) rather than the Django endpoint path (ADR Option A). This revision brings the ADR current.
+### Revision History
+- **2026-05-24 (Rev 1):** Original ADR documented two jobs and a proposed OIDC service account (`civicmirror-scheduler`). Revised to reflect actual deployment: `cloudrun-runtime` used for all services; grown to five jobs; `sync_elections` implemented as Cloud Run Job (Path B).
+- **2026-05-27 (Rev 2):** Grown to eleven scheduled jobs with addition of IA SOS, CO SOS, VA ELECT, MA SOS, and SC ENR auto-discovery integrations. Updated full job registry and endpoint table.
 
 ---
 
 ## Context
 
-CivicMirror API requires periodic background ingestion from five data sources:
+CivicMirror API requires periodic background ingestion from multiple data sources. All jobs are managed by Google Cloud Scheduler in `us-central1`.
 
-| GCP Job Name | Schedule (UTC) | Django Endpoint / Mechanism | Source |
+### Current Scheduled Jobs (as of 2026-05-27)
+
+| GCP Job Name | Schedule (UTC) | Mechanism | Source / Purpose |
 |---|---|---|---|
-| `sync-elections-hourly` | Every hour | Cloud Run Job → `manage.py sync_elections` | Google Civic API |
-| `sync-openstates` | Daily 02:00 | `POST /internal/tasks/sync-openstates/` | OpenStates API |
-| `sync-fec` | Every 6 hours | `POST /internal/tasks/sync-fec/` | OpenFEC API |
-| `sync-sc-vrems` | Daily 01:00 | `POST /internal/tasks/sync-sc-vrems/` | SC VREMS (Clarity Elections) |
-| `poll-pending-results` | Daily 06:00 | `POST /internal/tasks/poll-results/` | All state results adapters |
+| `sync-elections-hourly` | `0 * * * *` | **Path B** — Cloud Run Job `civicmirror-sync-elections` | Google Civic API — election list sync |
+| `poll-sc-enr` | `5 * * * *` | **Path A** — `POST /internal/tasks/poll-sc-enr/` | SC ENR — election discovery + URL resolution |
+| `sync-sc-enr-results` | `20 * * * *` | **Path A** — `POST /internal/tasks/sync-sc-enr-results/` | SC ENR — Clarity results ingestion |
+| `sync-fec` | `0 */6 * * *` | **Path A** — `POST /internal/tasks/sync-fec/` | OpenFEC API — campaign finance |
+| `sync-sc-vrems` | `0 1 * * *` | **Path A** — `POST /internal/tasks/sync-sc-vrems/` | SC VREMS — candidate/race filings |
+| `sync-openstates` | `0 2 * * *` | **Path A** — `POST /internal/tasks/sync-openstates/` | OpenStates API — state legislative |
+| `sync-ia-sos` | `0 2 * * *` | **Path A** — `POST /internal/tasks/sync-ia-sos/` | Iowa SOS — election + race data |
+| `sync-co-sos` | `0 2 * * *` | **Path A** — `POST /internal/tasks/sync-co-sos/` | Colorado SOS — election + race data |
+| `sync-ma-sos` | `0 3 * * *` | **Path A** — `POST /internal/tasks/sync-ma-sos/` | Massachusetts SOS — election + race data |
+| `sync-va-elect` | `30 3 * * *` | **Path A** — `POST /internal/tasks/sync-va-elections/` | Virginia ELECT — election + race data |
+| `poll-pending-results` | `0 6 * * *` | **Path A** — `POST /internal/tasks/poll-results/` | All state results adapters |
 
 The original plan used **Celery Beat** as the scheduler. Celery Beat is a long-running process that maintains an internal clock and fires tasks on a configured schedule.
 
@@ -38,13 +47,23 @@ Replace Celery Beat with **Google Cloud Scheduler**, using one of two trigger me
 
 ### Path A — Cloud Scheduler → OIDC POST → Django endpoint → Celery (standard pattern)
 
-Used by: `sync-openstates`, `sync-fec`, `sync-sc-vrems`, `poll-pending-results`
+Used by all jobs except `sync-elections-hourly`.
 
-1. The Django API exposes internal trigger endpoints (not public):
-   - `POST /internal/tasks/sync-openstates/`
-   - `POST /internal/tasks/sync-fec/`
-   - `POST /internal/tasks/sync-sc-vrems/`
-   - `POST /internal/tasks/poll-results/`
+1. The Django API exposes internal trigger endpoints under `/internal/tasks/` (not public):
+
+   | Endpoint | Job |
+   |---|---|
+   | `POST /internal/tasks/poll-sc-enr/` | SC ENR discovery (hourly :05) |
+   | `POST /internal/tasks/sync-sc-enr-results/` | SC ENR results ingestion (hourly :20) |
+   | `POST /internal/tasks/sync-fec/` | FEC campaign finance (six-hourly) |
+   | `POST /internal/tasks/sync-sc-vrems/` | SC VREMS filings (daily 01:00) |
+   | `POST /internal/tasks/sync-openstates/` | OpenStates legislative (daily 02:00) |
+   | `POST /internal/tasks/sync-ia-sos/` | Iowa SOS (daily 02:00) |
+   | `POST /internal/tasks/sync-co-sos/` | Colorado SOS (daily 02:00) |
+   | `POST /internal/tasks/sync-ma-sos/` | Massachusetts SOS (daily 03:00) |
+   | `POST /internal/tasks/sync-va-elections/` | Virginia ELECT (daily 03:30) |
+   | `POST /internal/tasks/poll-results/` | All state results adapters (daily 06:00) |
+
 2. Google Cloud Scheduler fires an authenticated OIDC POST to the endpoint.
 3. The Django view validates the caller identity, enqueues the Celery task (`.delay()`), and returns `202 Accepted` immediately.
 4. Celery workers process the task asynchronously.
@@ -101,6 +120,22 @@ Cloud Scheduler is at-least-once: network timeouts or transient 5xx responses ca
 - If the lock is held, return `202 Accepted` with `{"status": "already_running"}` — do not enqueue again.
 - Store task invocation records (task name, scheduled time, Celery task ID, status) for observability.
 - Configure Cloud Scheduler retry policy conservatively: max 1 retry, minimum retry interval 5 minutes.
+
+### Lock TTL Reference
+
+| Job | Lock key pattern | TTL |
+|---|---|---|
+| `sync-elections-hourly` | `task_lock:sync_elections:{YYYY-MM-DDTHH}` | 55 min |
+| `poll-sc-enr` | `task_lock:poll_sc_enr:{YYYY-MM-DDTHH}` | 55 min |
+| `sync-sc-enr-results` | `task_lock:sync_sc_enr_results:{YYYY-MM-DDTHH}` | 55 min |
+| `sync-fec` | `task_lock:sync_fec:{YYYY-MM-DDT{00,06,12,18}}` | 6 h |
+| `sync-sc-vrems` | `task_lock:sync_sc_vrems:{YYYY-MM-DD}` | 23 h |
+| `sync-openstates` | `task_lock:sync_openstates:{YYYY-MM-DD}` | 23 h |
+| `sync-ia-sos` | `task_lock:sync_ia_sos:{YYYY-MM-DD}` | 23 h |
+| `sync-co-sos` | `task_lock:sync_co_sos:{YYYY-MM-DD}` | 23 h |
+| `sync-ma-sos` | `task_lock:sync_ma_sos:{YYYY-MM-DD}` | 23 h |
+| `sync-va-elect` | `task_lock:sync_va_elect:{YYYY-MM-DD}` | 23 h |
+| `poll-pending-results` | `task_lock:poll_pending_results:{YYYY-MM-DD}` | 23 h |
 
 ---
 
@@ -169,7 +204,7 @@ Celery task ID is returned in the 202 response body: `{"task_id": "<uuid>"}`.
 
 - [x] Service account `cloudrun-runtime@civicmirror-2026.iam.gserviceaccount.com` used for all services
 - [x] `roles/run.invoker` granted on the API Cloud Run service
-- [x] Cloud Scheduler jobs configured with OIDC auth (Path A jobs)
+- [x] All Path A Cloud Scheduler jobs configured with OIDC auth (10 jobs)
 - [x] `civicmirror-sync-elections` Cloud Run Job configured (Path B)
 - [x] `INTERNAL_TASK_TOKEN` in Secret Manager (local dev fallback)
 - [x] `min-instances=1` on Celery worker (`civicmirror-worker`)
