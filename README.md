@@ -1,21 +1,25 @@
-# CivicMirror API — State Data Coverage
+# CivicMirror API
 
-## Legend
+Election data aggregation and normalization platform. Ingests results from multiple public sources, normalizes them using FIPS codes and OCD-IDs, and serves a unified REST API for the [CivicMirror](https://github.com/tokendad/CivicMirror) web app.
+
+---
+
+## At a Glance — State Coverage
+
+Use this table to identify the next best integration target. States with multiple ⚠️ columns and a clear public data source are the highest-value additions.
 
 | Symbol | Meaning |
 |---|---|
 | ✅ | Complete — dedicated state integration working |
-| ⚠️ | Partial — cross-cutting sources only (Google Civic API, OpenStates, OpenFEC) |
-| ❌ | Not implemented |
+| ⚠️ | Partial — cross-cutting sources only (Google Civic API / OpenStates / OpenFEC) |
+| ❌ | Not yet implemented |
 
-**Cross-cutting sources providing base coverage for all states:**
-- **Elections** — Google Civic Information API (federal & statewide elections)
-- **Races** — OpenStates API (state legislative races/officials)
-- **Candidate Info** — OpenFEC API (federal candidates only)
+> **Base coverage for all states via cross-cutting integrations:**
+> Elections (Google Civic API) · Races (OpenStates) · Candidate Info (OpenFEC — federal candidates only)
 
 ---
 
-## State Coverage Table
+## State Coverage
 
 | State | Elections | Races | Community | Ballots | Live | Results | Candidate Info |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -76,14 +80,32 @@
 
 | Column | Description |
 |---|---|
-| **Elections** | Source of election data — date, type, jurisdiction |
+| **Elections** | Election metadata — date, type, jurisdiction |
 | **Races** | Individual contests per election (Senator, Auditor, Clerk, etc.) |
-| **Community** | Local town and city election coverage (full ✅ = statewide; partial ⚠️ = select municipalities) |
-| **Ballots** | Ballot measure information sourced (referendums, initiatives, questions) |
-| **Live** | Access to live results during an active election night |
-| **Results** | Official certified results published post-election |
-| **Candidate Info** | Candidate contact info, images, phone, website, platform |
+| **Community** | Local/town/city coverage (⚠️ = select municipalities; ✅ = statewide) |
+| **Ballots** | Ballot measures — referendums, initiatives, questions |
+| **Live** | Live results feed during an active election night |
+| **Results** | Official certified results post-election |
+| **Candidate Info** | Candidate contact, images, phone, website, platform |
 
 ---
 
-*Last updated: 2026-05-27 — See `Docs/State Research/COVERAGE-ANALYSIS-RESULTS.md` for full source analysis.*
+## Priority Targets
+
+States closest to a full ✅ row based on available public data:
+
+| State | Opportunity | Source |
+|---|---|---|
+| **CA** | REST API available | `https://api.sos.ca.gov` |
+| **AZ** | FTP XML live feed | `ftp://ftp.azsos.gov/ElectionResults/` |
+| **CT** | Socrata/SODA API | CT Open Data Portal |
+| **PA** | Socrata/SODA API | PA Open Data Portal |
+| **NC** | FTP — live + GIS | NC SBE FTP site |
+| **MI** | Community REST API | `michiganelections.io` |
+| **MN** | Real-time portal + GIS | MN SOS |
+
+> See [`Docs/State Research/COVERAGE-ANALYSIS-RESULTS.md`](Docs/State%20Research/COVERAGE-ANALYSIS-RESULTS.md) for the full source analysis on all 48 researched states.
+
+---
+
+*Last updated: 2026-05-27*
