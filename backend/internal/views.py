@@ -2,7 +2,6 @@ import logging
 
 from django.core.cache import cache
 from django.http import JsonResponse
-from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
@@ -19,236 +18,127 @@ from integrations.va_elect.tasks import sync_va_elections
 from results.tasks import poll_pending_results
 
 from .auth import require_internal_task_token
+from .task_locks import TASK_LOCKS, current_window, lock_key
+from .tasks import release_task_lock
 
 logger = logging.getLogger(__name__)
 
-_SYNC_ELECTIONS_LOCK_TTL = 55 * 60   # 55 minutes — just under the 1-hour schedule window
-_POLL_RESULTS_LOCK_TTL = 23 * 60 * 60  # 23 hours — just under the daily window
-_SYNC_OPENSTATES_LOCK_TTL = 23 * 60 * 60  # 23 hours — just under the daily window
-_SYNC_FEC_LOCK_TTL = 6 * 60 * 60  # 6 hours — on-demand trigger dedupe window
-_SYNC_SC_VREMS_LOCK_TTL = 23 * 60 * 60  # 23 hours — daily cadence
-_POLL_SC_ENR_LOCK_TTL = 55 * 60          # 55 minutes — runs every hour during election season
-_SYNC_SC_ENR_RESULTS_LOCK_TTL = 55 * 60  # 55 minutes — runs alongside poll
-_SYNC_IA_SOS_LOCK_TTL = 23 * 60 * 60  # 23 hours — daily cadence
-_SYNC_CO_SOS_LOCK_TTL = 23 * 60 * 60  # 23 hours — daily cadence
-_SYNC_VA_ELECT_LOCK_TTL = 23 * 60 * 60  # 23 hours — daily cadence
-_SYNC_MA_SOS_LOCK_TTL = 23 * 60 * 60   # 23 hours — daily cadence
-_SYNC_CA_SOS_LOCK_TTL = 23 * 60 * 60   # 23 hours — daily cadence
+
+def _acquire_lock(task_name: str):
+    """
+    Try to claim this task's idempotency lock for the current schedule window.
+
+    Returns ``(acquired: bool, key: str)``. The window granularity and TTL come
+    from the shared ``TASK_LOCKS`` registry so trigger and clearer stay in sync.
+    """
+    window_type, ttl = TASK_LOCKS[task_name]
+    window = current_window(window_type)
+    key = lock_key(task_name, window)
+    acquired = cache.add(key, 1, ttl)
+    return acquired, key
 
 
-def _schedule_window_hourly() -> str:
-    return timezone.now().strftime("%Y-%m-%dT%H")
+def _trigger(task_name, celery_task, request):
+    """
+    Shared trigger body: acquire the lock, enqueue, and arrange for the lock to
+    be released when the task terminally finishes (success or failure) via
+    Celery link/link_error callbacks. The lock stays held during retries.
+    """
+    acquired, key = _acquire_lock(task_name)
+    if not acquired:
+        logger.info("scheduler.trigger.skipped task=%s key=%s", task_name, key)
+        return JsonResponse({"status": "already_running"}, status=202)
 
-
-def _schedule_window_daily() -> str:
-    return timezone.now().strftime("%Y-%m-%d")
-
-
-def _schedule_window_six_hourly() -> str:
-    now = timezone.now()
-    bucket = (now.hour // 6) * 6
-    return f"{now.strftime('%Y-%m-%d')}T{bucket:02d}"
+    task = celery_task.apply_async(
+        link=release_task_lock.si(key),
+        link_error=release_task_lock.si(key),
+    )
+    logger.info(
+        "scheduler.trigger.enqueued task=%s task_id=%s key=%s",
+        task_name, task.id, key,
+    )
+    return JsonResponse({"task_id": task.id}, status=202)
 
 
 @csrf_exempt
 @require_POST
 @require_internal_task_token
 def sync_elections_trigger(request):
-    window = _schedule_window_hourly()
-    lock_key = f"task_lock:sync_elections:{window}"
-
-    acquired = cache.add(lock_key, 1, _SYNC_ELECTIONS_LOCK_TTL)
-    if not acquired:
-        logger.info("scheduler.trigger.skipped task=sync_elections window=%s", window)
-        return JsonResponse({"status": "already_running"}, status=202)
-
-    task = sync_elections.delay()
-    logger.info("scheduler.trigger.enqueued task=sync_elections task_id=%s window=%s", task.id, window)
-    return JsonResponse({"task_id": task.id}, status=202)
+    return _trigger("sync_elections", sync_elections, request)
 
 
 @csrf_exempt
 @require_POST
 @require_internal_task_token
 def poll_results_trigger(request):
-    window = _schedule_window_daily()
-    lock_key = f"task_lock:poll_pending_results:{window}"
-
-    acquired = cache.add(lock_key, 1, _POLL_RESULTS_LOCK_TTL)
-    if not acquired:
-        logger.info("scheduler.trigger.skipped task=poll_pending_results window=%s", window)
-        return JsonResponse({"status": "already_running"}, status=202)
-
-    task = poll_pending_results.delay()
-    logger.info("scheduler.trigger.enqueued task=poll_pending_results task_id=%s window=%s", task.id, window)
-    return JsonResponse({"task_id": task.id}, status=202)
+    return _trigger("poll_pending_results", poll_pending_results, request)
 
 
 @csrf_exempt
 @require_POST
 @require_internal_task_token
 def sync_openstates_trigger(request):
-    window = _schedule_window_daily()
-    lock_key = f"task_lock:sync_openstates:{window}"
-
-    acquired = cache.add(lock_key, 1, _SYNC_OPENSTATES_LOCK_TTL)
-    if not acquired:
-        logger.info("scheduler.trigger.skipped task=sync_openstates window=%s", window)
-        return JsonResponse({"status": "already_running"}, status=202)
-
-    task = sync_openstates_all_states.delay()
-    logger.info("scheduler.trigger.enqueued task=sync_openstates task_id=%s window=%s", task.id, window)
-    return JsonResponse({"task_id": task.id}, status=202)
+    return _trigger("sync_openstates", sync_openstates_all_states, request)
 
 
 @csrf_exempt
 @require_POST
 @require_internal_task_token
 def sync_fec_trigger(request):
-    window = _schedule_window_six_hourly()
-    lock_key = f"task_lock:sync_fec:{window}"
-
-    acquired = cache.add(lock_key, 1, _SYNC_FEC_LOCK_TTL)
-    if not acquired:
-        logger.info("scheduler.trigger.skipped task=sync_fec window=%s", window)
-        return JsonResponse({"status": "already_running"}, status=202)
-
-    task = sync_fec_candidates.delay()
-    logger.info("scheduler.trigger.enqueued task=sync_fec task_id=%s window=%s", task.id, window)
-    return JsonResponse({"task_id": task.id}, status=202)
+    return _trigger("sync_fec", sync_fec_candidates, request)
 
 
 @csrf_exempt
 @require_POST
 @require_internal_task_token
 def sync_sc_vrems_trigger(request):
-    window = _schedule_window_daily()
-    lock_key = f"task_lock:sync_sc_vrems:{window}"
-
-    acquired = cache.add(lock_key, 1, _SYNC_SC_VREMS_LOCK_TTL)
-    if not acquired:
-        logger.info("scheduler.trigger.skipped task=sync_sc_vrems window=%s", window)
-        return JsonResponse({"status": "already_running"}, status=202)
-
-    task = sync_sc_elections.delay()
-    logger.info("scheduler.trigger.enqueued task=sync_sc_vrems task_id=%s window=%s", task.id, window)
-    return JsonResponse({"task_id": task.id}, status=202)
+    return _trigger("sync_sc_vrems", sync_sc_elections, request)
 
 
 @csrf_exempt
 @require_POST
 @require_internal_task_token
 def sync_ia_sos_trigger(request):
-    window = _schedule_window_daily()
-    lock_key = f"task_lock:sync_ia_sos:{window}"
-
-    acquired = cache.add(lock_key, 1, _SYNC_IA_SOS_LOCK_TTL)
-    if not acquired:
-        logger.info("scheduler.trigger.skipped task=sync_ia_sos window=%s", window)
-        return JsonResponse({"status": "already_running"}, status=202)
-
-    task = sync_ia_elections.delay()
-    logger.info("scheduler.trigger.enqueued task=sync_ia_sos task_id=%s window=%s", task.id, window)
-    return JsonResponse({"task_id": task.id}, status=202)
+    return _trigger("sync_ia_sos", sync_ia_elections, request)
 
 
 @csrf_exempt
 @require_POST
 @require_internal_task_token
 def sync_co_sos_trigger(request):
-    window = _schedule_window_daily()
-    lock_key = f"task_lock:sync_co_sos:{window}"
-
-    acquired = cache.add(lock_key, 1, _SYNC_CO_SOS_LOCK_TTL)
-    if not acquired:
-        logger.info("scheduler.trigger.skipped task=sync_co_sos window=%s", window)
-        return JsonResponse({"status": "already_running"}, status=202)
-
-    task = sync_co_elections.delay()
-    logger.info("scheduler.trigger.enqueued task=sync_co_sos task_id=%s window=%s", task.id, window)
-    return JsonResponse({"task_id": task.id}, status=202)
+    return _trigger("sync_co_sos", sync_co_elections, request)
 
 
 @csrf_exempt
 @require_POST
 @require_internal_task_token
 def sync_va_elect_trigger(request):
-    window = _schedule_window_daily()
-    lock_key = f"task_lock:sync_va_elect:{window}"
-
-    acquired = cache.add(lock_key, 1, _SYNC_VA_ELECT_LOCK_TTL)
-    if not acquired:
-        logger.info("scheduler.trigger.skipped task=sync_va_elect window=%s", window)
-        return JsonResponse({"status": "already_running"}, status=202)
-
-    task = sync_va_elections.delay()
-    logger.info("scheduler.trigger.enqueued task=sync_va_elect task_id=%s window=%s", task.id, window)
-    return JsonResponse({"task_id": task.id}, status=202)
+    return _trigger("sync_va_elect", sync_va_elections, request)
 
 
 @csrf_exempt
 @require_POST
 @require_internal_task_token
 def sync_ma_sos_trigger(request):
-    window = _schedule_window_daily()
-    lock_key = f"task_lock:sync_ma_sos:{window}"
-
-    acquired = cache.add(lock_key, 1, _SYNC_MA_SOS_LOCK_TTL)
-    if not acquired:
-        logger.info("scheduler.trigger.skipped task=sync_ma_sos window=%s", window)
-        return JsonResponse({"status": "already_running"}, status=202)
-
-    task = sync_ma_elections.delay()
-    logger.info("scheduler.trigger.enqueued task=sync_ma_sos task_id=%s window=%s", task.id, window)
-    return JsonResponse({"task_id": task.id}, status=202)
+    return _trigger("sync_ma_sos", sync_ma_elections, request)
 
 
 @csrf_exempt
 @require_POST
 @require_internal_task_token
 def poll_sc_enr_trigger(request):
-    window = _schedule_window_hourly()
-    lock_key = f"task_lock:poll_sc_enr:{window}"
-
-    acquired = cache.add(lock_key, 1, _POLL_SC_ENR_LOCK_TTL)
-    if not acquired:
-        logger.info("scheduler.trigger.skipped task=poll_sc_enr window=%s", window)
-        return JsonResponse({"status": "already_running"}, status=202)
-
-    task = poll_sc_enr_elections.delay()
-    logger.info("scheduler.trigger.enqueued task=poll_sc_enr task_id=%s window=%s", task.id, window)
-    return JsonResponse({"task_id": task.id}, status=202)
+    return _trigger("poll_sc_enr", poll_sc_enr_elections, request)
 
 
 @csrf_exempt
 @require_POST
 @require_internal_task_token
 def sync_sc_enr_results_trigger(request):
-    window = _schedule_window_hourly()
-    lock_key = f"task_lock:sync_sc_enr_results:{window}"
-
-    acquired = cache.add(lock_key, 1, _SYNC_SC_ENR_RESULTS_LOCK_TTL)
-    if not acquired:
-        logger.info("scheduler.trigger.skipped task=sync_sc_enr_results window=%s", window)
-        return JsonResponse({"status": "already_running"}, status=202)
-
-    task = sync_sc_enr_results.delay()
-    logger.info("scheduler.trigger.enqueued task=sync_sc_enr_results task_id=%s window=%s", task.id, window)
-    return JsonResponse({"task_id": task.id}, status=202)
+    return _trigger("sync_sc_enr_results", sync_sc_enr_results, request)
 
 
 @csrf_exempt
 @require_POST
 @require_internal_task_token
 def sync_ca_sos_trigger(request):
-    window = _schedule_window_daily()
-    lock_key = f"task_lock:sync_ca_sos:{window}"
-
-    acquired = cache.add(lock_key, 1, _SYNC_CA_SOS_LOCK_TTL)
-    if not acquired:
-        logger.info("scheduler.trigger.skipped task=sync_ca_sos window=%s", window)
-        return JsonResponse({"status": "already_running"}, status=202)
-
-    task = sync_ca_elections.delay()
-    logger.info("scheduler.trigger.enqueued task=sync_ca_sos task_id=%s window=%s", task.id, window)
-    return JsonResponse({"task_id": task.id}, status=202)
+    return _trigger("sync_ca_sos", sync_ca_elections, request)
