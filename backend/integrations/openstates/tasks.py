@@ -36,6 +36,7 @@ def sync_openstates_legislators(self, state: str):
     matcher = CandidateMatcher()
     client = OpenStatesClient()
     updated_count = 0
+    created_count = 0
     skipped_count = 0
     warning_count = 0
     last_warning = ''
@@ -53,15 +54,11 @@ def sync_openstates_legislators(self, state: str):
                 continue
 
             mapped = map_person(raw_person)
-            if mapped is None:
-                skipped_count += 1
-                continue
-
             enrichment_payload = dict(mapped)
             enrichment_payload['name'] = mapped.get('display_name', '')
 
             try:
-                _, action = matcher.enrich(
+                _, action = matcher.enrich_or_create(
                     race=None,
                     source='openstates',
                     external_id=person_id,
@@ -75,6 +72,8 @@ def sync_openstates_legislators(self, state: str):
 
             if action == 'enriched':
                 updated_count += 1
+            elif action == 'created':
+                created_count += 1
             else:
                 skipped_count += 1
                 if action == 'ambiguous':
@@ -90,7 +89,7 @@ def sync_openstates_legislators(self, state: str):
         sync_log.save(
             update_fields=['records_updated', 'records_skipped', 'error_count', 'last_error', 'status', 'completed_at']
         )
-        return {'updated': updated_count, 'skipped': skipped_count, 'warnings': warning_count, 'state': state}
+        return {'updated': updated_count, 'created': created_count, 'skipped': skipped_count, 'warnings': warning_count, 'state': state}
     except OpenStatesForbiddenError as exc:
         sync_log.error_count = 1
         sync_log.last_error = str(exc)

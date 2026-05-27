@@ -36,8 +36,14 @@ def test_map_person_extracts_active_legislator_fields():
     assert mapped['source_metadata']['openstates']['person_id'] == 'os-1'
 
 
-def test_map_person_returns_none_without_current_role():
-    assert map_person({'id': 'os-1', 'name': 'Alex Smith', 'current_role': None}) is None
+def test_map_person_sets_incumbent_false_without_current_role():
+    mapped = map_person({'id': 'os-1', 'name': 'Alex Smith', 'current_role': None})
+    assert isinstance(mapped, dict)
+    assert mapped['incumbent'] is False
+    assert mapped['display_name'] == 'Alex Smith'
+    assert mapped['state'] == ''
+    assert mapped['chamber'] == ''
+    assert mapped['district'] == ''
 
 
 def test_map_person_extracts_state_from_jurisdiction():

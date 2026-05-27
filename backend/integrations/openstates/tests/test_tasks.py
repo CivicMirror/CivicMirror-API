@@ -36,7 +36,7 @@ def test_sync_openstates_legislators_skips_unchanged_records():
     assert result['updated'] == 0
     assert sync_log.records_updated == 0
     assert sync_log.records_skipped == 1
-    mock_matcher_cls.return_value.enrich.assert_not_called()
+    mock_matcher_cls.return_value.enrich_or_create.assert_not_called()
 
 
 @pytest.mark.django_db
@@ -85,6 +85,7 @@ def test_sync_openstates_legislators_updates_matching_candidate(mock_client_cls)
     candidate.refresh_from_db()
     sync_log = SyncLog.objects.get(task_name='sync_openstates_legislators', address_label='CA')
     assert result['updated'] == 1
+    assert result['created'] == 0
     assert candidate.openstates_person_id == 'os-1'
     assert candidate.party == 'Democratic'
     assert candidate.website_url == 'https://alex.example.com'
@@ -106,7 +107,8 @@ def test_sync_openstates_legislators_skips_missing_person_id():
 
 
 @pytest.mark.django_db
-def test_sync_openstates_legislators_skips_people_without_current_role():
+def test_sync_openstates_legislators_skips_people_without_state_or_chamber():
+    # A person with no current_role has no state/chamber data → enrich_or_create returns no_match → skipped
     with patch('integrations.openstates.tasks.OpenStatesClient') as mock_client_cls:
         mock_client_cls.return_value.list_people_all_pages.return_value = [{'id': 'os-2', 'name': 'Alex', 'current_role': None}]
 

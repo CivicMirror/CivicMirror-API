@@ -17,9 +17,14 @@ def test_list_people_sends_expected_params(mock_get, settings):
 
     assert payload == {'results': [], 'pagination': {'page': 1, 'max_page': 1}}
     _, kwargs = mock_get.call_args
-    assert kwargs['params']['jurisdiction'] == 'ocd-jurisdiction/country:us/state:ca/government'
-    assert kwargs['params']['apikey'] == 'test-key'
-    assert kwargs['params']['api_key'] == 'test-key'
+    params = dict(kwargs['params'])
+    assert params['jurisdiction'] == 'ocd-jurisdiction/country:us/state:ca/government'
+    assert params['apikey'] == 'test-key'
+    assert params['api_key'] == 'test-key'
+    # include params should be present (list of tuples may have duplicates)
+    include_values = [v for k, v in kwargs['params'] if k == 'include']
+    assert 'offices' in include_values
+    assert 'links' in include_values
     assert kwargs['timeout'] == 10
 
 

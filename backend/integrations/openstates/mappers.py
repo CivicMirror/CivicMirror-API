@@ -7,7 +7,9 @@ from django.utils import timezone
 STATE_RE = re.compile(r'state:([a-z]{2})', re.IGNORECASE)
 
 
-def _extract_current_party(parties: list[dict] | None) -> str:
+def _extract_current_party(parties) -> str:
+    if isinstance(parties, str):
+        return parties.strip()
     for party in parties or []:
         if not isinstance(party, dict):
             continue
@@ -28,10 +30,9 @@ def _first_value(items: list[dict] | None, key: str) -> str:
     return ''
 
 
-def map_person(raw: dict) -> dict | None:
+def map_person(raw: dict) -> dict:
     current_role = raw.get('current_role') or {}
-    if not current_role:
-        return None
+    incumbent = bool(current_role)
 
     jurisdiction = current_role.get('jurisdiction') or ''
     return {
@@ -41,6 +42,7 @@ def map_person(raw: dict) -> dict | None:
         'website_url': _first_value(raw.get('links'), 'url'),
         'contact_phone': _first_value(raw.get('offices'), 'voice'),
         'contact_office': _first_value(raw.get('offices'), 'address'),
+        'incumbent': incumbent,
         'state': _extract_state(jurisdiction),
         'chamber': (current_role.get('org_classification') or '').lower(),
         'district': str(current_role.get('district') or ''),
