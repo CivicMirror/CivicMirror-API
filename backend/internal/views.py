@@ -13,6 +13,7 @@ from integrations.ia_sos.tasks import sync_ia_elections
 from integrations.openstates.tasks import sync_openstates_all_states
 from integrations.sc_vrems.tasks import sync_sc_elections
 from integrations.sc_enr.tasks import poll_sc_enr_elections, sync_sc_enr_results
+from integrations.ca_sos.tasks import sync_ca_elections
 from integrations.ma_sos.tasks import sync_ma_elections
 from integrations.va_elect.tasks import sync_va_elections
 from results.tasks import poll_pending_results
@@ -32,6 +33,7 @@ _SYNC_IA_SOS_LOCK_TTL = 23 * 60 * 60  # 23 hours — daily cadence
 _SYNC_CO_SOS_LOCK_TTL = 23 * 60 * 60  # 23 hours — daily cadence
 _SYNC_VA_ELECT_LOCK_TTL = 23 * 60 * 60  # 23 hours — daily cadence
 _SYNC_MA_SOS_LOCK_TTL = 23 * 60 * 60   # 23 hours — daily cadence
+_SYNC_CA_SOS_LOCK_TTL = 23 * 60 * 60   # 23 hours — daily cadence
 
 
 def _schedule_window_hourly() -> str:
@@ -232,4 +234,21 @@ def sync_sc_enr_results_trigger(request):
 
     task = sync_sc_enr_results.delay()
     logger.info("scheduler.trigger.enqueued task=sync_sc_enr_results task_id=%s window=%s", task.id, window)
+    return JsonResponse({"task_id": task.id}, status=202)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_ca_sos_trigger(request):
+    window = _schedule_window_daily()
+    lock_key = f"task_lock:sync_ca_sos:{window}"
+
+    acquired = cache.add(lock_key, 1, _SYNC_CA_SOS_LOCK_TTL)
+    if not acquired:
+        logger.info("scheduler.trigger.skipped task=sync_ca_sos window=%s", window)
+        return JsonResponse({"status": "already_running"}, status=202)
+
+    task = sync_ca_elections.delay()
+    logger.info("scheduler.trigger.enqueued task=sync_ca_sos task_id=%s window=%s", task.id, window)
     return JsonResponse({"task_id": task.id}, status=202)
