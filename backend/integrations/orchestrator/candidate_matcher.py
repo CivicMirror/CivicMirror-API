@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from django.db import models as django_models
+
 from elections.models import Candidate, Race
 
 from .enrichment import get_fields_to_update, merge_source_metadata
@@ -64,6 +66,80 @@ class CandidateMatcher:
             setattr(candidate, field, value)
         candidate.save(update_fields=list(updates.keys()))
         return candidate, 'enriched'
+
+    def enrich_or_create(
+        self,
+        race: Race | None,
+        source: str,
+        external_id: str,
+        enrichment_payload: dict,
+    ) -> tuple['Candidate | None', str]:
+        candidate, action = self.enrich(race, source, external_id, enrichment_payload)
+        if action != 'no_match':
+            return candidate, action
+
+        state = (enrichment_payload.get('state') or '').upper()
+        chamber = (enrichment_payload.get('chamber') or '').lower()
+        district = str(enrichment_payload.get('district') or '').strip()
+        name = enrichment_payload.get('display_name') or enrichment_payload.get('name') or ''
+
+        if not (state and chamber and name):
+            return None, 'no_match'
+
+        target_race = self._find_race_for_legislator(state, chamber, district)
+        if target_race is None:
+            return None, 'no_match'
+
+        candidate = Candidate.objects.create(
+            race=target_race,
+            name=name,
+            party=enrichment_payload.get('party') or '',
+            incumbent=bool(enrichment_payload.get('incumbent')),
+            candidate_status=Candidate.CandidateStatus.RUNNING,
+            image_url=enrichment_payload.get('image_url') or '',
+            website_url=enrichment_payload.get('website_url') or '',
+            contact_phone=enrichment_payload.get('contact_phone') or '',
+            contact_office=enrichment_payload.get('contact_office') or '',
+            openstates_person_id=str(external_id) if external_id else '',
+            source_metadata=merge_source_metadata(
+                {},
+                source,
+                {
+                    'external_id': str(external_id),
+                    **(enrichment_payload.get('source_metadata', {}).get(source) or {}),
+                },
+            ),
+        )
+        return candidate, 'created'
+
+    def _find_race_for_legislator(self, state: str, chamber: str, district: str) -> 'Race | None':
+        if not state or not chamber:
+            return None
+
+        qs = Race.objects.filter(
+            election__state=state.upper(),
+            race_status='active',
+        ).select_related('election')
+
+        if chamber == 'upper':
+            qs = qs.filter(office_title__iregex=r'senate')
+        elif chamber == 'lower':
+            qs = qs.filter(office_title__iregex=r'house|represent|assembl|delegate')
+        elif chamber == 'executive':
+            qs = qs.filter(
+                office_title__iregex=r'governor|attorney general|secretary|treasurer|auditor|comptroller'
+            )
+        else:
+            return None
+
+        if district:
+            qs = qs.filter(
+                django_models.Q(office_title__icontains=district) |
+                django_models.Q(jurisdiction__icontains=district)
+            )
+
+        matches = list(qs[:2])
+        return matches[0] if len(matches) == 1 else None
 
     def _find_candidate(self, race: Race | None, payload: dict) -> tuple[Candidate | None, bool]:
         candidate, ambiguous = self._match_by_external_ids(payload)

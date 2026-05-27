@@ -37,13 +37,15 @@ class OpenStatesClient:
             raise OpenStatesForbiddenError('OPENSTATES_API_KEY is not configured.')
 
         jurisdiction = f"ocd-jurisdiction/country:us/state:{(state or '').lower()}/government"
-        params = {
-            'jurisdiction': jurisdiction,
-            'page': page,
-            'per_page': per_page,
-            'apikey': self.api_key,
-            'api_key': self.api_key,
-        }
+        params = [
+            ('jurisdiction', jurisdiction),
+            ('page', page),
+            ('per_page', per_page),
+            ('apikey', self.api_key),
+            ('api_key', self.api_key),
+            ('include', 'offices'),
+            ('include', 'links'),
+        ]
         url = f'{self.base_url}/people'
 
         for attempt in range(self.max_retries + 1):
