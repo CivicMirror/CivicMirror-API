@@ -11,6 +11,7 @@ urlpatterns = [
     path("tasks/sync-ia-sos/", views.sync_ia_sos_trigger, name="internal-sync-ia-sos"),
     path("tasks/sync-co-sos/", views.sync_co_sos_trigger, name="internal-sync-co-sos"),
     path("tasks/sync-va-elect/", views.sync_va_elect_trigger, name="internal-sync-va-elect"),
+    path("tasks/sync-va-elections/", views.sync_va_elect_trigger, name="internal-sync-va-elections"),
     path("tasks/sync-ma-sos/", views.sync_ma_sos_trigger, name="internal-sync-ma-sos"),
     path("tasks/poll-sc-enr/", views.poll_sc_enr_trigger, name="internal-poll-sc-enr"),
     path("tasks/sync-sc-enr-results/", views.sync_sc_enr_results_trigger, name="internal-sync-sc-enr-results"),
