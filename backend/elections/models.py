@@ -94,6 +94,7 @@ class Race(models.Model):
         CO_SOS = 'co_sos', 'Colorado SOS'
         VA_ELECT = 'va_elect', 'Virginia ELECT'
         MA_SOS = 'ma_sos', 'Massachusetts SOS'
+        CA_SOS = 'ca_sos', 'California SOS'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'

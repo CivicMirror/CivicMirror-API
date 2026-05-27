@@ -419,3 +419,9 @@ The most realistic low-cost CivicMirror architecture is:
 6. **Optional direct-state adapters:** VIP feeds, Clarity parsers, official state portals where needed
 
 This keeps the core system under the current budget target while still allowing future expansion into richer paid sources if the project grows.
+
+---
+
+## May 26 
+Updated sources to review
+https://blogs.mulesoft.com/dev-guides/15-apis-to-track-election-data/

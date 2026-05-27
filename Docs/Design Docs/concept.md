@@ -169,3 +169,17 @@ Local development uses `docker-compose.dev.yaml` with PostgreSQL, Redis, Django,
 - [ ] Expose unified REST API
 - [ ] CivicMirror integration
 - [ ] Public API documentation
+
+--- 
+## Summary Table Design
+
+**Primary Function is State and Federal data,  But community/Local/Town Data is always a plus.**
+
+- Elections: Source of data for Elction information,  Date, Time, Candidates, 
+- Races: Source The individual Contest per Election, Senator, Auditor, Clerk...etc
+- Comminuity:  Sources for Local towns and citys.  Complete coverage would mean the entire state is covered.  Partial Would me towns and communities would be covered.  *Design note: add a percentage of coverage here possible?*
+- Ballots: Ballots information has been sourced
+- Live:  Access to live results during an active election
+- Results: Official published results 
+- Candidate Info:  Source of Information about specific Candidate(contact information, images, phone, website...)
+- 

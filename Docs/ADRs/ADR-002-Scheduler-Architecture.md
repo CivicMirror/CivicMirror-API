@@ -27,6 +27,7 @@ CivicMirror API requires periodic background ingestion from multiple data source
 | `sync-co-sos` | `0 2 * * *` | **Path A** — `POST /internal/tasks/sync-co-sos/` | Colorado SOS — election + race data |
 | `sync-ma-sos` | `0 3 * * *` | **Path A** — `POST /internal/tasks/sync-ma-sos/` | Massachusetts SOS — election + race data |
 | `sync-va-elect` | `30 3 * * *` | **Path A** — `POST /internal/tasks/sync-va-elections/` | Virginia ELECT — election + race data |
+| `sync-ca-sos` | `0 4 * * *` | **Path A** — `POST /internal/tasks/sync-ca-sos/` | California SOS — election + race data |
 | `poll-pending-results` | `0 6 * * *` | **Path A** — `POST /internal/tasks/poll-results/` | All state results adapters |
 
 The original plan used **Celery Beat** as the scheduler. Celery Beat is a long-running process that maintains an internal clock and fires tasks on a configured schedule.
@@ -62,6 +63,7 @@ Used by all jobs except `sync-elections-hourly`.
    | `POST /internal/tasks/sync-co-sos/` | Colorado SOS (daily 02:00) |
    | `POST /internal/tasks/sync-ma-sos/` | Massachusetts SOS (daily 03:00) |
    | `POST /internal/tasks/sync-va-elections/` | Virginia ELECT (daily 03:30) |
+   | `POST /internal/tasks/sync-ca-sos/` | California SOS (daily 04:00) |
    | `POST /internal/tasks/poll-results/` | All state results adapters (daily 06:00) |
 
 2. Google Cloud Scheduler fires an authenticated OIDC POST to the endpoint.
@@ -135,6 +137,7 @@ Cloud Scheduler is at-least-once: network timeouts or transient 5xx responses ca
 | `sync-co-sos` | `task_lock:sync_co_sos:{YYYY-MM-DD}` | 23 h |
 | `sync-ma-sos` | `task_lock:sync_ma_sos:{YYYY-MM-DD}` | 23 h |
 | `sync-va-elect` | `task_lock:sync_va_elect:{YYYY-MM-DD}` | 23 h |
+| `sync-ca-sos` | `task_lock:sync_ca_sos:{YYYY-MM-DD}` | 23 h |
 | `poll-pending-results` | `task_lock:poll_pending_results:{YYYY-MM-DD}` | 23 h |
 
 ---
