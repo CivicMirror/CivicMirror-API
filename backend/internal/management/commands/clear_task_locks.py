@@ -16,6 +16,9 @@ _LOCK_PREFIX = "task_lock:"
 _DAILY_TASKS = [
     "sync_co_sos",
     "sync_ia_sos",
+    "sync_ma_sos",
+    "sync_va_elect",
+    "sync_ca_sos",
     "poll_pending_results",
 ]
 
