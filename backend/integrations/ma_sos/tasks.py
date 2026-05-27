@@ -95,13 +95,17 @@ def sync_ma_elections(self):
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return {"created": 0, "updated": 0, "queued": 0}
 
-        # Build mapped election dicts
+        # Build mapped election dicts, skipping any without a resolvable election_date
         election_data: list[tuple[str, dict]] = []
         for row in unique_rows:
             schedule = row.pop("_schedule", {})
             mapped = map_election(row, schedule)
             source_id = mapped.pop("source_id")
-            election_data.append((source_id, {**mapped, "last_synced_at": timezone.now()}))
+            defaults = {**mapped, "last_synced_at": timezone.now()}
+            if defaults.get("election_date") is None:
+                logger.warning("ma_sos.sync_elections.skipped_no_date source_id=%s", source_id)
+                continue
+            election_data.append((source_id, defaults))
 
         source_ids = [d[0] for d in election_data]
 
@@ -113,6 +117,7 @@ def sync_ma_elections(self):
             Election(source_id=sid, **defaults)
             for sid, defaults in election_data
         ]
+
         if election_objects:
             Election.objects.bulk_create(
                 election_objects,
