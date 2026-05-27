@@ -146,6 +146,7 @@ INSTALLED_APPS += [
     'integrations.openstates',
     'integrations.fec',
     'integrations.sc_vrems',
+    'integrations.sc_enr',
     'integrations.ia_sos',
     'integrations.co_sos',
     'integrations.va_elect',
