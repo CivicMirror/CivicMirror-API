@@ -25,6 +25,8 @@ class RaceFilterSet(django_filters.FilterSet):
     geography_scope = CharFilter(lookup_expr='iexact')
     jurisdiction_level = CharFilter(field_name='election__jurisdiction_level')
     source = CharFilter()
+    election_date__gte = DateFilter(field_name='election__election_date', lookup_expr='gte')
+    election_date__lte = DateFilter(field_name='election__election_date', lookup_expr='lte')
 
     class Meta:
         model = Race
