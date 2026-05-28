@@ -237,15 +237,16 @@ def test_sync_ma_elections_routes_through_ingest_service():
 
     SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
 
-    fake_schedule = {2024: {"general": "2024-11-05", "primary": "2024-09-03"}}
     fake_rows = [
         {"election_id": 165300, "office": "President", "district": "Statewide",
          "stage": "General", "year": 2024},
     ]
 
+    # The two task patches prevent .delay() side effects; their bindings
+    # aren't asserted on.
     with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient, \
-         patch("integrations.ma_sos.tasks.sync_ma_races") as mock_races, \
-         patch("integrations.ma_sos.tasks.sync_ma_ballot_question") as mock_bq:
+         patch("integrations.ma_sos.tasks.sync_ma_races"), \
+         patch("integrations.ma_sos.tasks.sync_ma_ballot_question"):
         inst = MockClient.return_value
         inst.get_ocpf_schedule.return_value = {"generalElectionDate": "11/5/2024", "primaryElectionDate": "9/3/2024"}
         inst.get_election_ids.return_value = fake_rows

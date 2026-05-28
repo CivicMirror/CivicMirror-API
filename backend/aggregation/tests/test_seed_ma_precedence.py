@@ -1,7 +1,7 @@
 import pytest
 
-from aggregation.models import SourcePrecedence
 from aggregation.migrations import _seed_data
+from aggregation.models import SourcePrecedence
 
 
 @pytest.mark.django_db
