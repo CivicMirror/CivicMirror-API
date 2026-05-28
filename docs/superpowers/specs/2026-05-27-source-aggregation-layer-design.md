@@ -45,8 +45,9 @@ than bolting compatibility onto the source-siloed models:
   service (DB-`null=True` during the incremental rollout so not-yet-migrated
   adapters coexist; tightened to NOT NULL in the Phase-2 finish). Per-source
   ids live on `ElectionSourceLink`. The legacy `Election.source_id` column is
-  **demoted to nullable, non-unique, deprecated** so not-yet-migrated adapters keep
-  working during the incremental rollout; it is physically **dropped at the end of
+  **demoted to nullable** (kept unique in Phase 1 because un-migrated adapters
+  bulk-upsert on it; NULLs are exempt from uniqueness so merged elections coexist).
+  The column and its unique constraint are physically **dropped at the end of
   Phase 2** once every adapter is off it.
 - The API may change freely (the CivicMirror frontend is updated alongside).
 - **Adapters and infrastructure are kept and adapted**, not rewritten from scratch:
@@ -115,10 +116,13 @@ Election / Race / Candidate  (+ field_provenance, contributing_sources)
   Always set by the ingest service; not-yet-migrated adapters leave it NULL
   (multiple NULLs are allowed under the unique constraint). Tightened to NOT NULL
   in the Phase-2 finish.
-- **Demote** `source_id` to `null=True, blank=True` and drop `unique=True`
-  (deprecated convenience for not-yet-migrated adapters; per-source ids now live on
-  `ElectionSourceLink`). Migrated adapters (CA SOS, Civic) do not set it. Column is
-  dropped at the end of Phase 2.
+- **Make `source_id` nullable** (`unique=True, null=True, blank=True`); the unique
+  constraint is *kept* in Phase 1 because not-yet-migrated adapters (e.g.
+  `sc_vrems`) `bulk_create` with `update_conflicts=True, unique_fields=["source_id"]`
+  and require it. NULLs are exempt from uniqueness, so merged elections with
+  `source_id=NULL` coexist. Per-source ids live on `ElectionSourceLink`. Migrated
+  adapters (CA SOS, Civic) do not set it. The column (and constraint) are dropped
+  in the Phase-2 finish.
 - Add `field_provenance` (`JSONField`, default `dict`) — `field → source`.
 - Add `contributing_sources` (`JSONField`, default `list`).
 - Add `needs_review` (`BooleanField`, default `False`).

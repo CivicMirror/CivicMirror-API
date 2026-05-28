@@ -534,10 +534,12 @@ In `class Election`, add after `results_url` (line ~52):
     contributing_sources = models.JSONField(default=list, blank=True)
     needs_review = models.BooleanField(default=False)
 ```
-Demote `source_id` to nullable, non-unique, deprecated (kept for not-yet-migrated
-adapters; dropped in the Phase-2 finish):
+Make `source_id` nullable (keep `unique=True` — not-yet-migrated adapters such as
+`sc_vrems` `bulk_create` on it with `update_conflicts/unique_fields=["source_id"]`;
+NULLs are exempt from uniqueness so merged elections with `source_id=NULL`
+coexist). The column and its unique constraint are dropped in the Phase-2 finish:
 ```python
-    source_id = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    source_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
 ```
 In `class Race`, add after `submitted_by_uid` (line ~152):
 ```python
