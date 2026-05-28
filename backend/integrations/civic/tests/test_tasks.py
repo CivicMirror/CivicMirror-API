@@ -126,19 +126,15 @@ def test_sync_election_races_measure(MockClient, mock_set_cache, mock_get_cache)
     assert MeasureOption.objects.filter(race=race).count() == 3  # Yes, No, Abstain
 
 
-@pytest.fixture
-def precedence(db):
-    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
-
-
 @pytest.mark.django_db
-def test_ingest_civic_election_lands_on_canonical_key(precedence):
+def test_ingest_civic_election_lands_on_canonical_key(civic_precedence):
     payload = {
         "source_id": "11255",
         "name": "California Primary Election",
         "election_date": "2026-06-02",
         "ocd_division_id": "ocd-division/country:us/state:ca",
     }
-    election = ingest_civic_election(payload)
+    election, created = ingest_civic_election(payload)
     assert election.canonical_key == "CA:primary:2026-06-02:state"
     assert "civic_api" in election.contributing_sources
+    assert created is True

@@ -132,3 +132,12 @@ def test_parse_election_date_from_catalog_title():
 
 def test_parse_election_date_returns_none_when_absent():
     assert parse_election_date_from_catalog(b"https://api.sos.ca.gov\nno date here\n") is None
+
+
+def test_parse_election_type_from_catalog_detects_primary_and_general():
+    from integrations.ca_sos.parsers import parse_election_type_from_catalog
+    primary = b'"|... California June 2, 2026 Primary Election|"\n'
+    general = b'"|... California November 3, 2026 General Election|"\n'
+    assert parse_election_type_from_catalog(primary) == "primary"
+    assert parse_election_type_from_catalog(general) == "general"
+    assert parse_election_type_from_catalog(b"no match here") is None
