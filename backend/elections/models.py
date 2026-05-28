@@ -156,6 +156,7 @@ class Race(models.Model):
     submitted_by_uid = models.CharField(max_length=128, blank=True, db_index=True)
     field_provenance = models.JSONField(default=dict, blank=True)
     contributing_sources = models.JSONField(default=list, blank=True)
+    results_url = models.URLField(blank=True, default='')
 
     objects = models.Manager()
 
