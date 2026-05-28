@@ -8,6 +8,7 @@ from integrations.ca_sos.mappers import (
     ca_primary_date,
     infer_geography_scope,
     map_election,
+    map_election_identity,
     normalize,
 )
 
@@ -82,3 +83,18 @@ class TestInferGeographyScope:
 
     def test_assembly_district(self):
         assert infer_geography_scope("State Assembly District 10") == "district"
+
+
+class TestMapElectionIdentity:
+    def test_map_election_identity_uses_catalog_date_when_provided(self):
+        identity, fields = map_election_identity(2026, "primary", catalog_date=date(2026, 6, 2))
+        assert identity["election_date"] == date(2026, 6, 2)
+        assert identity["state"] == "CA"
+        assert identity["election_type"] == "primary"
+        assert identity["jurisdiction_level"] == "state"
+        assert fields["name"] == "2026 California Primary Election"
+
+    def test_map_election_identity_falls_back_to_statutory_date(self):
+        identity, _ = map_election_identity(2026, "primary", catalog_date=None)
+        # statutory fallback (first Tuesday after first Monday in March 2026)
+        assert identity["election_date"] == date(2026, 3, 3)
