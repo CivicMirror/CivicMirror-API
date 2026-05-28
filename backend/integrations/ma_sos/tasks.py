@@ -95,55 +95,33 @@ def sync_ma_elections(self):
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return {"created": 0, "updated": 0, "queued": 0}
 
-        # Build mapped election dicts, skipping any without a resolvable election_date
-        election_data: list[tuple[str, dict]] = []
-        for row in unique_rows:
+        from aggregation import ingest
+
+        election_objects: list[Election] = []
+        for idx, row in enumerate(unique_rows):
             schedule = row.pop("_schedule", {})
             mapped = map_election(row, schedule)
             source_id = mapped.pop("source_id")
-            defaults = {**mapped, "last_synced_at": timezone.now()}
-            if defaults.get("election_date") is None:
+            if mapped.get("election_date") is None:
                 logger.warning("ma_sos.sync_elections.skipped_no_date source_id=%s", source_id)
-                continue
-            election_data.append((source_id, defaults))
-
-        source_ids = [d[0] for d in election_data]
-
-        existing_source_ids = set(
-            Election.objects.filter(source_id__in=source_ids).values_list("source_id", flat=True)
-        ) if source_ids else set()
-
-        election_objects = [
-            Election(source_id=sid, **defaults)
-            for sid, defaults in election_data
-        ]
-
-        if election_objects:
-            Election.objects.bulk_create(
-                election_objects,
-                update_conflicts=True,
-                update_fields=[
-                    "name", "election_date", "election_type", "jurisdiction_level",
-                    "state", "status", "source_metadata", "last_synced_at",
-                ],
-                unique_fields=["source_id"],
-            )
-
-        created_count = sum(1 for sid, _ in election_data if sid not in existing_source_ids)
-        updated_count = len(election_data) - created_count
-
-        # Reload to get PKs for task dispatch
-        elections_by_source_id = {
-            e.source_id: e
-            for e in Election.objects.filter(source_id__in=source_ids)
-        } if source_ids else {}
-
-        for idx, (source_id, defaults) in enumerate(election_data):
-            election_obj = elections_by_source_id.get(source_id)
-            if not election_obj:
-                logger.warning("ma_sos.sync_elections.missing_pk source_id=%s", source_id)
                 skipped_count += 1
                 continue
+            identity = {
+                "state": mapped["state"],
+                "election_type": mapped["election_type"],
+                "election_date": mapped["election_date"],
+                "jurisdiction_level": mapped["jurisdiction_level"],
+            }
+            # Everything else (name, status, source_metadata, …) becomes ingest fields.
+            fields = {k: v for k, v in mapped.items() if k not in identity}
+            election_obj, was_created = ingest.ingest_election(
+                source="ma_sos", source_id=source_id, identity=identity, fields=fields,
+            )
+            if was_created:
+                created_count += 1
+            else:
+                updated_count += 1
+
             electionstats_id = (election_obj.source_metadata or {}).get("electionstats_id")
             if not electionstats_id:
                 skipped_count += 1
@@ -153,6 +131,7 @@ def sync_ma_elections(self):
                 countdown=idx * 3,
             )
             queued_count += 1
+            election_objects.append(election_obj)
 
         # Discover and queue ballot questions for current year
         bq_ids = client.get_ballot_question_ids(current_year)

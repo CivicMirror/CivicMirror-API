@@ -6,21 +6,24 @@ from datetime import date
 from unittest.mock import MagicMock, call, patch
 
 import pytest
+from django.test import override_settings
 
 # ---------------------------------------------------------------------------
 # sync_ma_elections
 # ---------------------------------------------------------------------------
 
 @patch("integrations.ma_sos.tasks.SyncLog")
-@patch("integrations.ma_sos.tasks.Election")
 @patch("integrations.ma_sos.tasks.sync_ma_races")
 @patch("integrations.ma_sos.tasks.sync_ma_ballot_question")
 @patch("integrations.ma_sos.tasks.MaSosClient")
 @patch("integrations.ma_sos.tasks.timezone")
 def test_sync_ma_elections_discovers_and_queues(
     mock_tz, mock_client_cls, mock_bq_task, mock_races_task,
-    mock_election_cls, mock_synclog_cls,
+    mock_synclog_cls,
 ):
+    """Routing through ingest_election: verify races + BQ tasks are queued when
+    a valid election is discovered.  Election model calls now go through the
+    aggregation ingest service, so we mock that instead of bulk_create."""
     from integrations.ma_sos.tasks import sync_ma_elections
 
     # SyncLog setup
@@ -31,7 +34,7 @@ def test_sync_ma_elections_discovers_and_queues(
     mock_synclog_cls.Status.COMPLETED_WITH_WARNINGS = "warnings"
     mock_synclog_cls.Status.FAILED = "failed"
 
-    # Client returns 2 elections and 1 BQ
+    # Client returns 1 election and 1 BQ
     mock_client = MagicMock()
     mock_client_cls.return_value = mock_client
     mock_client.get_ocpf_schedule.return_value = {"generalElectionDate": "11/5/2024", "primaryElectionDate": "9/3/2024"}
@@ -43,29 +46,17 @@ def test_sync_ma_elections_discovers_and_queues(
     ]
     mock_client.get_ballot_question_ids.return_value = [11620]
 
-    # Election model
-    mock_qs = MagicMock()
-    mock_qs.values_list.return_value = []
-    mock_election_cls.objects.filter.return_value = mock_qs
-    mock_election_cls.objects.bulk_create.return_value = []
+    # Mock the ingest service to return a fake election object
     mock_saved_election = MagicMock()
-    mock_saved_election.source_id = "ma_sos_165300"
     mock_saved_election.pk = 1
     mock_saved_election.source_metadata = {"electionstats_id": 165300}
-    # Second call (reload after bulk_create) returns the list
-    mock_election_cls.objects.filter.side_effect = [mock_qs, [mock_saved_election]]
-    mock_election_cls.JurisdictionLevel.NATIONAL = "national"
-    mock_election_cls.JurisdictionLevel.STATE = "state"
-    mock_election_cls.JurisdictionLevel.LOCAL = "local"
-    mock_election_cls.Status.UPCOMING = "upcoming"
-    mock_election_cls.Status.ACTIVE = "active"
-    mock_election_cls.Status.RESULTS_PENDING = "results_pending"
 
     mock_tz.now.return_value = MagicMock()
     mock_tz.localdate.return_value = date(2024, 12, 1)
 
-    # Patch date.today()
-    with patch("integrations.ma_sos.tasks.date") as mock_date:
+    # Patch date.today() and the ingest service
+    with patch("integrations.ma_sos.tasks.date") as mock_date, \
+         patch("aggregation.ingest.ingest_election", return_value=(mock_saved_election, True)):
         mock_date.today.return_value = date(2024, 12, 1)
         sync_ma_elections.run()
 
@@ -254,3 +245,41 @@ def test_sync_ma_ballot_question_upserts(
 
     mock_race_cls.objects.bulk_create.assert_called_once()
     assert mock_measure_cls.objects.get_or_create.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Integration test — ingest service routing
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+def test_sync_ma_elections_routes_through_ingest_service():
+    """Verify each discovered MA election lands as a canonical Election via the
+    aggregation ingest service with electionstats_id preserved on source_metadata."""
+    from aggregation.models import SourcePrecedence
+    from elections.models import Election, ElectionSourceLink
+    from integrations.ma_sos.tasks import sync_ma_elections
+
+    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+
+    fake_schedule = {2024: {"general": "2024-11-05", "primary": "2024-09-03"}}
+    fake_rows = [
+        {"election_id": 165300, "office": "President", "district": "Statewide",
+         "stage": "General", "year": 2024},
+    ]
+
+    with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient, \
+         patch("integrations.ma_sos.tasks.sync_ma_races") as mock_races, \
+         patch("integrations.ma_sos.tasks.sync_ma_ballot_question") as mock_bq:
+        inst = MockClient.return_value
+        inst.get_ocpf_schedule.return_value = {"generalElectionDate": "11/5/2024", "primaryElectionDate": "9/3/2024"}
+        inst.get_election_ids.return_value = fake_rows
+        inst.get_ballot_question_ids.return_value = []
+        sync_ma_elections.run()
+
+    e = Election.objects.get(state="MA", election_date=date(2024, 11, 5))
+    assert "ma_sos" in e.contributing_sources
+    assert e.canonical_key.startswith("MA:")
+    link = ElectionSourceLink.objects.get(election=e, source="ma_sos")
+    assert link.source_id  # populated by ingest
+    assert e.source_metadata.get("electionstats_id") == 165300
