@@ -29,7 +29,7 @@ def test_sync_elections_valid_token(client, internal_token):
     with patch("internal.views.sync_elections") as mock_task:
         mock_result = MagicMock()
         mock_result.id = "abc-123"
-        mock_task.delay.return_value = mock_result
+        mock_task.apply_async.return_value = mock_result
         response = client.post(
             "/internal/tasks/sync-elections/",
             HTTP_AUTHORIZATION=f"Bearer {internal_token}",
@@ -37,7 +37,7 @@ def test_sync_elections_valid_token(client, internal_token):
     assert response.status_code == 202
     data = response.json()
     assert data["task_id"] == "abc-123"
-    mock_task.delay.assert_called_once()
+    mock_task.apply_async.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -84,7 +84,7 @@ def test_oidc_token_accepted(client):
          patch("google.oauth2.id_token.verify_oauth2_token", return_value=fake_payload):
         mock_result = MagicMock()
         mock_result.id = "oidc-task"
-        mock_task.delay.return_value = mock_result
+        mock_task.apply_async.return_value = mock_result
         response = client.post(
             "/internal/tasks/sync-elections/",
             HTTP_AUTHORIZATION="Bearer fake.oidc.jwt",
@@ -134,7 +134,7 @@ def test_sync_elections_idempotency(client, internal_token):
     with patch("internal.views.sync_elections") as mock_task:
         mock_result = MagicMock()
         mock_result.id = "abc-123"
-        mock_task.delay.return_value = mock_result
+        mock_task.apply_async.return_value = mock_result
 
         r1 = client.post(
             "/internal/tasks/sync-elections/",
@@ -148,7 +148,7 @@ def test_sync_elections_idempotency(client, internal_token):
     assert r1.json()["task_id"] == "abc-123"
     assert r2.status_code == 202
     assert r2.json()["status"] == "already_running"
-    mock_task.delay.assert_called_once()
+    mock_task.apply_async.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -157,7 +157,7 @@ def test_poll_results_valid_token(client, internal_token):
     with patch("internal.views.poll_pending_results") as mock_task:
         mock_result = MagicMock()
         mock_result.id = "def-456"
-        mock_task.delay.return_value = mock_result
+        mock_task.apply_async.return_value = mock_result
         response = client.post(
             "/internal/tasks/poll-results/",
             HTTP_AUTHORIZATION=f"Bearer {internal_token}",
@@ -172,7 +172,7 @@ def test_sync_openstates_valid_token(client, internal_token):
     with patch("internal.views.sync_openstates_all_states") as mock_task:
         mock_result = MagicMock()
         mock_result.id = "ghi-789"
-        mock_task.delay.return_value = mock_result
+        mock_task.apply_async.return_value = mock_result
         response = client.post(
             "/internal/tasks/sync-openstates/",
             HTTP_AUTHORIZATION=f"Bearer {internal_token}",
@@ -187,7 +187,7 @@ def test_sync_openstates_idempotency(client, internal_token):
     with patch("internal.views.sync_openstates_all_states") as mock_task:
         mock_result = MagicMock()
         mock_result.id = "ghi-789"
-        mock_task.delay.return_value = mock_result
+        mock_task.apply_async.return_value = mock_result
 
         first = client.post(
             "/internal/tasks/sync-openstates/",
@@ -201,7 +201,7 @@ def test_sync_openstates_idempotency(client, internal_token):
     assert first.json()["task_id"] == "ghi-789"
     assert second.status_code == 202
     assert second.json()["status"] == "already_running"
-    mock_task.delay.assert_called_once()
+    mock_task.apply_async.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -210,7 +210,7 @@ def test_sync_fec_valid_token(client, internal_token):
     with patch("internal.views.sync_fec_candidates") as mock_task:
         mock_result = MagicMock()
         mock_result.id = "jkl-012"
-        mock_task.delay.return_value = mock_result
+        mock_task.apply_async.return_value = mock_result
         response = client.post(
             "/internal/tasks/sync-fec/",
             HTTP_AUTHORIZATION=f"Bearer {internal_token}",
@@ -225,7 +225,7 @@ def test_sync_fec_idempotency(client, internal_token):
     with patch("internal.views.sync_fec_candidates") as mock_task:
         mock_result = MagicMock()
         mock_result.id = "jkl-012"
-        mock_task.delay.return_value = mock_result
+        mock_task.apply_async.return_value = mock_result
 
         first = client.post(
             "/internal/tasks/sync-fec/",
@@ -239,7 +239,7 @@ def test_sync_fec_idempotency(client, internal_token):
     assert first.json()["task_id"] == "jkl-012"
     assert second.status_code == 202
     assert second.json()["status"] == "already_running"
-    mock_task.delay.assert_called_once()
+    mock_task.apply_async.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -248,7 +248,7 @@ def test_sync_co_sos_valid_token(client, internal_token):
     with patch("internal.views.sync_co_elections") as mock_task:
         mock_result = MagicMock()
         mock_result.id = "mno-345"
-        mock_task.delay.return_value = mock_result
+        mock_task.apply_async.return_value = mock_result
         response = client.post(
             "/internal/tasks/sync-co-sos/",
             HTTP_AUTHORIZATION=f"Bearer {internal_token}",
@@ -263,7 +263,7 @@ def test_sync_co_sos_idempotency(client, internal_token):
     with patch("internal.views.sync_co_elections") as mock_task:
         mock_result = MagicMock()
         mock_result.id = "mno-345"
-        mock_task.delay.return_value = mock_result
+        mock_task.apply_async.return_value = mock_result
 
         first = client.post(
             "/internal/tasks/sync-co-sos/",
@@ -277,5 +277,5 @@ def test_sync_co_sos_idempotency(client, internal_token):
     assert first.json()["task_id"] == "mno-345"
     assert second.status_code == 202
     assert second.json()["status"] == "already_running"
-    mock_task.delay.assert_called_once()
+    mock_task.apply_async.assert_called_once()
 
