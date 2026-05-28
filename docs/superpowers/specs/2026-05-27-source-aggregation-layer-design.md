@@ -1,7 +1,7 @@
 # Source Aggregation & Normalization Layer
 
 **Date:** 2026-05-27
-**Status:** Approved (design) — implementation plan covers Phase 0+1
+**Status:** Approved (design) — ground-up clean-schema approach; implementation plan covers Phase 0+1
 **Area:** `backend/aggregation/` (new), `backend/elections/`, all source adapters under `backend/integrations/`, `backend/results/`
 
 ## Problem
@@ -34,15 +34,45 @@ California (Civic + CA SOS), then migrate other states incrementally. New
 states/sources onboard by implementing a small adapter contract and adding
 precedence rows — no core changes.
 
+## Approach: ground-up clean schema
+
+There is **no user base**, so existing data is disposable and the API contract is
+not frozen. We therefore design the schema **canonical-first and clean** rather
+than bolting compatibility onto the source-siloed models:
+
+- No legacy data migration. **Wipe the database and re-sync** through the new layer.
+- `canonical_key` is the **unique identity**, always populated by the ingest
+  service (DB-`null=True` during the incremental rollout so not-yet-migrated
+  adapters coexist; tightened to NOT NULL in the Phase-2 finish). Per-source
+  ids live on `ElectionSourceLink`. The legacy `Election.source_id` column is
+  **demoted to nullable, non-unique, deprecated** so not-yet-migrated adapters keep
+  working during the incremental rollout; it is physically **dropped at the end of
+  Phase 2** once every adapter is off it.
+- The API may change freely (the CivicMirror frontend is updated alongside).
+- **Adapters and infrastructure are kept and adapted**, not rewritten from scratch:
+  the state-specific HTTP/parsing/proxy logic, scheduler endpoints, auth, API, and
+  deployment are valuable and retained. Adapters are rewritten only to call the new
+  ingest service.
+- Adapters are cut over **one at a time, CA first**. Not-yet-migrated adapters are
+  **disabled** (they don't write legacy rows); each repopulates its state's data
+  when cut over.
+
+"Fresh migrations" here means clean canonical-first model definitions with new
+migrations applied to a wiped database — **not** a squash/reset of the whole
+migration history (out of scope; the only thing that would additionally fix is the
+local-SQLite test quirk, which is acceptable as-is).
+
 ## Key decisions (locked during brainstorming)
 
 | Decision | Choice |
 |---|---|
 | Precedence config | **DB-configurable, admin-editable** (`SourcePrecedence` table) |
-| Canonical Election identity | **Strict natural key**: `state + election_type + election_date + jurisdiction_level`; unmatched source elections kept separate and flagged `needs_review` (no silent dupes) |
+| Canonical Election identity | **Strict natural key** `state + election_type + election_date + jurisdiction_level`, stored as a **unique** `canonical_key` (DB-nullable during the incremental rollout so not-yet-migrated adapters coexist; **always populated by the ingest service**; tightened to NOT NULL in the Phase-2 finish); unmatched/ambiguous data kept separate and flagged `needs_review` |
+| Data handling | **Wipe + re-sync** (no legacy data migration) |
 | Merge semantics | Per-field provenance; precedence changes take effect on a source's **next sync** |
-| Candidate matching | **Exact normalized name + party** within a race (nonpartisan: name only); bias to avoid false merges; mismatches flagged for review |
+| Candidate matching | **Order-independent normalized name + party** within a race (nonpartisan: name only); bias to avoid false merges; mismatches flagged for review |
 | Merge architecture | **Shared ingest service (normalize-on-write)** — adapters emit normalized fields + source name; one service applies precedence/provenance |
+| Adapters / infra | **Keep & adapt** (rewrite onto the ingest contract); disable until cut over |
 | Rollout | Generic layer built once; validated on CA; states migrated incrementally |
 
 ---
@@ -52,7 +82,7 @@ precedence rows — no core changes.
 A new package `backend/aggregation/` containing:
 
 - **`identity.py`** — canonical key construction + normalization helpers
-  (`normalize_office_title`, `normalize_name`, `normalize_party`, OCD parsing).
+  (`normalize_office_title`, `normalize_name`, `name_match_key`, `normalize_party`).
 - **`precedence.py`** — precedence resolution against the `SourcePrecedence` table,
   with field→field_group mapping and wildcard defaults.
 - **`ingest.py`** — the ingest service: `ingest_election()`, `ingest_race()`,
@@ -77,44 +107,48 @@ Election / Race / Candidate  (+ field_provenance, contributing_sources)
 
 ---
 
-## Data model changes
+## Data model (clean, canonical-first)
 
 ### Election
-- **Add** `canonical_key` (`CharField`, unique, nullable during rollout) =
+- `canonical_key` (`CharField`, **unique**, `null=True` during rollout) =
   `f"{state}:{election_type}:{election_date.isoformat()}:{jurisdiction_level}"`.
-- **Add** `field_provenance` (`JSONField`, default `dict`) — `field → source`.
-- **Add** `contributing_sources` (`JSONField`, default `list`).
-- **Add** `needs_review` (`BooleanField`, default `False`).
-- **Demote** `source_id`: drop the `unique=True` (kept for backward-compat reads;
-  per-source ids now live on `ElectionSourceLink`). Not removed in Phase 1.
+  Always set by the ingest service; not-yet-migrated adapters leave it NULL
+  (multiple NULLs are allowed under the unique constraint). Tightened to NOT NULL
+  in the Phase-2 finish.
+- **Demote** `source_id` to `null=True, blank=True` and drop `unique=True`
+  (deprecated convenience for not-yet-migrated adapters; per-source ids now live on
+  `ElectionSourceLink`). Migrated adapters (CA SOS, Civic) do not set it. Column is
+  dropped at the end of Phase 2.
+- Add `field_provenance` (`JSONField`, default `dict`) — `field → source`.
+- Add `contributing_sources` (`JSONField`, default `list`).
+- Add `needs_review` (`BooleanField`, default `False`).
+- Keep `name`, `election_date`, `election_type`, `jurisdiction_level`, `state`,
+  `status`, `source_metadata`, `last_synced_at`, `election_cycle`, `results_url`
+  (`results_url` owned via the `results` precedence group).
 
 ### ElectionSourceLink (new)
-`election (FK)`, `source (CharField)`, `source_id (CharField)`,
-`results_url (URLField, blank)`, `last_synced_at (DateTimeField)`.
-Unique on `(election, source)`. One row per contributing source per election.
+`election (FK, related_name='source_links_rel')`, `source (CharField)`,
+`source_id (CharField)`, `results_url (URLField, blank)`,
+`last_synced_at (DateTimeField, null)`. Unique on `(election, source)`.
 
 ### Race
-- **Redefine** `canonical_key` (already unique, nullable) source-independent:
+- `canonical_key` (**unique**, `null=True` — unchanged from the current model),
+  redefined source-independent:
   `f"{election.canonical_key}|{normalized_office_title}|{ocd_division_id or 'NO_OCD'}|{race_type}"`.
-  Legacy source-scoped keys coexist (different shape, no collision) until a state
-  is migrated.
-- **Add** `field_provenance` (`JSONField`), `contributing_sources` (`JSONField`).
-- `source` field retained = highest-precedence contributing source (for API
-  back-compat).
+- Add `field_provenance`, `contributing_sources` (`JSONField`).
+- `source` retained = highest-precedence contributing source (representative).
 
 ### Candidate
-- Identity = `(race, normalized_name, normalized_party)`. Add a
-  `normalized_party` column; nonpartisan races match on name only.
-- Replace the `(race, name)` unique constraint with `(race, normalized_name,
-  normalized_party)` (migration recomputes normalized fields, then adds the
-  constraint).
-- **Add** `field_provenance` (`JSONField`).
+- Add `normalized_party` (`CharField`) and `field_provenance` (`JSONField`).
+- Semantic dedup is performed by the ingest service via an order-independent
+  `name_match_key` + normalized party (nonpartisan: name only). The existing
+  `(race, name)` unique constraint is **kept** as a DB backstop.
 
 ### SourcePrecedence (new, admin-editable)
 `state (CharField, default '*')`, `field_group (CharField, default '*')`,
 `source (CharField)`, `rank (IntegerField; lower = higher precedence)`.
-Unique on `(state, field_group, source)`. Seeded by data migration with the
-Civic-first baseline (see Precedence).
+Unique on `(state, field_group, source)`. Seeded by migration with the Civic-first
+baseline.
 
 ---
 
@@ -122,14 +156,15 @@ Civic-first baseline (see Precedence).
 
 **Field groups** (the precedence unit, not individual columns) map model fields to
 a small set: `identity` (name/title), `date`, `status`, `contacts`
-(phone/website/email/photo), `party`, `district` (ocd/jurisdiction/scope),
-`results` (vote-bearing fields). The field→group map lives in `precedence.py`.
+(phone/website/email/photo/description), `party`, `district`
+(ocd/jurisdiction/scope), `results` (vote-bearing fields, results_url). The
+field→group map lives in `precedence.py`.
 
 **Resolution** for `(state, field_group, source)`:
 1. Most-specific `SourcePrecedence` row wins: exact `(state, field_group)` >
    `(state, '*')` > `('*', field_group)` > `('*', '*')`.
-2. A source with no matching row is treated as **lowest precedence** (it may only
-   fill fields that have no current owner).
+2. A source with no matching row is treated as **lowest precedence** (+∞; may only
+   fill fields with no current owner).
 
 **Seeded baseline (examples):**
 ```
@@ -137,8 +172,8 @@ a small set: `identity` (name/title), `date`, `status`, `contacts`
 ('*','*',      'fec',       1)
 ('CA','results','ca_sos',   0)   # CA: live results owned by CA SOS
 ('CA','results','civic_api',1)
-('CA','contacts','civic_api',0)  # CA: candidate contacts owned by Civic
 ('CA','date',  'ca_sos',    0)   # CA: authoritative date from CA SOS catalog
+('CA','contacts','civic_api',0)  # CA: candidate contacts owned by Civic
 ```
 "Downgrading" a source for a state = edit a `rank` in admin; effective on that
 source's next sync.
@@ -158,7 +193,7 @@ For an incoming `(canonical_key, source, fields)`:
    - `owner = field_provenance.get(field)`; `owner_rank = resolve(state, group, owner)` (or +∞ if no owner).
    - If `owner is None` **or** `incoming_rank <= owner_rank`: write the value and
      set `field_provenance[field] = source`.
-4. Candidates: within the canonical race, match on `(normalized_name,
+4. Candidates: within the canonical race, match on `(name_match_key,
    normalized_party)`; get-or-create, then merge fields by the same rule. No
    confident match → create separate candidate flagged for review.
 
@@ -168,15 +203,14 @@ Idempotent and order-independent for a fixed precedence config.
 
 ## Adapter contract
 
-Each adapter exposes a function returning normalized records:
-- **election:** `{state, election_type, election_date, jurisdiction_level, name, status, source_metadata…}`
+Each adapter exposes functions returning normalized records:
+- **election:** `{state, election_type, election_date, jurisdiction_level, name, status, …}`
 - **race:** `{office_title, ocd_division_id, race_type, …}` (+ election identity)
 - **candidate:** `{name, party, contacts…}` (+ race identity)
 
-…and calls `aggregation.ingest.ingest_election/race/candidate(source=<name>, fields=…)`.
-A base helper performs normalization (office title, party, OCD, name). Adapters
-are migrated one at a time; un-migrated adapters keep their current direct-write
-behavior until their state is onboarded.
+…and calls `aggregation.ingest.ingest_election/race/candidate(source=<name>, …)`.
+A base helper performs normalization. Adapters are cut over one at a time;
+not-yet-migrated adapters are **disabled** until their state is onboarded.
 
 ---
 
@@ -186,9 +220,9 @@ behavior until their state is onboarded.
    matching the REST client) instead of `json-endpoints.csv` (bulk-JSON catalog,
    incompatible with `fetch_contest`).
 2. **Parser rewrite** (`integrations/ca_sos/parsers.py`): handle the headerless
-   format — line 1 is the base URL, line 2 a title, then bare endpoint URLs
-   separated by blanks. Strip `API_BASE` to derive `/returns/…` paths; skip
-   `/county/` breakdowns (keep statewide + `/district/N`); reuse existing skip
+   format — line 1 base URL, line 2 title, then bare endpoint URLs separated by
+   blanks. Strip `API_BASE` to derive `/returns/…` paths; skip `/county/`
+   breakdowns and `/district/all` (keep statewide + `/district/N`); reuse skip
    patterns for `/status`, files, `/query`.
 3. **Date from catalog title:** parse the election date out of the catalog title
    ("…California June 2, 2026 …Primary Election") via regex; fall back to the
@@ -201,28 +235,28 @@ behavior until their state is onboarded.
 
 ---
 
-## Data migration
+## Data reset (replaces a data migration)
 
-A **CA-scoped** one-time migration:
-- Backfill `canonical_key`, normalized fields, and provenance for CA rows.
-- Merge the duplicate CA primaries (Civic id 8 and CA SOS `ca_sos_2026_primary`,
-  plus the `ca_sos_2026_general`) and their races/candidates onto canonical rows;
-  create `ElectionSourceLink`s.
-- Seed the `SourcePrecedence` baseline + CA overrides.
-
-No global big-bang. Each later state gets its own merge migration when its
-adapters are onboarded (Phase 2+). The schema columns are added globally and are
-nullable, so un-migrated states are unaffected.
+Because data is disposable, there is **no merge migration**. Cutover procedure:
+1. Deploy the new schema + aggregation layer with only migrated adapters enabled
+   (Phase 1: Civic + CA SOS).
+2. **Wipe** the elections data (`flush` the relevant tables / fresh DB) to clear
+   the old source-siloed rows before re-syncing through the aggregation layer.
+3. Apply migrations; the `SourcePrecedence` baseline is seeded by a data migration.
+4. Trigger CA syncs to repopulate through the ingest service.
+Non-CA states stay empty until their adapters are cut over (Phase 2+).
 
 ---
 
-## API surface (backward compatible)
+## API surface
 
-- Keep all existing Election/Race/Candidate fields.
-- `Race.source` = highest-precedence contributing source (representative value).
-- **Add** `sources: [...]` (contributing sources) and optional `field_provenance`
-  on Election/Race/Candidate serializers for transparency.
-- `race_count` and existing filters unchanged. CivicMirror consumers keep working.
+The API need not preserve backward compatibility (no users); the CivicMirror
+frontend is updated alongside. Concretely:
+- `Election` exposes `sources` (contributing sources, from `contributing_sources`)
+  and optional `field_provenance`; the deprecated `source_id` may remain on the
+  serializer until the column is dropped in Phase 2.
+- `Race`/`Candidate` serializers gain `sources` / `field_provenance`.
+- Keep changes otherwise minimal to limit frontend churn.
 
 ---
 
@@ -236,20 +270,19 @@ nullable, so un-migrated states are unaffected.
   (`"Democratic Party"`/`"Dem"`/`"DEM"` → `DEM`); empty party = nonpartisan.
 - **Cross-window / partial syncs** → each source updates only the fields it
   outranks; stale values refreshed on that source's next sync.
-- **Source stops providing a field** → value persists until re-asserted/cleared on
-  re-sync (acceptable per "next sync" semantics).
 
 ---
 
 ## Testing
 
-- **Ingest service (unit, cache/DB):** precedence resolution (wildcards, most-specific),
+- **Ingest service (unit):** precedence resolution (wildcards, most-specific),
   per-field merge + provenance, downgrade-on-next-sync, candidate matching incl.
-  party normalization and nonpartisan races, false-merge avoidance.
-- **CA SOS parser:** `api-endpoints.csv` parsing, `/county/` filtering, date extraction.
+  order-independent name key, party normalization, nonpartisan races,
+  false-merge avoidance.
+- **CA SOS parser:** `api-endpoints.csv` parsing, `/county/` + `/district/all`
+  filtering, date extraction.
 - **CA integration:** Civic + CA SOS → one merged Election/Race/Candidate tree with
   expected field ownership.
-- **Migration test:** CA dedup merges existing duplicates correctly and idempotently.
 - Local runs use `pytest --no-migrations` (the test DB can't replay the existing
   Postgres-only `RunSQL` migrations on SQLite; CI runs against Postgres).
 
@@ -257,19 +290,22 @@ nullable, so un-migrated states are unaffected.
 
 ## Phasing
 
-- **Phase 0** — schema (canonical keys, provenance, `ElectionSourceLink`,
-  `SourcePrecedence`) + `aggregation/` service + precedence engine. No adapters
-  migrated yet.
+- **Phase 0** — canonical-first schema (unique `canonical_key`, nullable during
+  rollout; provenance; `ElectionSourceLink`; `SourcePrecedence`; demote
+  `Election.source_id` to nullable/non-unique) + `aggregation/` service +
+  precedence engine. No adapters migrated yet.
 - **Phase 1** — migrate Civic + CA SOS onto the service; fix the CA SOS adapter;
-  CA data migration; validate end-to-end. **← first implementation plan covers
-  Phase 0+1.**
+  wipe + re-sync; validate end-to-end. **← first implementation plan covers Phase 0+1.**
 - **Phase 2+** — migrate SC (ENR/VREMS), CO, IA, MA, VA, FEC, OpenStates
-  incrementally; each its own plan + state-scoped data migration.
+  incrementally; each its own plan; disabled until cut over. **Finish:** once all
+  adapters are migrated, drop the `Election.source_id` column and tighten
+  `canonical_key` to NOT NULL.
 
 ## Out of scope (YAGNI)
 
-- Staging tables / instant re-projection without re-fetch (rejected; "next sync"
-  semantics chosen).
+- Squash/reset of the full migration history across apps.
+- Legacy data migration / merging existing rows (wipe + re-sync instead).
+- Staging tables / instant re-projection without re-fetch ("next sync" chosen).
 - Fuzzy candidate matching and an alias table (start exact; revisit if needed).
 - GeoJSON/FIPS boundary ingestion, Ballotpedia, Democracy Works (future sources).
-- Migrating non-CA states (Phase 2+, separate specs/plans).
+- Migrating non-CA states (Phase 2+, separate plans).
