@@ -23,7 +23,6 @@ import logging
 from datetime import date
 
 from celery import shared_task
-from django.db import transaction
 from django.utils import timezone
 
 from elections.models import Candidate, Election, MeasureOption, Race
@@ -343,30 +342,27 @@ def sync_ma_ballot_question(self, bq_id: int):
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return
 
+        from aggregation import ingest
+
         race_fields = map_ballot_question(metadata, election_obj)
-        canonical_key = race_fields.pop("canonical_key")
-        now = timezone.now()
+        # Discard the legacy source-scoped canonical_key from the mapper —
+        # the ingest service builds its own source-independent one.
+        race_fields.pop("canonical_key", None)
+        race_identity = {
+            "office_title": race_fields["office_title"],
+            "ocd_division_id": race_fields.get("ocd_division_id", ""),
+            "race_type": race_fields["race_type"],
+        }
+        ingest_fields = {k: v for k, v in race_fields.items()
+                         if k not in {"office_title", "ocd_division_id", "race_type"}}
+        race_obj, race_was_new = ingest.ingest_race(
+            election=election_obj, source="ma_sos",
+            identity=race_identity, fields=ingest_fields,
+        )
+        race_created = 1 if race_was_new else 0
 
-        with transaction.atomic():
-            existing_keys = set(
-                Race.objects.filter(canonical_key=canonical_key).values_list("canonical_key", flat=True)
-            )
-            Race.objects.bulk_create(
-                [Race(canonical_key=canonical_key, election=election_obj, last_synced_at=now, **race_fields)],
-                update_conflicts=True,
-                update_fields=[
-                    "election", "race_type", "office_title", "normalized_office_title",
-                    "jurisdiction", "geography_scope", "certification_status", "source",
-                    "race_status", "vote_method", "max_selections", "ocd_division_id",
-                    "source_metadata", "last_synced_at",
-                ],
-                unique_fields=["canonical_key"],
-            )
-            race_created = 1 if canonical_key not in existing_keys else 0
-
-            race_obj = Race.objects.get(canonical_key=canonical_key)
-            MeasureOption.objects.get_or_create(race=race_obj, label="Yes")
-            MeasureOption.objects.get_or_create(race=race_obj, label="No")
+        MeasureOption.objects.get_or_create(race=race_obj, option_label="Yes")
+        MeasureOption.objects.get_or_create(race=race_obj, option_label="No")
 
         sync_log.records_created = race_created
         sync_log.status = SyncLog.Status.COMPLETED

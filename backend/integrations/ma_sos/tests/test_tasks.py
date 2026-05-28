@@ -168,16 +168,16 @@ def test_sync_ma_races_missing_election_returns(mock_tz, mock_election_cls, mock
 # ---------------------------------------------------------------------------
 
 @patch("integrations.ma_sos.tasks.SyncLog")
-@patch("integrations.ma_sos.tasks.Race")
 @patch("integrations.ma_sos.tasks.MeasureOption")
-@patch("integrations.ma_sos.tasks.transaction")
 @patch("integrations.ma_sos.tasks.MaSosClient")
 @patch("integrations.ma_sos.tasks._get_or_create_bq_election")
 @patch("integrations.ma_sos.tasks.timezone")
 def test_sync_ma_ballot_question_upserts(
-    mock_tz, mock_get_election, mock_client_cls, mock_tx,
-    mock_measure_cls, mock_race_cls, mock_synclog_cls,
+    mock_tz, mock_get_election, mock_client_cls,
+    mock_measure_cls, mock_synclog_cls,
 ):
+    """sync_ma_ballot_question routes through ingest_race (not bulk_create).
+    Adapted from OLD bulk_create pattern: now mocks aggregation.ingest.ingest_race."""
     from integrations.ma_sos.tasks import sync_ma_ballot_question
 
     mock_log = MagicMock()
@@ -203,29 +203,22 @@ def test_sync_ma_ballot_question_upserts(
 
     mock_election = MagicMock()
     mock_election.status = "results_pending"
+    mock_election.canonical_key = "MA:general:2024-11-05:state"
+    mock_election.state = "MA"
     mock_get_election.return_value = mock_election
 
-    mock_race_cls.objects.filter.return_value.values_list.return_value = []
-    mock_race_cls.objects.bulk_create.return_value = []
-    mock_race_cls.CertificationStatus.UPCOMING = "upcoming"
-    mock_race_cls.CertificationStatus.RESULTS_CERTIFIED = "results_certified"
-    mock_race_cls.RaceType.MEASURE = "measure"
-    mock_race_cls.RaceType.CANDIDATE = "candidate"
-    mock_race_cls.Source.MA_SOS = "ma_sos"
-    mock_race_cls.RaceStatus.ACTIVE = "active"
-    mock_race_cls.VoteMethod.YES_NO = "yes_no"
-    mock_race_cls.VoteMethod.SINGLE_CHOICE = "single_choice"
-
     mock_race_obj = MagicMock()
-    mock_race_cls.objects.get.return_value = mock_race_obj
-
-    mock_tx.atomic.return_value.__enter__ = MagicMock(return_value=None)
-    mock_tx.atomic.return_value.__exit__ = MagicMock(return_value=False)
     mock_tz.now.return_value = MagicMock()
 
-    sync_ma_ballot_question.run(11620)
+    with patch("aggregation.ingest.ingest_race", return_value=(mock_race_obj, True)) as mock_ingest_race:
+        sync_ma_ballot_question.run(11620)
 
-    mock_race_cls.objects.bulk_create.assert_called_once()
+    # Verify ingest_race was called with source="ma_sos" and race_type="measure"
+    mock_ingest_race.assert_called_once()
+    call_kwargs = mock_ingest_race.call_args.kwargs
+    assert call_kwargs["source"] == "ma_sos"
+    assert call_kwargs["identity"]["race_type"] == "measure"
+    # Yes/No MeasureOptions are still created outside the merge layer
     assert mock_measure_cls.objects.get_or_create.call_count == 2
 
 
@@ -307,3 +300,47 @@ def test_sync_ma_races_routes_through_ingest_service():
     assert race.canonical_key.startswith("MA:general:2024-11-05:state|")
     assert "ma_sos" in race.contributing_sources
     assert Candidate.objects.filter(race=race).count() == 2
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+def test_sync_ma_ballot_question_routes_through_ingest_service():
+    """sync_ma_ballot_question writes a canonical measure Race (+ Yes/No options) via ingest."""
+    from aggregation.models import SourcePrecedence
+    from elections.models import Election, MeasureOption, Race
+    from integrations.ma_sos.tasks import sync_ma_ballot_question
+
+    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+
+    # Pre-seed the BQ-parent Election so _get_or_create_bq_election finds it.
+    e = Election.objects.create(
+        name="2024 MA Ballot Questions",
+        election_date=date(2024, 11, 5),
+        election_type="general",
+        jurisdiction_level="state",
+        state="MA",
+        canonical_key="MA:general:2024-11-05:state",
+        contributing_sources=["ma_sos"],
+    )
+
+    fake_metadata = {
+        "bq_id": 11620,
+        "date": "2024-11-05",
+        "year": 2024,
+        "title": "Question 1 — State Auditor authority to audit Legislature",
+        "summary": "Sample summary",
+    }
+
+    with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient:
+        inst = MockClient.return_value
+        inst.get_ballot_question_metadata.return_value = fake_metadata
+        sync_ma_ballot_question.run(11620)
+
+    race = Race.objects.filter(election=e).first()
+    assert race is not None
+    assert race.race_type == "measure"
+    assert race.canonical_key.startswith("MA:general:2024-11-05:state|")
+    assert "ma_sos" in race.contributing_sources
+    # Yes/No options are still created via get_or_create (outside the merge layer).
+    labels = set(MeasureOption.objects.filter(race=race).values_list("option_label", flat=True))
+    assert {"Yes", "No"}.issubset(labels)
