@@ -5,7 +5,6 @@ import pytest
 
 from results.adapters.ca import CaliforniaAdapter, _parse_reporting_pct
 
-
 SAMPLE_CONTEST_JSON = [
     {
         "raceTitle": "Governor - Statewide Results",
@@ -44,8 +43,9 @@ class TestCaliforniaAdapter:
         assert result.mapping_confidence == "none"
 
     def test_returns_result_rows_from_api(self, db):
-        from elections.models import Election, Race
         from datetime import date
+
+        from elections.models import Election, Race
 
         election = Election.objects.create(
             source_id="ca_sos_2026_general",
@@ -55,7 +55,7 @@ class TestCaliforniaAdapter:
             state="CA",
             status="results_pending",
         )
-        race = Race.objects.create(
+        Race.objects.create(
             election=election,
             office_title="Governor - Statewide Results",
             canonical_key="ca_sos:ca_sos_2026_general:governor",
@@ -92,8 +92,9 @@ class TestCaliforniaAdapter:
         assert alice.office_title == "Governor - Statewide Results"
 
     def test_skips_race_without_ca_endpoint(self, db):
-        from elections.models import Election, Race
         from datetime import date
+
+        from elections.models import Election, Race
 
         election = Election.objects.create(
             source_id="ca_sos_test_no_endpoint",

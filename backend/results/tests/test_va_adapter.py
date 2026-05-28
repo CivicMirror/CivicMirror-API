@@ -9,7 +9,6 @@ import pytest
 from results.adapters.base import AdapterResult
 from results.adapters.va import VirginiaAdapter, _get_text, _parse_ballot_items, _safe_float, _safe_int
 
-
 # ---------------------------------------------------------------------------
 # Helper function tests
 # ---------------------------------------------------------------------------
