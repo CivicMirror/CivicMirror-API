@@ -49,10 +49,19 @@ def _trigger(task_name, celery_task, request):
         logger.info("scheduler.trigger.skipped task=%s key=%s", task_name, key)
         return JsonResponse({"status": "already_running"}, status=202)
 
-    task = celery_task.apply_async(
-        link=release_task_lock.si(key),
-        link_error=release_task_lock.si(key),
-    )
+    try:
+        task = celery_task.apply_async(
+            link=release_task_lock.si(key),
+            link_error=release_task_lock.si(key),
+        )
+    except Exception:
+        cache.delete(key)
+        logger.exception(
+            "scheduler.trigger.enqueue_failed task=%s key=%s",
+            task_name, key,
+        )
+        return JsonResponse({"status": "enqueue_failed"}, status=503)
+
     logger.info(
         "scheduler.trigger.enqueued task=%s task_id=%s key=%s",
         task_name, task.id, key,
