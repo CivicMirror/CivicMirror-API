@@ -241,49 +241,38 @@ def sync_ma_races(self, election_pk: int):
             if len(parts) >= 3:
                 election_row["office"] = " ".join(parts[2:4]) if len(parts) > 4 else parts[2]
 
+        from aggregation import ingest
+
         race_fields = map_race(election_obj, election_row)
-        canonical_key = race_fields.pop("canonical_key")
+        # The mapper's legacy `canonical_key` is source-scoped — discard it.
+        # The ingest service builds its own source-independent canonical key.
+        race_fields.pop("canonical_key", None)
+        race_identity = {
+            "office_title": race_fields.pop("office_title"),
+            "ocd_division_id": race_fields.pop("ocd_division_id", "") or "",
+            "race_type": race_fields.pop("race_type"),
+        }
+        race_obj, race_was_new = ingest.ingest_race(
+            election=election_obj, source="ma_sos",
+            identity=race_identity, fields=race_fields,
+        )
+        race_created = 1 if race_was_new else 0
+        race_updated = 0 if race_was_new else 1
 
-        now = timezone.now()
-
-        with transaction.atomic():
-            existing_race_keys = set(
-                Race.objects.filter(canonical_key=canonical_key).values_list("canonical_key", flat=True)
+        for c in real_candidates:
+            cand_fields = map_candidate(c)
+            cand_name = c.get("name", "")
+            cand_party = cand_fields.pop("party", "")
+            if not cand_name:
+                continue
+            _cand_obj, cand_was_new = ingest.ingest_candidate(
+                race=race_obj, source="ma_sos",
+                name=cand_name, party=cand_party, fields=cand_fields,
             )
-
-            Race.objects.bulk_create(
-                [Race(canonical_key=canonical_key, election=election_obj, last_synced_at=now, **race_fields)],
-                update_conflicts=True,
-                update_fields=[
-                    "election", "race_type", "office_title", "normalized_office_title",
-                    "jurisdiction", "geography_scope", "certification_status", "source",
-                    "race_status", "vote_method", "max_selections", "ocd_division_id",
-                    "source_metadata", "last_synced_at",
-                ],
-                unique_fields=["canonical_key"],
-            )
-            race_created = 1 if canonical_key not in existing_race_keys else 0
-            race_updated = 0 if race_created else 1
-
-            race_obj = Race.objects.get(canonical_key=canonical_key)
-
-            candidate_objects = [
-                Candidate(race=race_obj, name=c["name"], **map_candidate(c))
-                for c in real_candidates
-            ]
-
-            if candidate_objects:
-                existing_cand_keys = set(
-                    Candidate.objects.filter(race=race_obj).values_list("name", flat=True)
-                )
-                cand_created = sum(1 for c in candidate_objects if c.name not in existing_cand_keys)
-                cand_updated = len(candidate_objects) - cand_created
-                Candidate.objects.bulk_create(
-                    candidate_objects,
-                    update_conflicts=True,
-                    update_fields=["party", "candidate_status", "source_metadata"],
-                    unique_fields=["race", "name"],
-                )
+            if cand_was_new:
+                cand_created += 1
+            else:
+                cand_updated += 1
 
         election_obj.last_synced_at = timezone.now()
         election_obj.save(update_fields=["last_synced_at"])
