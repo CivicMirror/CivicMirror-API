@@ -11,6 +11,45 @@ Each entry should answer: *what*, *where it'd land in the code*, *why*, and any
 
 ## Open
 
+### 2026-05-28 — Phase-2 follow-up: results adapters filter by `source`, not `contributing_sources`
+**Where:** `backend/results/adapters/ca.py:88`, `ma.py`, `va.py`, and any CO/IA Clarity
+results adapters that filter Races by `source=Race.Source.<X>`.
+
+**Why:** After the aggregation merge, `Race.source` is set to the highest-precedence
+contributing source for that race's *identity* group — not the originating adapter.
+For CA that means merged races have `source="civic_api"` even though CA SOS
+contributed; the CA results adapter's `Race.objects.filter(source=Race.Source.CA_SOS)`
+query then finds **zero races** to poll. Change to a `contributing_sources` JSON
+contains query, e.g. `.filter(contributing_sources__contains=["ca_sos"])`.
+
+**Hidden today:** `poll-pending-results` is currently paused as part of the Phase-1
+cutover. This bug bites the first time it's unpaused (or when any state's results
+adapter is exercised).
+
+**Scope:** Touch every results adapter that filters by `source`. Quick fix per
+adapter, plus a regression test that proves a merged race is found.
+
+---
+
+### 2026-05-28 — Phase-2 finish: drop `Election.source_id` and tighten `canonical_key`
+**Where:** `backend/elections/models.py` + new migration + small downstream cleanup
+in serializers / filters / admin / un-migrated adapters.
+
+**Why:** During the incremental rollout `Election.source_id` was kept
+`unique=True, null=True` so un-migrated adapters (sc_vrems, etc.) that
+`bulk_create` with `unique_fields=["source_id"]` kept working. Once every adapter
+goes through the aggregation ingest, the column has no readers and the unique
+constraint is dead weight. Same for `Election.canonical_key`'s `null=True` — it's
+a rollout hedge; once every adapter populates it, tighten to `NOT NULL`.
+
+**Notes:**
+- Do this **after** the last per-state adapter migration ships.
+- Also remove `build_canonical_key()` and the parallel legacy helpers in
+  state-specific mappers (civic, ma_sos, etc.).
+- Drop `source_id` from the `ElectionSerializer` fields list at the same time.
+
+---
+
 ### 2026-05-28 — Show Races inline on the Election admin change page
 **Where:** `backend/elections/admin.py` — add a `RaceInline(admin.TabularInline)`
 and reference it from `ElectionAdmin.inlines`.
