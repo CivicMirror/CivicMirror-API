@@ -14,6 +14,7 @@ The parser is deliberately lenient: it tries multiple column header spellings
 and skips rows it cannot interpret rather than raising.
 """
 import csv
+import datetime as _dt
 import io
 import logging
 import re
@@ -126,3 +127,52 @@ def deduplicate_catalog(entries: list[dict]) -> list[dict]:
             seen.add(entry["path"])
             out.append(entry)
     return out
+
+
+_API_BASE = "https://api.sos.ca.gov"
+_DATE_RE = re.compile(
+    r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})",
+    re.IGNORECASE,
+)
+_MONTHS = {m.lower(): i for i, m in enumerate(
+    ["", "January", "February", "March", "April", "May", "June",
+     "July", "August", "September", "October", "November", "December"]
+)}
+
+
+def parse_api_endpoint_catalog(csv_bytes: bytes) -> list[dict]:
+    """
+    Parse api-endpoints.csv (headerless list of full REST URLs) into contest
+    dicts: {"name", "path", "type", "race_id"}. Keeps statewide + /district/N;
+    skips /county/, /district/all, /status, /query, and file URLs.
+    """
+    text = csv_bytes.decode("utf-8-sig", errors="replace")
+    results: list[dict] = []
+    for raw in text.splitlines():
+        line = raw.strip().strip('"').strip()
+        if not line or not line.startswith(_API_BASE):
+            continue
+        path = line[len(_API_BASE):]
+        if path in ("", "/"):
+            continue
+        if _should_skip(path) or "/county/" in path or path.endswith("/district/all"):
+            continue
+        name = path.rstrip("/").split("/")[-1].replace("-", " ").strip()
+        results.append({
+            "name": name or path,
+            "path": path,
+            "type": "measure" if "ballot-measure" in path else "candidate",
+            "race_id": "",
+        })
+    logger.info("ca_sos.parser.api_catalog_parsed contests=%d", len(results))
+    return results
+
+
+def parse_election_date_from_catalog(csv_bytes: bytes):
+    """Extract the election date from the catalog title line. Returns date or None."""
+    text = csv_bytes.decode("utf-8-sig", errors="replace")
+    match = _DATE_RE.search(text)
+    if not match:
+        return None
+    month = _MONTHS[match.group(1).lower()]
+    return _dt.date(int(match.group(3)), month, int(match.group(2)))
