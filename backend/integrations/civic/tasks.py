@@ -51,8 +51,7 @@ def sync_elections(self):
             if str(payload.get("source_id")) == _VIP_TEST_ELECTION_ID:
                 logger.debug("Skipping VIP test election (source_id=%s)", _VIP_TEST_ELECTION_ID)
                 continue
-            election = ingest_civic_election(payload)
-            created = election.contributing_sources == ["civic_api"]
+            election, created = ingest_civic_election(payload)
             created_count += int(created)
             updated_count += int(not created)
             if not races_are_fresh(election):
@@ -116,9 +115,11 @@ def sync_election_races(self, election_id: int, address: str, address_label: str
                 "ocd_division_id": race_defaults.get("ocd_division_id", ""),
                 "race_type": race_defaults["race_type"],
             }
-            race_fields = {k: v for k, v in race_defaults.items() if k not in {"canonical_key", "office_title", "ocd_division_id", "race_type"}}
-            race = _ingest.ingest_race(election=election, source="civic_api", identity=race_identity, fields=race_fields)
-            race_was_new = race.contributing_sources == ["civic_api"]
+            race_fields = {k: v for k, v in race_defaults.items() if k not in {"office_title", "ocd_division_id", "race_type"}}
+            race, race_was_new = _ingest.ingest_race(
+                election=election, source="civic_api",
+                identity=race_identity, fields=race_fields,
+            )
             created_count += int(race_was_new)
             updated_count += int(not race_was_new)
 

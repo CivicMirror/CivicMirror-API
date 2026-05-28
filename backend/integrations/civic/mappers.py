@@ -103,6 +103,13 @@ def default_voting_window(election_date: date):
 
 
 def map_contest_to_race_defaults(election: Election, contest: dict) -> dict:
+    # NOTE: Does NOT include `canonical_key`. The aggregation ingest service
+    # computes the source-independent race canonical_key from the election's
+    # canonical_key + normalized office + ocd + race_type. The legacy
+    # source-scoped `build_canonical_key(...)` here would key off
+    # `election.source_id`, which is NULL for elections created via the
+    # ingest path — producing `civic_api:None:...` keys that collide across
+    # races. Leaving it out avoids the footgun entirely.
     race_type = infer_race_type(contest)
     office_title = extract_contest_title(contest)
     normalized_title = normalize_office_title(office_title)
@@ -124,14 +131,6 @@ def map_contest_to_race_defaults(election: Election, contest: dict) -> dict:
         "max_selections": 1,
         "ocd_division_id": ocd_id,
         "normalized_office_title": normalized_title,
-        "canonical_key": build_canonical_key(
-            Race.Source.CIVIC_API,
-            election.source_id,
-            normalized_title,
-            ocd_id,
-            race_type,
-            election.election_date,
-        ),
     }
 
 

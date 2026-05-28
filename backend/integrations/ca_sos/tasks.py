@@ -53,6 +53,7 @@ def sync_ca_elections(self):
     from .parsers import (
         parse_api_endpoint_catalog,
         parse_election_date_from_catalog,
+        parse_election_type_from_catalog,
     )
 
     sync_log = SyncLog.objects.create(
@@ -68,22 +69,28 @@ def sync_ca_elections(self):
         fingerprint = client.get_endpoint_catalog_fingerprint()
         catalog_bytes = None
         catalog_date = None
+        catalog_election_type = None
         if fingerprint is not None:
             catalog_bytes = client.fetch_endpoint_catalog_csv()
             catalog_date = parse_election_date_from_catalog(catalog_bytes)
+            catalog_election_type = parse_election_type_from_catalog(catalog_bytes)
 
         elections = {}
         for election_type in _ELECTION_TYPES:
-            cdate = catalog_date if election_type == "primary" else None
+            # Apply the catalog-parsed date only to the election it actually
+            # describes (primary vs general); otherwise fall back to the
+            # statutory formula. Avoids stamping a November date onto a March
+            # primary record when the general catalog is published.
+            cdate = catalog_date if election_type == catalog_election_type else None
             identity, fields = map_election_identity(year, election_type, catalog_date=cdate)
-            election = ingest.ingest_election(
+            election, created = ingest.ingest_election(
                 source="ca_sos",
                 source_id=build_election_source_id(year, election_type),
                 identity=identity,
                 fields=fields,
             )
             elections[election_type] = election
-            created_count += int(election.contributing_sources == ["ca_sos"])
+            created_count += int(created)
 
         logger.info("ca_sos.sync_elections.seeded year=%d", year)
 
@@ -110,7 +117,13 @@ def sync_ca_elections(self):
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return {"created": created_count, "queued": 0}
 
-        election_obj = elections.get("primary") or elections.get("general")
+        # Route the races queue to the election the catalog describes; only
+        # fall back if the title didn't match primary/general.
+        election_obj = (
+            elections.get(catalog_election_type)
+            or elections.get("primary")
+            or elections.get("general")
+        )
         sync_ca_races.delay(election_obj.pk, json.dumps(entries), fingerprint)
 
         sync_log.notes = f"Queued sync_ca_races: {len(entries)} contests"
@@ -199,7 +212,11 @@ def sync_ca_races(self, election_pk: int, catalog_json: str, fingerprint: str):
                 continue
 
             for contest in contests:
-                race = ingest.ingest_race(
+                # source_metadata['ca_endpoint'] is required by the CA Stage-2
+                # results adapter (backend/results/adapters/ca.py): it filters
+                # races with source_metadata!={} and reads the endpoint from
+                # there to drive results polling.
+                race, _ = ingest.ingest_race(
                     election=election_obj,
                     source="ca_sos",
                     identity={
@@ -217,6 +234,11 @@ def sync_ca_races(self, election_pk: int, catalog_json: str, fingerprint: str):
                             if election_obj.status == Election.Status.RESULTS_PENDING
                             else Race.CertificationStatus.UPCOMING
                         ),
+                        "source_metadata": {
+                            "ca_endpoint": entry["path"],
+                            "ca_race_id": entry.get("race_id", ""),
+                            "contest_type": entry["type"],
+                        },
                     },
                 )
                 created_count += 1
@@ -224,7 +246,7 @@ def sync_ca_races(self, election_pk: int, catalog_json: str, fingerprint: str):
                     cand_name = (raw_cand.get("Name") or "").strip()
                     if not cand_name:
                         continue
-                    cand = ingest.ingest_candidate(
+                    cand, _ = ingest.ingest_candidate(
                         race=race,
                         source="ca_sos",
                         name=cand_name,

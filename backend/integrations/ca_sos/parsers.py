@@ -176,3 +176,18 @@ def parse_election_date_from_catalog(csv_bytes: bytes):
         return None
     month = _MONTHS[match.group(1).lower()]
     return _dt.date(int(match.group(3)), month, int(match.group(2)))
+
+
+def parse_election_type_from_catalog(csv_bytes: bytes) -> str | None:
+    """
+    Return ``"primary"`` or ``"general"`` based on the catalog title (or
+    ``None`` if neither word appears). Used to route the catalog's parsed date
+    and the Stage-2 races queue to the right election; the title alone tells
+    us whether the file describes the primary or the general cycle.
+    """
+    text = csv_bytes.decode("utf-8-sig", errors="replace").lower()
+    if "primary" in text:
+        return "primary"
+    if "general" in text:
+        return "general"
+    return None

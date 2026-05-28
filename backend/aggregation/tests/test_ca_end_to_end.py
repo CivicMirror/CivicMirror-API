@@ -15,11 +15,11 @@ def test_civic_and_ca_sos_merge_into_one_election_with_expected_ownership():
                     election_date=date(2026, 6, 2), jurisdiction_level="state")
 
     # Civic first (baseline)
-    civic = ingest.ingest_election(
+    civic, _ = ingest.ingest_election(
         source="civic_api", source_id="11255", identity=identity,
         fields={"name": "California Primary Election"},
     )
-    r = ingest.ingest_race(
+    r, _ = ingest.ingest_race(
         election=civic, source="civic_api",
         identity={"office_title": "Governor", "ocd_division_id": "ocd-division/country:us/state:ca", "race_type": "candidate"},
         fields={"office_title": "Governor", "jurisdiction": "California"},
@@ -28,11 +28,11 @@ def test_civic_and_ca_sos_merge_into_one_election_with_expected_ownership():
                             party="Democratic Party", fields={"image_url": "https://civic/p.jpg"})
 
     # CA SOS augments (results + date authority)
-    ca = ingest.ingest_election(
+    ca, _ = ingest.ingest_election(
         source="ca_sos", source_id="ca_sos_2026_primary", identity=identity,
         fields={"name": "2026 California Primary Election"},
     )
-    r2 = ingest.ingest_race(
+    r2, _ = ingest.ingest_race(
         election=ca, source="ca_sos",
         identity={"office_title": "Governor", "ocd_division_id": "ocd-division/country:us/state:ca", "race_type": "candidate"},
         fields={"results_url": "https://api.sos.ca.gov/returns/governor"},

@@ -4,6 +4,12 @@ Normalize-on-write merge engine.
 Adapters call ingest_election/ingest_race/ingest_candidate with their source
 name and normalized field dicts. Each field is written only when the incoming
 source out-ranks the field's current provenance owner (see precedence.resolve_rank).
+
+Each ingest function returns ``(instance, created)`` where ``created`` is True if
+the canonical row did not exist before this call. Adapters use it for accurate
+SyncLog accounting; previously they inferred create/update from
+``contributing_sources == [source]`` which collapsed re-syncs of a single-source
+record into ``created``.
 """
 import logging
 
@@ -53,18 +59,36 @@ def ingest_election(*, source, source_id, identity, fields):
 
     if not (state and election_date and election_type and jurisdiction_level):
         # Cannot form a canonical key — keep as its own row, flagged for review.
-        election = Election.objects.create(
-            name=fields.get("name", "Needs review"),
-            election_date=election_date or timezone.localdate(),
-            election_type=election_type or Election.ElectionType.OTHER,
-            jurisdiction_level=jurisdiction_level or Election.JurisdictionLevel.STATE,
-            state=state, source_id=source_id, needs_review=True,
-        )
+        # Look it up via ElectionSourceLink so retries from the same
+        # (source, source_id) reuse the existing row rather than violating the
+        # unique constraint on Election.source_id or producing orphan duplicates.
+        link = ElectionSourceLink.objects.filter(source=source, source_id=source_id).first()
+        if link is not None:
+            election = link.election
+            link.last_synced_at = timezone.now()
+            link.save(update_fields=["last_synced_at"])
+            created = False
+        else:
+            election = Election.objects.create(
+                name=fields.get("name", "Needs review"),
+                election_date=election_date or timezone.localdate(),
+                election_type=election_type or Election.ElectionType.OTHER,
+                jurisdiction_level=jurisdiction_level or Election.JurisdictionLevel.STATE,
+                state=state, source_id=source_id, needs_review=True,
+            )
+            ElectionSourceLink.objects.create(
+                election=election, source=source, source_id=source_id,
+                last_synced_at=timezone.now(),
+            )
+            created = True
+        _add_source(election, source)
+        election.save(update_fields=["contributing_sources"])
         logger.warning("aggregation.election.needs_review source=%s source_id=%s", source, source_id)
-        return election
+        return election, created
 
     key = election_canonical_key(state, election_type, election_date, jurisdiction_level)
     election = Election.objects.select_for_update().filter(canonical_key=key).first()
+    created = election is None
     if election is None:
         # Migrated sources leave Election.source_id NULL; the per-source id is
         # recorded on ElectionSourceLink below.
@@ -87,7 +111,7 @@ def ingest_election(*, source, source_id, identity, fields):
             "last_synced_at": timezone.now(),
         },
     )
-    return election
+    return election, created
 
 
 @transaction.atomic
@@ -99,6 +123,7 @@ def ingest_race(*, election, source, identity, fields):
     key = race_canonical_key(election.canonical_key or f"e{election.pk}", office_title, ocd, race_type)
 
     race = Race.objects.select_for_update().filter(canonical_key=key).first()
+    created = race is None
     if race is None:
         race = Race(
             canonical_key=key, election=election, office_title=office_title,
@@ -117,7 +142,7 @@ def ingest_race(*, election, source, identity, fields):
     )
     race.last_synced_at = timezone.now()
     race.save()
-    return race
+    return race, created
 
 
 @transaction.atomic
@@ -135,6 +160,7 @@ def ingest_candidate(*, race, source, name, party, fields):
             match = cand
             break
 
+    created = match is None
     if match is None:
         match = Candidate(race=race, name=name, party=party, normalized_party=norm_party)
 
@@ -145,4 +171,4 @@ def ingest_candidate(*, race, source, name, party, fields):
     # Reflect the precedence-winning party in normalized_party.
     match.normalized_party = normalize_party(match.party)
     match.save()
-    return match
+    return match, created
