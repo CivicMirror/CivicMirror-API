@@ -139,6 +139,7 @@ if HAS_CORSHEADERS:
     INSTALLED_APPS.append('corsheaders')
 INSTALLED_APPS += [
     'elections',
+    'aggregation',
     'results',
     'ops',
     'community',

@@ -1,9 +1,18 @@
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from elections.models import Candidate, Election, MeasureOption, Race
+from aggregation.models import SourcePrecedence
+from elections.models import Candidate, Election, ElectionSourceLink, MeasureOption, Race
+from integrations.civic.ingest_adapter import ingest_civic_election
 from ops.models import SyncLog
+
+
+@pytest.fixture
+def civic_precedence(db):
+    """Register civic_api as a known source so the ingest engine can rank it."""
+    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
 
 
 @pytest.mark.django_db
@@ -19,25 +28,34 @@ def test_sync_elections_creates_synclog(MockClient):
 @pytest.mark.django_db
 @patch("integrations.civic.tasks.CivicAPIClient")
 @patch("integrations.civic.tasks.races_are_fresh", return_value=True)
-def test_sync_elections_skips_vip_test(mock_fresh, MockClient):
+def test_sync_elections_skips_vip_test(mock_fresh, MockClient, civic_precedence):
+    # Updated: canonical elections don't set source_id on the Election row;
+    # the source_id lives on ElectionSourceLink. Check that no link was created
+    # for the VIP test election, which must be filtered out before ingest.
     MockClient.return_value.list_elections.return_value = [
         {"source_id": "2000", "name": "VIP Test Election", "election_date": "2024-01-01", "ocd_division_id": "ocd-division/country:us"}
     ]
     from integrations.civic.tasks import sync_elections
     sync_elections()
-    assert Election.objects.filter(source_id="2000").count() == 0
+    assert ElectionSourceLink.objects.filter(source="civic_api", source_id="2000").count() == 0
+    assert Election.objects.count() == 0
 
 
 @pytest.mark.django_db
 @patch("integrations.civic.tasks.CivicAPIClient")
 @patch("integrations.civic.tasks.races_are_fresh", return_value=True)
-def test_sync_elections_creates_election(mock_fresh, MockClient):
+def test_sync_elections_creates_election(mock_fresh, MockClient, civic_precedence):
+    # Updated: the ingest service creates a canonical Election row (source_id=NULL)
+    # and registers the civic source_id on ElectionSourceLink. Assert both.
     MockClient.return_value.list_elections.return_value = [
         {"source_id": "9530", "name": "Louisiana 2026 Primary", "election_date": "2026-03-21", "ocd_division_id": "ocd-division/country:us/state:la"}
     ]
     from integrations.civic.tasks import sync_elections
     sync_elections()
-    assert Election.objects.filter(source_id="9530").exists()
+    assert Election.objects.filter(canonical_key="LA:primary:2026-03-21:state").exists()
+    assert ElectionSourceLink.objects.filter(source="civic_api", source_id="9530").exists()
+    election = Election.objects.get(canonical_key="LA:primary:2026-03-21:state")
+    assert "civic_api" in election.contributing_sources
 
 
 @pytest.mark.django_db
@@ -106,3 +124,17 @@ def test_sync_election_races_measure(MockClient, mock_set_cache, mock_get_cache)
     race = Race.objects.get(election=election)
     assert race.race_type == Race.RaceType.MEASURE
     assert MeasureOption.objects.filter(race=race).count() == 3  # Yes, No, Abstain
+
+
+@pytest.mark.django_db
+def test_ingest_civic_election_lands_on_canonical_key(civic_precedence):
+    payload = {
+        "source_id": "11255",
+        "name": "California Primary Election",
+        "election_date": "2026-06-02",
+        "ocd_division_id": "ocd-division/country:us/state:ca",
+    }
+    election, created = ingest_civic_election(payload)
+    assert election.canonical_key == "CA:primary:2026-06-02:state"
+    assert "civic_api" in election.contributing_sources
+    assert created is True

@@ -100,3 +100,13 @@ class TestFetchEndpointCatalog:
         ):
             result = client.get_endpoint_catalog_fingerprint()
         assert result is None
+
+
+def test_fetch_catalog_defaults_to_api_endpoints_csv():
+    client = CaSosClient()
+    with patch.object(client, "_get") as mock_get:
+        resp = MagicMock(status_code=200, content=b"https://api.sos.ca.gov\n")
+        mock_get.return_value = resp
+        client.fetch_endpoint_catalog_csv()
+        called_url = mock_get.call_args[0][0]
+        assert called_url.endswith("/api-endpoints.csv")

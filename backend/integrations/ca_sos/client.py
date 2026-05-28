@@ -115,7 +115,7 @@ class CaSosClient:
         except ValueError as exc:
             raise CaSosError(f"CA SOS /returns/status returned non-JSON: {exc}") from exc
 
-    def fetch_endpoint_catalog_csv(self, filename: str = "json-endpoints.csv") -> bytes:
+    def fetch_endpoint_catalog_csv(self, filename: str = "api-endpoints.csv") -> bytes:
         """
         Download the endpoint catalog CSV from media.sos.ca.gov.
 
@@ -132,7 +132,7 @@ class CaSosClient:
         )
         return resp.content
 
-    def get_endpoint_catalog_fingerprint(self, filename: str = "json-endpoints.csv") -> str | None:
+    def get_endpoint_catalog_fingerprint(self, filename: str = "api-endpoints.csv") -> str | None:
         """
         Return an MD5 hash of the endpoint catalog CSV for change detection.
         Returns None if the file is unavailable.

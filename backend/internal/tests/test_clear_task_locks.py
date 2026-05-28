@@ -10,6 +10,7 @@ from io import StringIO
 import pytest
 from django.core.cache import cache
 from django.core.management import call_command
+from django.test import override_settings
 
 from internal.task_locks import (
     TASK_LOCKS,
@@ -71,8 +72,18 @@ def test_unknown_task_filter_reports_error():
     assert "Unknown task" in err.getvalue()
 
 
+@override_settings(CACHES={
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "test-clear-locks-locmem",
+    }
+})
 def test_all_flag_falls_back_gracefully_on_non_redis_backend():
-    """LocMem (dev/test) has no scan support; --all must not crash."""
+    """LocMem (dev/test) has no scan support; --all must not crash.
+
+    Forces LocMem for this test so it works in environments where the default
+    cache is Redis (e.g. CI).
+    """
     err = StringIO()
     call_command("clear_task_locks", all=True, stdout=StringIO(), stderr=err)
     assert "requires the Redis cache backend" in err.getvalue()

@@ -1,8 +1,12 @@
 """Tests for CA SOS CSV catalog parsers."""
 import pytest
 
-from integrations.ca_sos.parsers import deduplicate_catalog, parse_endpoint_catalog
-
+from integrations.ca_sos.parsers import (
+    deduplicate_catalog,
+    parse_api_endpoint_catalog,
+    parse_election_date_from_catalog,
+    parse_endpoint_catalog,
+)
 
 SAMPLE_CSV = b"""RaceID,ContestName,EndpointURL,ContestType
 02000000000059,Governor - Statewide Results,/returns/governor,Candidate
@@ -91,3 +95,49 @@ class TestDeduplicateCatalog:
         ]
         result = deduplicate_catalog(entries)
         assert [e["path"] for e in result] == ["/a", "/b"]
+
+
+SAMPLE = b"""https://api.sos.ca.gov
+"|This file lists all available endpoints for the California June 2, 2026 Primary Election|"
+
+https://api.sos.ca.gov/returns/governor
+https://api.sos.ca.gov/returns/governor/county/alameda
+
+https://api.sos.ca.gov/returns/us-rep/district/all
+https://api.sos.ca.gov/returns/us-rep/district/12
+
+https://api.sos.ca.gov/returns/status
+"""
+
+
+def test_parse_api_catalog_keeps_statewide_and_district_skips_county():
+    entries = parse_api_endpoint_catalog(SAMPLE)
+    paths = [e["path"] for e in entries]
+    assert "/returns/governor" in paths
+    assert "/returns/us-rep/district/12" in paths
+    assert "/returns/governor/county/alameda" not in paths   # county skipped
+    assert "/returns/us-rep/district/all" not in paths        # 'all' skipped
+    assert "/returns/status" not in paths                     # status skipped
+
+
+def test_parse_api_catalog_names_default_to_path_tail():
+    entries = parse_api_endpoint_catalog(SAMPLE)
+    gov = next(e for e in entries if e["path"] == "/returns/governor")
+    assert gov["name"].lower() == "governor"
+
+
+def test_parse_election_date_from_catalog_title():
+    assert parse_election_date_from_catalog(SAMPLE).isoformat() == "2026-06-02"
+
+
+def test_parse_election_date_returns_none_when_absent():
+    assert parse_election_date_from_catalog(b"https://api.sos.ca.gov\nno date here\n") is None
+
+
+def test_parse_election_type_from_catalog_detects_primary_and_general():
+    from integrations.ca_sos.parsers import parse_election_type_from_catalog
+    primary = b'"|... California June 2, 2026 Primary Election|"\n'
+    general = b'"|... California November 3, 2026 General Election|"\n'
+    assert parse_election_type_from_catalog(primary) == "primary"
+    assert parse_election_type_from_catalog(general) == "general"
+    assert parse_election_type_from_catalog(b"no match here") is None

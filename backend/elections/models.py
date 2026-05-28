@@ -38,7 +38,7 @@ class Election(models.Model):
     )
     jurisdiction_level = models.CharField(max_length=20, choices=JurisdictionLevel.choices)
     state = models.CharField(max_length=2, null=True, blank=True)
-    source_id = models.CharField(max_length=50, unique=True)
+    source_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
     status = models.CharField(max_length=30, default=Status.UPCOMING, choices=Status.choices)
     source_metadata = models.JSONField(default=dict, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
@@ -50,6 +50,10 @@ class Election(models.Model):
         related_name='elections',
     )
     results_url = models.URLField(blank=True, default='')
+    canonical_key = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    field_provenance = models.JSONField(default=dict, blank=True)
+    contributing_sources = models.JSONField(default=list, blank=True)
+    needs_review = models.BooleanField(default=False)
 
     class Meta:
         indexes = [models.Index(fields=['source_id'])]
@@ -150,6 +154,9 @@ class Race(models.Model):
         blank=True,
     )
     submitted_by_uid = models.CharField(max_length=128, blank=True, db_index=True)
+    field_provenance = models.JSONField(default=dict, blank=True)
+    contributing_sources = models.JSONField(default=list, blank=True)
+    results_url = models.URLField(blank=True, default='')
 
     objects = models.Manager()
 
@@ -193,6 +200,8 @@ class Candidate(models.Model):
     source_metadata = models.JSONField(default=dict, blank=True)
     contact_phone = models.CharField(max_length=30, blank=True)
     contact_office = models.CharField(max_length=255, blank=True)
+    normalized_party = models.CharField(max_length=40, blank=True)
+    field_provenance = models.JSONField(default=dict, blank=True)
 
     class Meta:
         constraints = [
@@ -202,6 +211,22 @@ class Candidate(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class ElectionSourceLink(models.Model):
+    election = models.ForeignKey(Election, on_delete=models.CASCADE, related_name='source_links_rel')
+    source = models.CharField(max_length=40)
+    source_id = models.CharField(max_length=255, blank=True)
+    results_url = models.URLField(blank=True, default='')
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['election', 'source'], name='unique_election_source')
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.election_id}:{self.source}'
 
 
 class MeasureOption(models.Model):
