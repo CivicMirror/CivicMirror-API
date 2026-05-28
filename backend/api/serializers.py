@@ -13,12 +13,14 @@ class ElectionCycleSerializer(serializers.ModelSerializer):
 class ElectionSerializer(serializers.ModelSerializer):
     race_count = serializers.IntegerField(read_only=True)
     election_cycle = ElectionCycleSerializer(read_only=True)
+    sources = serializers.ListField(source="contributing_sources", read_only=True)
 
     class Meta:
         model = Election
         fields = [
             'id', 'source_id', 'name', 'election_date', 'jurisdiction_level',
             'state', 'status', 'last_synced_at', 'election_cycle', 'race_count',
+            'sources', 'field_provenance',
         ]
 
 
@@ -36,6 +38,7 @@ class CandidateSerializer(serializers.ModelSerializer):
             'description', 'image_url', 'website_url',
             'fec_candidate_id', 'bioguide_id', 'openstates_person_id',
             'contact_phone', 'contact_office', 'race',
+            'field_provenance',
         ]
 
 
@@ -63,6 +66,7 @@ class RaceListSerializer(serializers.ModelSerializer):
 class RaceDetailSerializer(serializers.ModelSerializer):
     candidates = CandidateSerializer(many=True, read_only=True)
     measure_options = MeasureOptionSerializer(many=True, read_only=True)
+    sources = serializers.ListField(source="contributing_sources", read_only=True)
 
     class Meta:
         model = Race
@@ -73,6 +77,7 @@ class RaceDetailSerializer(serializers.ModelSerializer):
             'ocd_division_id', 'normalized_office_title',
             'yes_vote_details', 'no_vote_details', 'match_confidence',
             'source', 'last_synced_at', 'candidates', 'measure_options',
+            'sources', 'field_provenance',
         ]
 
 
