@@ -84,6 +84,28 @@ def map_election(year: int, election_type: str) -> dict:
     }
 
 
+def map_election_identity(year: int, election_type: str, catalog_date=None):
+    """
+    Return (identity, fields) for the ingest service.
+
+    identity = canonical natural key parts; fields = mergeable values.
+    Uses the catalog-derived date when available, else the statutory fallback.
+    """
+    election_date = catalog_date or ca_election_date(year, election_type)
+    type_label = election_type.title()
+    identity = {
+        "state": "CA",
+        "election_type": election_type,
+        "election_date": election_date,
+        "jurisdiction_level": Election.JurisdictionLevel.STATE,
+    }
+    fields = {
+        "name": f"{year} California {type_label} Election",
+        "status": infer_election_status(election_date),
+    }
+    return identity, fields
+
+
 # ---------------------------------------------------------------------------
 # Race / Candidate mappers
 # ---------------------------------------------------------------------------
