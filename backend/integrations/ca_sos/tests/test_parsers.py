@@ -3,11 +3,10 @@ import pytest
 
 from integrations.ca_sos.parsers import (
     deduplicate_catalog,
-    parse_endpoint_catalog,
     parse_api_endpoint_catalog,
     parse_election_date_from_catalog,
+    parse_endpoint_catalog,
 )
-
 
 SAMPLE_CSV = b"""RaceID,ContestName,EndpointURL,ContestType
 02000000000059,Governor - Statewide Results,/returns/governor,Candidate

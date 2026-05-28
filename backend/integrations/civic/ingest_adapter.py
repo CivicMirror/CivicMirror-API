@@ -3,9 +3,13 @@ from datetime import date
 
 from aggregation import ingest
 from elections.models import Election
+
 from .mappers import (
-    map_contest_to_race_defaults, map_candidate_defaults,
-    parse_jurisdiction_level, parse_state_from_ocd, infer_election_status,
+    infer_election_status,
+    map_candidate_defaults,
+    map_contest_to_race_defaults,
+    parse_jurisdiction_level,
+    parse_state_from_ocd,
 )
 
 
