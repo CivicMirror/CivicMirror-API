@@ -153,7 +153,7 @@ def test_sync_va_races_happy_path(db=None):
          patch("integrations.va_elect.tasks.Election") as MockElection, \
          patch("integrations.va_elect.tasks.Race") as MockRace, \
          patch("integrations.va_elect.tasks.Candidate") as MockCandidate, \
-         patch("integrations.va_elect.tasks.MeasureOption") as MockOption, \
+         patch("integrations.va_elect.tasks.MeasureOption"), \
          patch("integrations.va_elect.tasks.map_race") as mock_map_race, \
          patch("integrations.va_elect.tasks.map_candidate") as mock_map_candidate, \
          patch("integrations.va_elect.tasks.transaction") as mock_tx:

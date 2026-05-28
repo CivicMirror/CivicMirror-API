@@ -5,6 +5,7 @@ The lock is acquired in the trigger view and must be released when the triggered
 task terminally succeeds or fails -- but held during the run and across retries.
 Cache-only + Celery eager mode, so these run without a DB or broker.
 """
+import pytest
 from celery import shared_task
 from django.core.cache import cache
 from django.test import RequestFactory, override_settings
@@ -47,9 +48,6 @@ def _retry_then_ok(self):
 def _expected_key(task_name):
     window_type, _ = TASK_LOCKS[task_name]
     return lock_key(task_name, current_window(window_type))
-
-
-import pytest
 
 
 @pytest.fixture(autouse=True)

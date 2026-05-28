@@ -17,13 +17,13 @@ import re
 import time
 
 import requests
+from bs4 import BeautifulSoup
 
 from core.http import ProxyAuthError, UpstreamBlockedError, proxy_request
+
 from .exceptions import IowaSosError, IowaSosRetryableError
 
 logger = logging.getLogger(__name__)
-
-from bs4 import BeautifulSoup
 
 CALENDAR_PDF_URL = "https://sos.iowa.gov/elections/pdf/cal3yr.pdf"
 

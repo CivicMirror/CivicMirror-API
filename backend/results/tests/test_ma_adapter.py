@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Adapter registration
 # ---------------------------------------------------------------------------
@@ -139,6 +138,7 @@ def test_fetch_results_parses_csv_on_cache_miss(mock_get, mock_cache):
 @patch("results.adapters.ma.requests.get")
 def test_fetch_results_http_error(mock_get):
     import requests as req_lib
+
     from results.adapters.ma import MassachusettsAdapter
 
     mock_get.side_effect = req_lib.RequestException("network error")

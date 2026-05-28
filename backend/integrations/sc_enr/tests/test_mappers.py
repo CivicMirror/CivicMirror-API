@@ -6,9 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from integrations.sc_enr.mappers import parse_enr_date, map_enr_election, attempt_election_link
+from integrations.sc_enr.mappers import attempt_election_link, map_enr_election, parse_enr_date
 from integrations.sc_enr.models import ENRElection
-
 
 # ------------------------------------------------------------------
 # parse_enr_date

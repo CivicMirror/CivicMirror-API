@@ -25,6 +25,7 @@ import requests
 from django.core.cache import cache
 
 from elections.models import Election, Race
+
 from .base import AdapterResult, ResultRow, StateResultsAdapter
 from .registry import register
 

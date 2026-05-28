@@ -1,0 +1,136 @@
+from datetime import date
+
+import pytest
+
+from aggregation import ingest
+from aggregation.models import SourcePrecedence
+from elections.models import Candidate, Election, Race
+
+
+@pytest.fixture
+def ca_precedence(db):
+    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+    SourcePrecedence.objects.create(state="CA", field_group="results", source="ca_sos", rank=0)
+    SourcePrecedence.objects.create(state="CA", field_group="results", source="civic_api", rank=1)
+    SourcePrecedence.objects.create(state="CA", field_group="contacts", source="civic_api", rank=0)
+    SourcePrecedence.objects.create(state="CA", field_group="contacts", source="ca_sos", rank=1)
+
+
+def _election_identity():
+    return dict(state="CA", election_type="primary",
+                election_date=date(2026, 6, 2), jurisdiction_level="state")
+
+
+@pytest.mark.django_db
+def test_ingest_election_creates_canonical_row_and_source_link(ca_precedence):
+    e, _ = ingest.ingest_election(
+        source="ca_sos", source_id="ca_sos_2026_primary",
+        identity=_election_identity(),
+        fields={"name": "2026 California Primary Election", "status": "upcoming"},
+    )
+    assert e.canonical_key == "CA:primary:2026-06-02:state"
+    assert "ca_sos" in e.contributing_sources
+    assert e.source_links_rel.filter(source="ca_sos", source_id="ca_sos_2026_primary").exists()
+    assert e.field_provenance["name"] == "ca_sos"
+
+
+@pytest.mark.django_db
+def test_two_sources_merge_onto_one_election(ca_precedence):
+    e1, _ = ingest.ingest_election(
+        source="ca_sos", source_id="ca_sos_2026_primary", identity=_election_identity(),
+        fields={"name": "2026 California Primary Election"},
+    )
+    e2, _ = ingest.ingest_election(
+        source="civic_api", source_id="11255", identity=_election_identity(),
+        fields={"name": "California Primary Election"},
+    )
+    assert e1.pk == e2.pk
+    assert set(e2.contributing_sources) == {"ca_sos", "civic_api"}
+    # name is an 'identity' field; civic (rank 0) outranks ca_sos (inf default) -> civic wins
+    assert e2.name == "California Primary Election"
+    assert e2.field_provenance["name"] == "civic_api"
+
+
+@pytest.mark.django_db
+def test_higher_precedence_source_wins_per_field(ca_precedence):
+    e, _ = ingest.ingest_election(source="ca_sos", source_id="x", identity=_election_identity(), fields={})
+    # results field group: ca_sos outranks civic in CA
+    ingest.ingest_race(
+        election=e, source="civic_api",
+        identity={"office_title": "Governor", "ocd_division_id": "", "race_type": "candidate"},
+        fields={"office_title": "Governor", "results_url": "https://civic/results"},
+    )
+    r, _ = ingest.ingest_race(
+        election=e, source="ca_sos",
+        identity={"office_title": "Governor", "ocd_division_id": "", "race_type": "candidate"},
+        fields={"results_url": "https://api.sos.ca.gov/returns/governor"},
+    )
+    assert r.results_url == "https://api.sos.ca.gov/returns/governor"
+    assert r.field_provenance["results_url"] == "ca_sos"
+    # office_title still owned by civic (only civic provided it)
+    assert r.field_provenance["office_title"] == "civic_api"
+
+
+@pytest.mark.django_db
+def test_candidate_matching_by_normalized_name_and_party(ca_precedence):
+    e, _ = ingest.ingest_election(source="ca_sos", source_id="x", identity=_election_identity(), fields={})
+    r, _ = ingest.ingest_race(
+        election=e, source="ca_sos",
+        identity={"office_title": "Governor", "ocd_division_id": "", "race_type": "candidate"},
+        fields={"office_title": "Governor"},
+    )
+    c1, _ = ingest.ingest_candidate(race=r, source="ca_sos", name="Xavier Becerra", party="Dem",
+                                 fields={"incumbent": False})
+    c2, _ = ingest.ingest_candidate(race=r, source="civic_api", name="Becerra, Xavier", party="Democratic Party",
+                                 fields={"image_url": "https://civic/photo.jpg"})
+    assert c1.pk == c2.pk
+    assert c2.image_url == "https://civic/photo.jpg"           # contacts: civic owns
+    assert c2.normalized_party == "DEM"
+
+
+@pytest.mark.django_db
+def test_ingest_election_flags_review_when_date_missing(ca_precedence):
+    e, _ = ingest.ingest_election(
+        source="ca_sos", source_id="bad",
+        identity={"state": "CA", "election_type": "primary",
+                  "election_date": None, "jurisdiction_level": "state"},
+        fields={"name": "Broken"},
+    )
+    assert e.needs_review is True
+    assert e.canonical_key is None
+
+
+@pytest.mark.django_db
+def test_ingest_election_needs_review_is_idempotent(ca_precedence):
+    """Re-syncing a needs-review election from the same source must reuse the
+    row (looked up via ElectionSourceLink) instead of colliding on
+    Election.source_id's unique constraint or creating an orphan duplicate."""
+    bad_identity = {
+        "state": "CA", "election_type": "primary",
+        "election_date": None, "jurisdiction_level": "state",
+    }
+    e1, created1 = ingest.ingest_election(
+        source="ca_sos", source_id="bad", identity=bad_identity, fields={"name": "Broken"},
+    )
+    e2, created2 = ingest.ingest_election(
+        source="ca_sos", source_id="bad", identity=bad_identity, fields={"name": "Broken"},
+    )
+    assert created1 is True
+    assert created2 is False
+    assert e1.pk == e2.pk
+    assert e2.source_links_rel.filter(source="ca_sos", source_id="bad").count() == 1
+
+
+@pytest.mark.django_db
+def test_ingest_election_returns_false_created_on_resync(ca_precedence):
+    """A returning single-source election must report created=False, not True."""
+    _, created1 = ingest.ingest_election(
+        source="ca_sos", source_id="x", identity=_election_identity(),
+        fields={"name": "CA Primary"},
+    )
+    _, created2 = ingest.ingest_election(
+        source="ca_sos", source_id="x", identity=_election_identity(),
+        fields={"name": "CA Primary"},
+    )
+    assert created1 is True
+    assert created2 is False

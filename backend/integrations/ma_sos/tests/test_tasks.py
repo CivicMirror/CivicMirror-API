@@ -67,7 +67,7 @@ def test_sync_ma_elections_discovers_and_queues(
     # Patch date.today()
     with patch("integrations.ma_sos.tasks.date") as mock_date:
         mock_date.today.return_value = date(2024, 12, 1)
-        result = sync_ma_elections.run()
+        sync_ma_elections.run()
 
     # Task should have queued at least one races task and one BQ task
     mock_races_task.apply_async.assert_called()
@@ -169,7 +169,7 @@ def test_sync_ma_races_upserts_race_and_candidates(
 
     mock_tz.now.return_value = MagicMock()
 
-    result = sync_ma_races.run(1)
+    sync_ma_races.run(1)
 
     mock_race_cls.objects.bulk_create.assert_called_once()
     mock_cand_cls.objects.bulk_create.assert_called_once()
@@ -179,8 +179,8 @@ def test_sync_ma_races_upserts_race_and_candidates(
 @patch("integrations.ma_sos.tasks.Election")
 @patch("integrations.ma_sos.tasks.timezone")
 def test_sync_ma_races_missing_election_returns(mock_tz, mock_election_cls, mock_synclog_cls):
-    from integrations.ma_sos.tasks import sync_ma_races
     from elections.models import Election as RealElection
+    from integrations.ma_sos.tasks import sync_ma_races
 
     mock_election_cls.DoesNotExist = RealElection.DoesNotExist
     mock_election_cls.objects.get.side_effect = RealElection.DoesNotExist()
@@ -250,7 +250,7 @@ def test_sync_ma_ballot_question_upserts(
     mock_tx.atomic.return_value.__exit__ = MagicMock(return_value=False)
     mock_tz.now.return_value = MagicMock()
 
-    result = sync_ma_ballot_question.run(11620)
+    sync_ma_ballot_question.run(11620)
 
     mock_race_cls.objects.bulk_create.assert_called_once()
     assert mock_measure_cls.objects.get_or_create.call_count == 2
