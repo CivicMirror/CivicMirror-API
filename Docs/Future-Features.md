@@ -11,6 +11,29 @@ Each entry should answer: *what*, *where it'd land in the code*, *why*, and any
 
 ## Open
 
+### 2026-05-28 — Decision: keep non-migrated schedulers paused through Phase 2
+**What:** SC (VREMS/ENR), CO, IA, MA, VA, FEC, OpenStates, and `poll-pending-results`
+scheduler jobs stay paused for the duration of Phase 2 — no per-state "interim
+old-write mode" run. Only `sync-elections-hourly` (Civic) and `sync-ca-sos`
+remain enabled.
+
+**Why:** No users are impacted by missing data for those states. Keeps the DB
+clean (no source-siloed `canonical_key=NULL` rows produced by un-migrated
+adapters) and avoids per-state mini-cutovers — each state's Phase-2 PR can simply
+unpause its scheduler, trigger a sync, and verify against canonical rows.
+
+**Per-state Phase-2 PR checklist (template):**
+1. Rewrite the adapter's sync task(s) onto `aggregation.ingest`.
+2. Update tests (preserve behavioral intent; assert against canonical rows /
+   `ElectionSourceLink`).
+3. If results adapter exists for that state: switch its filter to
+   `contributing_sources__contains=[...]` (see the related follow-up below).
+4. Add any state-specific precedence rows to the seed.
+5. Merge → unpause that state's scheduler(s) → trigger → verify in API
+   (`canonical_key` set, `sources` contains the source).
+
+---
+
 ### 2026-05-28 — Phase-2 follow-up: results adapters filter by `source`, not `contributing_sources`
 **Where:** `backend/results/adapters/ca.py:88`, `ma.py`, `va.py`, and any CO/IA Clarity
 results adapters that filter Races by `source=Race.Source.<X>`.
