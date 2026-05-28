@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from integrations.sc_enr.client import ENRClient, ENR_ELECTIONS_URL
+from integrations.sc_enr.client import ENR_ELECTIONS_URL, ENRClient
 from integrations.sc_enr.exceptions import SCEnrError, SCEnrRetryableError
 
 

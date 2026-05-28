@@ -9,7 +9,6 @@ import pytest
 from integrations.sc_enr.models import ENRElection
 from integrations.sc_enr.tasks import poll_sc_enr_elections, sync_sc_enr_results
 
-
 # ------------------------------------------------------------------
 # poll_sc_enr_elections
 # ------------------------------------------------------------------
