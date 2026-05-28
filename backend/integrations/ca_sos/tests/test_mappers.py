@@ -1,6 +1,7 @@
 """Tests for CA SOS mappers."""
-import pytest
 from datetime import date
+
+import pytest
 
 from integrations.ca_sos.mappers import (
     ca_election_date,

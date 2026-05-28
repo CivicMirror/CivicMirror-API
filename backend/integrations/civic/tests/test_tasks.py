@@ -1,9 +1,11 @@
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from aggregation.models import SourcePrecedence
 from elections.models import Candidate, Election, ElectionSourceLink, MeasureOption, Race
+from integrations.civic.ingest_adapter import ingest_civic_election
 from ops.models import SyncLog
 
 
@@ -122,15 +124,6 @@ def test_sync_election_races_measure(MockClient, mock_set_cache, mock_get_cache)
     race = Race.objects.get(election=election)
     assert race.race_type == Race.RaceType.MEASURE
     assert MeasureOption.objects.filter(race=race).count() == 3  # Yes, No, Abstain
-
-
-from datetime import date
-
-import pytest
-
-from aggregation.models import SourcePrecedence
-from elections.models import Election
-from integrations.civic.ingest_adapter import ingest_civic_election
 
 
 @pytest.fixture

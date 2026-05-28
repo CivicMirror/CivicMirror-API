@@ -193,7 +193,6 @@ def map_candidate(raw_candidate: dict) -> dict:
     from elections.models import Candidate
 
     is_incumbent = bool(raw_candidate.get("incumbent", False))
-    name = (raw_candidate.get("Name") or "").strip()
 
     return {
         "party": (raw_candidate.get("Party") or "").strip(),

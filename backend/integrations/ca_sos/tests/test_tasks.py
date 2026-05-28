@@ -1,11 +1,14 @@
 """Tests for CA SOS Celery tasks."""
 import json
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.test import override_settings
 
+from aggregation.models import SourcePrecedence
+from elections.models import Election
 from integrations.ca_sos.tasks import _resolve_current_election
-
 
 SAMPLE_CATALOG_ENTRIES = [
     {"name": "Governor", "path": "/returns/governor", "type": "candidate", "race_id": "01"},
@@ -35,8 +38,8 @@ _API_CATALOG_BYTES = (
 class TestSyncCaElections:
     def test_seeds_elections_and_queues_on_catalog_change(self, db):
         """Stage 1 should seed Elections via ingest service and queue sync_ca_races when catalog changes."""
-        from integrations.ca_sos.tasks import sync_ca_elections
         from elections.models import Election
+        from integrations.ca_sos.tasks import sync_ca_elections
 
         with (
             patch("integrations.ca_sos.tasks.CaSosClient") as mock_client_cls,
@@ -98,8 +101,8 @@ class TestSyncCaElections:
 
 class TestSyncCaRaces:
     def test_upserts_races_and_candidates(self, db):
+        from elections.models import Candidate, Election, Race
         from integrations.ca_sos.tasks import sync_ca_elections, sync_ca_races
-        from elections.models import Election, Race, Candidate
 
         # Seed election first via ingest service (API-URL-format catalog bytes).
         with (
@@ -153,14 +156,15 @@ class TestSyncCaRaces:
         assert result is None
 
     def test_handles_contest_fetch_error(self, db):
-        from integrations.ca_sos.tasks import sync_ca_races
         from elections.models import Election
         from integrations.ca_sos.exceptions import CaSosError
+        from integrations.ca_sos.tasks import sync_ca_races
 
         election = Election.objects.filter(state="CA").first()
         if not election:
-            from elections.models import Election
             from datetime import date
+
+            from elections.models import Election
             election = Election.objects.create(
                 source_id="ca_sos_test",
                 name="CA Test",
@@ -189,14 +193,6 @@ class TestSyncCaRaces:
 # ---------------------------------------------------------------------------
 # New integration test: catalog-date extraction + ingest service routing
 # ---------------------------------------------------------------------------
-from datetime import date
-from unittest.mock import patch
-
-import pytest
-from django.test import override_settings
-
-from aggregation.models import SourcePrecedence
-from elections.models import Election
 
 
 @pytest.fixture

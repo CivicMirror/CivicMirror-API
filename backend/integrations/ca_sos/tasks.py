@@ -48,9 +48,11 @@ def sync_ca_elections(self):
     catalog has changed.
     """
     from aggregation import ingest
-    from .mappers import build_election_source_id, map_election_identity
+
+    from .mappers import map_election_identity
     from .parsers import (
-        deduplicate_catalog, parse_api_endpoint_catalog, parse_election_date_from_catalog,
+        parse_api_endpoint_catalog,
+        parse_election_date_from_catalog,
     )
 
     sync_log = SyncLog.objects.create(
@@ -176,6 +178,7 @@ def sync_ca_races(self, election_pk: int, catalog_json: str, fingerprint: str):
 
     try:
         from aggregation import ingest
+
         from .mappers import infer_geography_scope, infer_race_type, normalize
 
         entries = json.loads(catalog_json)
