@@ -1,7 +1,7 @@
 """
 Tests for SC VREMS Celery tasks.
 """
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -131,6 +131,9 @@ def test_sync_sc_elections_idempotent(MockClient):
 @pytest.mark.django_db
 @patch("integrations.sc_vrems.tasks.VremsClient")
 def test_sync_sc_races_creates_race_and_candidates(MockClient):
+    from aggregation.models import SourcePrecedence
+    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+
     election = Election.objects.create(
         source_id="vrems_sc_22598",
         name="6/9/2026 Statewide Primary",
@@ -167,8 +170,8 @@ def test_sync_sc_races_creates_race_and_candidates(MockClient):
     from integrations.sc_vrems.tasks import sync_sc_races
     result = sync_sc_races(election.pk, "22598")
 
-    # Primary → two separate races (R and D)
-    assert Race.objects.filter(election=election).count() == 2
+    # Ingest merges R/D primary groups into one canonical Race; both candidates attach to it.
+    assert Race.objects.filter(election=election).count() == 1
     assert Candidate.objects.filter(race__election=election).count() == 2
     assert result["created"] >= 2
 
@@ -176,6 +179,9 @@ def test_sync_sc_races_creates_race_and_candidates(MockClient):
 @pytest.mark.django_db
 @patch("integrations.sc_vrems.tasks.VremsClient")
 def test_sync_sc_races_empty_table_logged(MockClient):
+    from aggregation.models import SourcePrecedence
+    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+
     election = Election.objects.create(
         source_id="vrems_sc_22741",
         name="11/3/2026 City of Sumter Municipal Election",
@@ -199,6 +205,9 @@ def test_sync_sc_races_empty_table_logged(MockClient):
 @pytest.mark.django_db
 @patch("integrations.sc_vrems.tasks.VremsClient")
 def test_sync_sc_races_idempotent(MockClient):
+    from aggregation.models import SourcePrecedence
+    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+
     election = Election.objects.create(
         source_id="vrems_sc_22598",
         name="6/9/2026 Statewide Primary",
@@ -227,6 +236,9 @@ def test_sync_sc_races_idempotent(MockClient):
 @pytest.mark.django_db
 @patch("integrations.sc_vrems.tasks.VremsClient")
 def test_sync_sc_races_vrems_status_in_metadata(MockClient):
+    from aggregation.models import SourcePrecedence
+    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+
     election = Election.objects.create(
         source_id="vrems_sc_22598",
         name="11/3/2024 Statewide General",
@@ -250,3 +262,91 @@ def test_sync_sc_races_vrems_status_in_metadata(MockClient):
     candidate = Candidate.objects.get(name="Winner Candidate")
     assert candidate.source_metadata["vrems_status"] == "Elected"
     assert candidate.candidate_status == Candidate.CandidateStatus.RUNNING
+
+
+# ------------------------------------------------------------------
+# Integration tests — ingest service routing (real DB)
+# ------------------------------------------------------------------
+
+from datetime import date as _date
+from django.test import override_settings
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+def test_sync_sc_elections_routes_through_ingest_service():
+    """Each discovered SC election lands as canonical Election with contributing_sources=['sc_vrems']."""
+    from aggregation.models import SourcePrecedence
+    from elections.models import Election, ElectionSourceLink
+    from integrations.sc_vrems.tasks import sync_sc_elections
+
+    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+
+    vrems_data = [
+        {
+            "electionId": "22598",
+            "electionName": "6/9/2026 Statewide Primary",
+            "displayName": "6/9/2026 Statewide Primary",
+            "electionDate": "2026-06-09T00:00:00",
+            "filingPeriodBeginDate": "2020-03-16T12:00:00",
+            "electionType": "General",
+        }
+    ]
+
+    with patch("integrations.sc_vrems.tasks.VremsClient") as MockClient, \
+         patch("integrations.sc_vrems.tasks.sync_sc_races"):
+        MockClient.return_value.get_all_elections.return_value = vrems_data
+        sync_sc_elections.run()
+
+    e = Election.objects.get(state="SC", election_date=_date(2026, 6, 9))
+    assert "sc_vrems" in e.contributing_sources
+    assert e.canonical_key.startswith("SC:")
+    link = ElectionSourceLink.objects.get(election=e, source="sc_vrems")
+    assert link.source_id == "vrems_sc_22598"
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+def test_sync_sc_races_routes_through_ingest_service():
+    """sync_sc_races writes canonical Race + Candidate via ingest (not bulk_create)."""
+    from aggregation.models import SourcePrecedence
+    from elections.models import Candidate, Election, Race
+    from integrations.sc_vrems.tasks import sync_sc_races
+
+    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+
+    e = Election.objects.create(
+        name="6/9/2026 Statewide Primary",
+        election_date=_date(2026, 6, 9),
+        election_type="primary",
+        jurisdiction_level="state",
+        state="SC",
+        canonical_key="SC:primary:2026-06-09:state",
+        contributing_sources=["sc_vrems"],
+    )
+
+    vrems_candidates = [
+        {
+            "office": "Governor",
+            "filing_location": "State",
+            "associated_counties": "",
+            "party": "Republican",
+            "name_on_ballot": "Alice Johnson",
+            "status": "Active",
+            "candidate_id": "1",
+            "candidate_detail_id": "999",
+            "candidate_detail_election_id": "22598",
+            "running_mate": "",
+        }
+    ]
+
+    with patch("integrations.sc_vrems.tasks.VremsClient") as MockClient:
+        MockClient.return_value.get_candidates.return_value = vrems_candidates
+        sync_sc_races.run(e.pk, "22598")
+
+    race = Race.objects.filter(election=e).first()
+    assert race is not None
+    assert "sc_vrems" in race.contributing_sources
+    cands = list(Candidate.objects.filter(race=race))
+    assert len(cands) == 1
+    assert cands[0].name == "Alice Johnson"
