@@ -7,6 +7,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from elections.models import Election, Race
+from unittest.mock import MagicMock
+
 from integrations.ia_sos.mappers import (
     build_election_source_id,
     build_race_canonical_key,
@@ -147,3 +149,59 @@ class TestMapCandidate:
         row = {"office": "Governor", "candidate_name": "Jane Smith", "party": "DEM", "district": ""}
         result = map_candidate(row)
         assert result["incumbent"] is False
+
+
+# ---------------------------------------------------------------------------
+# Mapper bug-fix tests (TDD)
+# ---------------------------------------------------------------------------
+
+class TestMapElectionIncludesElectionType:
+    def test_primary_election_type_present(self):
+        parsed = {
+            "name": "2026 Iowa Primary Election",
+            "election_date": "2026-06-02",
+            "election_year": 2026,
+            "election_type": "primary",
+        }
+        result = map_election(parsed)
+        assert "election_type" in result, "map_election must include 'election_type'"
+        assert result["election_type"] == "primary"
+
+    def test_general_election_type_present(self):
+        parsed = {
+            "name": "2026 Iowa General Election",
+            "election_date": "2026-11-03",
+            "election_year": 2026,
+            "election_type": "general",
+        }
+        result = map_election(parsed)
+        assert result["election_type"] == "general"
+
+
+class TestMapRaceNullSourceId:
+    def _make_election(self, source_id=None):
+        mock = MagicMock()
+        mock.source_id = source_id
+        mock.canonical_key = "IA:primary:2026-06-02:state"
+        mock.status = "upcoming"
+        mock.name = "2026 Iowa Primary Election"
+        return mock
+
+    def _race_group(self):
+        return {
+            "office": "Governor",
+            "district": "",
+            "party_group": "DEM",
+            "candidates": [],
+        }
+
+    def test_map_race_does_not_crash_with_null_source_id(self):
+        result = map_race(self._make_election(source_id=None), self._race_group())
+        assert isinstance(result["canonical_key"], str)
+        assert "None" not in result["canonical_key"]
+
+    def test_map_race_source_metadata_election_id_not_none(self):
+        result = map_race(self._make_election(source_id=None), self._race_group())
+        election_id = result["source_metadata"]["ia_sos_election_id"]
+        assert election_id is not None
+        assert isinstance(election_id, str)
