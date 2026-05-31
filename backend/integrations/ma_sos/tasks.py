@@ -23,7 +23,6 @@ import logging
 from datetime import date
 
 from celery import shared_task
-from django.db import transaction
 from django.utils import timezone
 
 from elections.models import Candidate, Election, MeasureOption, Race
@@ -95,64 +94,46 @@ def sync_ma_elections(self):
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return {"created": 0, "updated": 0, "queued": 0}
 
-        # Build mapped election dicts, skipping any without a resolvable election_date
-        election_data: list[tuple[str, dict]] = []
-        for row in unique_rows:
+        from aggregation import ingest
+
+        election_objects: list[Election] = []
+        for idx, row in enumerate(unique_rows):
             schedule = row.pop("_schedule", {})
             mapped = map_election(row, schedule)
             source_id = mapped.pop("source_id")
-            defaults = {**mapped, "last_synced_at": timezone.now()}
-            if defaults.get("election_date") is None:
+            if mapped.get("election_date") is None:
                 logger.warning("ma_sos.sync_elections.skipped_no_date source_id=%s", source_id)
-                continue
-            election_data.append((source_id, defaults))
-
-        source_ids = [d[0] for d in election_data]
-
-        existing_source_ids = set(
-            Election.objects.filter(source_id__in=source_ids).values_list("source_id", flat=True)
-        ) if source_ids else set()
-
-        election_objects = [
-            Election(source_id=sid, **defaults)
-            for sid, defaults in election_data
-        ]
-
-        if election_objects:
-            Election.objects.bulk_create(
-                election_objects,
-                update_conflicts=True,
-                update_fields=[
-                    "name", "election_date", "election_type", "jurisdiction_level",
-                    "state", "status", "source_metadata", "last_synced_at",
-                ],
-                unique_fields=["source_id"],
-            )
-
-        created_count = sum(1 for sid, _ in election_data if sid not in existing_source_ids)
-        updated_count = len(election_data) - created_count
-
-        # Reload to get PKs for task dispatch
-        elections_by_source_id = {
-            e.source_id: e
-            for e in Election.objects.filter(source_id__in=source_ids)
-        } if source_ids else {}
-
-        for idx, (source_id, defaults) in enumerate(election_data):
-            election_obj = elections_by_source_id.get(source_id)
-            if not election_obj:
-                logger.warning("ma_sos.sync_elections.missing_pk source_id=%s", source_id)
                 skipped_count += 1
                 continue
-            electionstats_id = (election_obj.source_metadata or {}).get("electionstats_id")
+            identity = {
+                "state": mapped["state"],
+                "election_type": mapped["election_type"],
+                "election_date": mapped["election_date"],
+                "jurisdiction_level": mapped["jurisdiction_level"],
+            }
+            # Everything else (name, status, source_metadata, …) becomes ingest fields.
+            fields = {k: v for k, v in mapped.items() if k not in identity}
+            # Extract electionstats_id from fields before ingest — source_metadata may
+            # not be written back to election_obj if a higher-precedence source already
+            # owns the identity fields on an existing canonical election.
+            electionstats_id = (fields.get("source_metadata") or {}).get("electionstats_id")
             if not electionstats_id:
                 skipped_count += 1
                 continue
+            election_obj, was_created = ingest.ingest_election(
+                source="ma_sos", source_id=source_id, identity=identity, fields=fields,
+            )
+            if was_created:
+                created_count += 1
+            else:
+                updated_count += 1
+
             sync_ma_races.apply_async(
-                args=[election_obj.pk],
+                args=[election_obj.pk, electionstats_id],
                 countdown=idx * 3,
             )
             queued_count += 1
+            election_objects.append(election_obj)
 
         # Discover and queue ballot questions for current year
         bq_ids = client.get_ballot_question_ids(current_year)
@@ -203,11 +184,11 @@ def sync_ma_elections(self):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def sync_ma_races(self, election_pk: int):
+def sync_ma_races(self, election_pk: int, electionstats_id: int):
     """
     Stage 2: Download election CSV, parse candidates, and upsert Race + Candidate records.
 
-    Looks up the election by PK, builds the CSV URL from source_metadata["electionstats_id"],
+    Looks up the election by PK, builds the CSV URL from the provided electionstats_id,
     parses candidate column headers and party row, then bulk-upserts.
     """
     try:
@@ -226,14 +207,6 @@ def sync_ma_races(self, election_pk: int):
     race_created = race_updated = cand_created = cand_updated = 0
 
     try:
-        electionstats_id = (election_obj.source_metadata or {}).get("electionstats_id")
-        if not electionstats_id:
-            sync_log.notes = "No electionstats_id in election.source_metadata"
-            sync_log.status = SyncLog.Status.COMPLETED_WITH_WARNINGS
-            sync_log.completed_at = timezone.now()
-            sync_log.save(update_fields=["notes", "status", "completed_at"])
-            return
-
         csv_bytes = client.download_election_csv(electionstats_id, precincts=False)
         candidate_rows = parsers.parse_election_csv(csv_bytes)
 
@@ -247,12 +220,14 @@ def sync_ma_races(self, election_pk: int):
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return
 
-        # Build the race row from the election's stored metadata
+        # Build the race row from stored metadata; fall back to empty strings if
+        # a higher-precedence source owns source_metadata on the canonical election.
+        meta = election_obj.source_metadata or {}
         election_row = {
             "election_id": electionstats_id,
-            "office": election_obj.source_metadata.get("office", ""),
-            "district": election_obj.source_metadata.get("district", ""),
-            "stage": election_obj.source_metadata.get("stage", "General"),
+            "office": meta.get("office", ""),
+            "district": meta.get("district", ""),
+            "stage": meta.get("stage", "General"),
         }
 
         # Infer office/district from election name if not in metadata
@@ -262,49 +237,38 @@ def sync_ma_races(self, election_pk: int):
             if len(parts) >= 3:
                 election_row["office"] = " ".join(parts[2:4]) if len(parts) > 4 else parts[2]
 
+        from aggregation import ingest
+
         race_fields = map_race(election_obj, election_row)
-        canonical_key = race_fields.pop("canonical_key")
+        # The mapper's legacy `canonical_key` is source-scoped — discard it.
+        # The ingest service builds its own source-independent canonical key.
+        race_fields.pop("canonical_key", None)
+        race_identity = {
+            "office_title": race_fields.pop("office_title"),
+            "ocd_division_id": race_fields.pop("ocd_division_id", "") or "",
+            "race_type": race_fields.pop("race_type"),
+        }
+        race_obj, race_was_new = ingest.ingest_race(
+            election=election_obj, source="ma_sos",
+            identity=race_identity, fields=race_fields,
+        )
+        race_created = 1 if race_was_new else 0
+        race_updated = 0 if race_was_new else 1
 
-        now = timezone.now()
-
-        with transaction.atomic():
-            existing_race_keys = set(
-                Race.objects.filter(canonical_key=canonical_key).values_list("canonical_key", flat=True)
+        for c in real_candidates:
+            cand_fields = map_candidate(c)
+            cand_name = c.get("name", "")
+            cand_party = cand_fields.pop("party", "")
+            if not cand_name:
+                continue
+            _cand_obj, cand_was_new = ingest.ingest_candidate(
+                race=race_obj, source="ma_sos",
+                name=cand_name, party=cand_party, fields=cand_fields,
             )
-
-            Race.objects.bulk_create(
-                [Race(canonical_key=canonical_key, election=election_obj, last_synced_at=now, **race_fields)],
-                update_conflicts=True,
-                update_fields=[
-                    "election", "race_type", "office_title", "normalized_office_title",
-                    "jurisdiction", "geography_scope", "certification_status", "source",
-                    "race_status", "vote_method", "max_selections", "ocd_division_id",
-                    "source_metadata", "last_synced_at",
-                ],
-                unique_fields=["canonical_key"],
-            )
-            race_created = 1 if canonical_key not in existing_race_keys else 0
-            race_updated = 0 if race_created else 1
-
-            race_obj = Race.objects.get(canonical_key=canonical_key)
-
-            candidate_objects = [
-                Candidate(race=race_obj, name=c["name"], **map_candidate(c))
-                for c in real_candidates
-            ]
-
-            if candidate_objects:
-                existing_cand_keys = set(
-                    Candidate.objects.filter(race=race_obj).values_list("name", flat=True)
-                )
-                cand_created = sum(1 for c in candidate_objects if c.name not in existing_cand_keys)
-                cand_updated = len(candidate_objects) - cand_created
-                Candidate.objects.bulk_create(
-                    candidate_objects,
-                    update_conflicts=True,
-                    update_fields=["party", "candidate_status", "source_metadata"],
-                    unique_fields=["race", "name"],
-                )
+            if cand_was_new:
+                cand_created += 1
+            else:
+                cand_updated += 1
 
         election_obj.last_synced_at = timezone.now()
         election_obj.save(update_fields=["last_synced_at"])
@@ -375,30 +339,27 @@ def sync_ma_ballot_question(self, bq_id: int):
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return
 
+        from aggregation import ingest
+
         race_fields = map_ballot_question(metadata, election_obj)
-        canonical_key = race_fields.pop("canonical_key")
-        now = timezone.now()
+        # Discard the legacy source-scoped canonical_key from the mapper —
+        # the ingest service builds its own source-independent one.
+        race_fields.pop("canonical_key", None)
+        race_identity = {
+            "office_title": race_fields["office_title"],
+            "ocd_division_id": race_fields.get("ocd_division_id", ""),
+            "race_type": race_fields["race_type"],
+        }
+        ingest_fields = {k: v for k, v in race_fields.items()
+                         if k not in {"office_title", "ocd_division_id", "race_type"}}
+        race_obj, race_was_new = ingest.ingest_race(
+            election=election_obj, source="ma_sos",
+            identity=race_identity, fields=ingest_fields,
+        )
+        race_created = 1 if race_was_new else 0
 
-        with transaction.atomic():
-            existing_keys = set(
-                Race.objects.filter(canonical_key=canonical_key).values_list("canonical_key", flat=True)
-            )
-            Race.objects.bulk_create(
-                [Race(canonical_key=canonical_key, election=election_obj, last_synced_at=now, **race_fields)],
-                update_conflicts=True,
-                update_fields=[
-                    "election", "race_type", "office_title", "normalized_office_title",
-                    "jurisdiction", "geography_scope", "certification_status", "source",
-                    "race_status", "vote_method", "max_selections", "ocd_division_id",
-                    "source_metadata", "last_synced_at",
-                ],
-                unique_fields=["canonical_key"],
-            )
-            race_created = 1 if canonical_key not in existing_keys else 0
-
-            race_obj = Race.objects.get(canonical_key=canonical_key)
-            MeasureOption.objects.get_or_create(race=race_obj, label="Yes")
-            MeasureOption.objects.get_or_create(race=race_obj, label="No")
+        MeasureOption.objects.get_or_create(race=race_obj, option_label="Yes")
+        MeasureOption.objects.get_or_create(race=race_obj, option_label="No")
 
         sync_log.records_created = race_created
         sync_log.status = SyncLog.Status.COMPLETED
