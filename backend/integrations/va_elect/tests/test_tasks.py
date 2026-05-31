@@ -2,11 +2,11 @@
 Unit tests for the va_elect Celery tasks.
 Django ORM + Celery are mocked — no DB required.
 """
-from contextlib import contextmanager
-from datetime import date
-from unittest.mock import MagicMock, call, patch
+from datetime import date as _date
+from unittest.mock import MagicMock, patch
 
 import pytest
+from django.test import override_settings
 
 from integrations.va_elect.tasks import sync_va_elections, sync_va_races
 
@@ -17,7 +17,7 @@ def _make_election_dict(slug="2025-November-General", idx=0):
         "source_id": f"va_elect_{slug}",
         "name": f"{slug} Election",
         "state": "VA",
-        "election_date": date(2025, 11, 4),
+        "election_date": _date(2025, 11, 4),
         "election_type": "general",
         "jurisdiction_level": "state",
         "status": "results_pending",
@@ -48,54 +48,34 @@ def test_sync_va_elections_no_slugs(db=None):
 
 
 def test_sync_va_elections_dispatches_subtasks(db=None):
-    """With 3 slugs, sync_va_elections dispatches 3 sync_va_races subtasks."""
-    from datetime import date
+    """sync_va_elections routes through ingest_election; queues one subtask per valid slug."""
+    mock_election_obj = MagicMock()
+    mock_election_obj.pk = 42
 
     with patch("integrations.va_elect.tasks.VaElectClient") as MockClient, \
          patch("integrations.va_elect.tasks.SyncLog") as MockLog, \
          patch("integrations.va_elect.tasks.sync_va_races") as mock_subtask, \
-         patch("integrations.va_elect.tasks.Election") as MockElection, \
-         patch("integrations.va_elect.tasks.map_election") as mock_map_election:
+         patch("aggregation.ingest.ingest_election", return_value=(mock_election_obj, True)) as mock_ingest:
 
         client = MockClient.return_value
         client.get_election_slugs.return_value = [
             "2025-November-General",
             "2025-June-Republican-Primary",
-            "2025-September-9-Special",
         ]
         client.get_election_metadata.return_value = {
             "electionDate": "2025-11-04",
-            "asOf": "2025-12-01T00:00:00Z",
-            "isOfficialResults": True,
+            "electionName": "2025 November General",
         }
-
-        mock_map_election.side_effect = [
-            _make_election_dict("2025-November-General"),
-            _make_election_dict("2025-June-Republican-Primary"),
-            _make_election_dict("2025-September-9-Special"),
-        ]
-
-        mock_election = MagicMock()
-        mock_election.pk = 42
-        mock_election.source_id = "va_elect_2025-November-General"
-        # bulk_create returns the objects list; Elections.objects.filter returns iterable
-        MockElection.objects.bulk_create.return_value = []
-        MockElection.objects.filter.return_value.values_list.return_value = []
-        mock_election2 = MagicMock()
-        mock_election2.pk = 43
-        mock_election2.source_id = "va_elect_2025-June-Republican-Primary"
-        mock_election3 = MagicMock()
-        mock_election3.pk = 44
-        mock_election3.source_id = "va_elect_2025-September-9-Special"
-        MockElection.objects.filter.return_value.__iter__ = lambda s: iter([mock_election, mock_election2, mock_election3])
 
         mock_log = MagicMock()
         MockLog.objects.create.return_value = mock_log
+        MockLog.Status.STARTED = "started"
+        MockLog.Status.COMPLETED = "completed"
 
         sync_va_elections()
 
-        # One apply_async per slug
-        assert mock_subtask.apply_async.call_count == 3
+    assert mock_ingest.call_count == 2
+    assert mock_subtask.apply_async.call_count == 2
 
 
 def test_sync_va_elections_records_error(db=None):
@@ -147,76 +127,65 @@ _DATA_PAYLOAD = {
 
 
 def test_sync_va_races_happy_path(db=None):
-    """sync_va_races fetches data, maps one candidate race, bulk-creates correctly."""
+    """sync_va_races routes candidate ballot items through ingest_race + ingest_candidate."""
+    data_payload = {
+        "ballotItems": [
+            {
+                "id": "item-001",
+                "contestType": "Candidate",
+                "name": [{"languageId": "en", "text": "Governor"}],
+                "summaryResults": {
+                    "ballotOptions": [
+                        {
+                            "name": [{"languageId": "en", "text": "Jane Smith"}],
+                            "nativeId": "cs1",
+                            "party": {"abbreviation": "D", "name": "Democratic"},
+                            "isWriteIn": False,
+                        }
+                    ]
+                },
+            }
+        ],
+    }
+
+    mock_election = MagicMock()
+    mock_election.pk = 42
+    mock_election.state = "VA"
+    mock_election.source_id = None
+    mock_election.canonical_key = "VA:general:2025-11-04:state"
+    mock_election.source_metadata = {"enr_slug": "2025-November-General"}
+    mock_election.status = "upcoming"
+
+    mock_race_obj = MagicMock()
+
     with patch("integrations.va_elect.tasks.VaElectClient") as MockClient, \
          patch("integrations.va_elect.tasks.SyncLog") as MockLog, \
          patch("integrations.va_elect.tasks.Election") as MockElection, \
-         patch("integrations.va_elect.tasks.Race") as MockRace, \
-         patch("integrations.va_elect.tasks.Candidate") as MockCandidate, \
-         patch("integrations.va_elect.tasks.MeasureOption"), \
-         patch("integrations.va_elect.tasks.map_race") as mock_map_race, \
-         patch("integrations.va_elect.tasks.map_candidate") as mock_map_candidate, \
-         patch("integrations.va_elect.tasks.transaction") as mock_tx:
+         patch("aggregation.ingest.ingest_race", return_value=(mock_race_obj, True)) as mock_ingest_race, \
+         patch("aggregation.ingest.ingest_candidate", return_value=(MagicMock(), True)) as mock_ingest_cand:
 
-        mock_tx.atomic.return_value.__enter__ = MagicMock(return_value=None)
-        mock_tx.atomic.return_value.__exit__ = MagicMock(return_value=False)
-
-        client = MockClient.return_value
-        client.get_election_data.return_value = _DATA_PAYLOAD
-
-        mock_election = MagicMock()
-        mock_election.pk = 42
-        mock_election.source_metadata = {"enr_slug": "2025-November-General"}
+        MockClient.return_value.get_election_data.return_value = data_payload
         MockElection.objects.get.return_value = mock_election
-
-        # Build a race mock whose race_type matches MockRace.RaceType.CANDIDATE
-        canonical_key = "va_elect:va_elect_2025-November-General:governor:statewide:nonpartisan"
-        mock_race_obj = MagicMock()
-        mock_race_obj.canonical_key = canonical_key
-        mock_race_obj.race_type = MockRace.RaceType.CANDIDATE  # same object = equality works
-
-        MockRace.objects.filter.return_value.values_list.return_value = []
-        MockRace.objects.filter.return_value.only.return_value = [mock_race_obj]
-        MockRace.objects.bulk_create.return_value = []
-        # Race(...) constructor call returns the mock race
-        MockRace.return_value = mock_race_obj
-
-        mock_map_race.return_value = {
-            "office_title": "Governor",
-            "race_type": MockRace.RaceType.CANDIDATE,
-            "source": MockRace.Source.VA_ELECT,
-            "canonical_key": canonical_key,
-            "source_metadata": {},
-            "geography_scope": "statewide",
-            "normalized_office_title": "governor",
-            "jurisdiction": "Virginia",
-            "certification_status": MockRace.CertificationStatus.RESULTS_PENDING,
-            "race_status": MockRace.RaceStatus.ACTIVE,
-            "vote_method": MockRace.VoteMethod.SINGLE_CHOICE,
-            "max_selections": 1,
-            "ocd_division_id": "",
-        }
-
-        mock_map_candidate.return_value = {
-            "party": "Democratic",
-            "incumbent": False,
-            "candidate_status": MagicMock(),
-            "source_metadata": {"enr_native_id": "cs1", "is_write_in": False},
-        }
-
-        mock_log = MagicMock()
-        MockLog.objects.create.return_value = mock_log
+        MockLog.objects.create.return_value = MagicMock()
+        MockLog.Status.STARTED = "started"
+        MockLog.Status.COMPLETED = "completed"
 
         sync_va_races(42, "2025-November-General")
 
-        MockCandidate.objects.bulk_create.assert_called_once()
-        mock_log.save.assert_called()
+    mock_ingest_race.assert_called_once()
+    call_kw = mock_ingest_race.call_args.kwargs
+    assert call_kw["source"] == "va_elect"
+    assert call_kw["identity"]["office_title"] == "Governor"
+
+    mock_ingest_cand.assert_called_once()
+    cand_kw = mock_ingest_cand.call_args.kwargs
+    assert cand_kw["name"] == "Jane Smith"
+    assert cand_kw["party"] == "Democratic"
 
 
 def test_sync_va_races_ballot_measure(db=None):
-    """sync_va_races creates MeasureOption rows for BallotMeasure contest type."""
+    """sync_va_races routes BallotMeasure items through ingest_race + MeasureOption.get_or_create."""
     measure_payload = {
-        "jurisdiction": {"bannerUrl": "d2c804ee/banner.png"},
         "ballotItems": [
             {
                 "id": "item-100",
@@ -226,74 +195,130 @@ def test_sync_va_races_ballot_measure(db=None):
                     "ballotOptions": [
                         {
                             "name": [{"languageId": "en", "text": "Yes"}],
-                            "voteCount": 1_000_000,
-                            "votePercent": 55.0,
-                            "isWinner": None,
-                            "isWriteIn": False,
                             "nativeId": "bms1",
                             "party": None,
+                            "isWriteIn": False,
                         }
                     ]
                 },
             }
         ],
-        "publicReportCategories": [],
     }
+
+    mock_election = MagicMock()
+    mock_election.pk = 10
+    mock_election.state = "VA"
+    mock_election.source_id = None
+    mock_election.canonical_key = "VA:general:2025-11-04:state"
+    mock_election.source_metadata = {"enr_slug": "2025-November-General"}
+    mock_election.status = "upcoming"
+
+    mock_race_obj = MagicMock()
 
     with patch("integrations.va_elect.tasks.VaElectClient") as MockClient, \
          patch("integrations.va_elect.tasks.SyncLog") as MockLog, \
          patch("integrations.va_elect.tasks.Election") as MockElection, \
-         patch("integrations.va_elect.tasks.Race") as MockRace, \
-         patch("integrations.va_elect.tasks.Candidate") as MockCandidate, \
          patch("integrations.va_elect.tasks.MeasureOption") as MockOption, \
-         patch("integrations.va_elect.tasks.map_race") as mock_map_race, \
-         patch("integrations.va_elect.tasks.map_measure_option") as mock_map_option, \
-         patch("integrations.va_elect.tasks.transaction") as mock_tx:
+         patch("aggregation.ingest.ingest_race", return_value=(mock_race_obj, True)) as mock_ingest_race, \
+         patch("aggregation.ingest.ingest_candidate") as mock_ingest_cand:
 
-        mock_tx.atomic.return_value.__enter__ = MagicMock(return_value=None)
-        mock_tx.atomic.return_value.__exit__ = MagicMock(return_value=False)
-
-        client = MockClient.return_value
-        client.get_election_data.return_value = measure_payload
-
-        mock_election = MagicMock()
-        mock_election.pk = 10
-        mock_election.source_metadata = {"enr_slug": "2025-November-General"}
+        MockClient.return_value.get_election_data.return_value = measure_payload
         MockElection.objects.get.return_value = mock_election
-
-        canonical_key = "va_elect:va_elect_2025-November-General:question 1:statewide:nonpartisan"
-        mock_race_obj = MagicMock()
-        mock_race_obj.canonical_key = canonical_key
-        mock_race_obj.race_type = MockRace.RaceType.MEASURE
-
-        MockRace.objects.filter.return_value.values_list.return_value = []
-        MockRace.objects.filter.return_value.only.return_value = [mock_race_obj]
-        MockRace.objects.bulk_create.return_value = []
-        MockRace.return_value = mock_race_obj
-
-        mock_map_race.return_value = {
-            "office_title": "Question 1",
-            "race_type": MockRace.RaceType.MEASURE,
-            "source": MockRace.Source.VA_ELECT,
-            "canonical_key": canonical_key,
-            "source_metadata": {},
-            "geography_scope": "statewide",
-            "normalized_office_title": "question 1",
-            "jurisdiction": "Virginia",
-            "certification_status": MockRace.CertificationStatus.RESULTS_PENDING,
-            "race_status": MockRace.RaceStatus.ACTIVE,
-            "vote_method": MockRace.VoteMethod.YES_NO,
-            "max_selections": 1,
-            "ocd_division_id": "",
-        }
-
-        mock_map_option.return_value = {"label": "Yes", "source_metadata": {"enr_native_id": "bms1"}}
-
-        mock_log = MagicMock()
-        MockLog.objects.create.return_value = mock_log
+        MockLog.objects.create.return_value = MagicMock()
+        MockLog.Status.STARTED = "started"
+        MockLog.Status.COMPLETED = "completed"
 
         sync_va_races(10, "2025-November-General")
 
-        MockOption.objects.bulk_create.assert_called_once()
-        # Candidate bulk_create should NOT be called for measure contests
-        MockCandidate.objects.bulk_create.assert_not_called()
+    mock_ingest_race.assert_called_once()
+    assert mock_ingest_race.call_args.kwargs["identity"]["race_type"] == "measure"
+    # MeasureOption.get_or_create called with option_label=, NOT label=
+    MockOption.objects.get_or_create.assert_called_once_with(
+        race=mock_race_obj, option_label="Yes"
+    )
+    # Candidate ingest must NOT be called for measure races
+    mock_ingest_cand.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Integration tests — ingest service routing (real DB)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+def test_sync_va_elections_routes_through_ingest_service():
+    """Each discovered VA election lands as a canonical Election with contributing_sources=['va_elect']."""
+    from aggregation.models import SourcePrecedence
+    from elections.models import Election, ElectionSourceLink
+
+    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+
+    fake_meta = {"electionDate": "2025-11-04", "electionName": "2025 VA General"}
+
+    with patch("integrations.va_elect.tasks.VaElectClient") as MockClient, \
+         patch("integrations.va_elect.tasks.sync_va_races"):
+        inst = MockClient.return_value
+        inst.get_election_slugs.return_value = ["2025-November-General"]
+        inst.get_election_metadata.return_value = fake_meta
+        sync_va_elections.run()
+
+    e = Election.objects.get(state="VA", election_date=_date(2025, 11, 4))
+    assert "va_elect" in e.contributing_sources
+    assert e.canonical_key.startswith("VA:")
+    link = ElectionSourceLink.objects.get(election=e, source="va_elect")
+    assert link.source_id == "va_elect_2025-November-General"
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+def test_sync_va_races_routes_through_ingest_service():
+    """sync_va_races writes canonical Race + Candidate via ingest (not bulk_create)."""
+    from aggregation.models import SourcePrecedence
+    from elections.models import Candidate, Election, Race
+
+    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+
+    e = Election.objects.create(
+        name="2025 VA General",
+        election_date=_date(2025, 11, 4),
+        election_type="general",
+        jurisdiction_level="state",
+        state="VA",
+        canonical_key="VA:general:2025-11-04:state",
+        source_metadata={"enr_slug": "2025-November-General"},
+        contributing_sources=["va_elect"],
+    )
+
+    fake_data = {
+        "ballotItems": [
+            {
+                "id": "item-001",
+                "contestType": "Candidate",
+                "name": [{"languageId": "en", "text": "Governor"}],
+                "summaryResults": {
+                    "ballotOptions": [
+                        {
+                            "name": [{"languageId": "en", "text": "Alice Johnson"}],
+                            "nativeId": "c1",
+                            "party": {"abbreviation": "D", "name": "Democratic"},
+                            "isWriteIn": False,
+                        }
+                    ]
+                },
+                "referendum": [],
+                "reportingUnits": None,
+            }
+        ]
+    }
+
+    with patch("integrations.va_elect.tasks.VaElectClient") as MockClient:
+        MockClient.return_value.get_election_data.return_value = fake_data
+        sync_va_races.run(e.pk, "2025-November-General")
+
+    race = Race.objects.filter(election=e).first()
+    assert race is not None
+    assert race.canonical_key.startswith("VA:general:2025-11-04:state|")
+    assert "va_elect" in race.contributing_sources
+    cands = list(Candidate.objects.filter(race=race))
+    assert len(cands) == 1
+    assert cands[0].name == "Alice Johnson"
