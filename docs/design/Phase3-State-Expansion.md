@@ -36,42 +36,37 @@ class XXAdapter(ClarityAdapter):
     state = "XX"
 ```
 
-**States to probe — verify Clarity before building:**
+**Probe results (completed 2026-05-31):**
 
-| State | Notes |
-|---|---|
-| NJ | Primary June 3 — probe immediately |
-| KY | High probability Clarity |
-| NV | High probability Clarity |
-| NH | High probability Clarity |
-| DE | High probability Clarity |
-| AK | High probability Clarity |
-| OK | High probability Clarity |
-| LA | High probability Clarity |
-| ND | Investigate |
-| WY | Investigate |
-| NE | Investigate |
-| MS | Investigate |
-| KS | Investigate |
-| IN | Investigate |
-| ID | Investigate |
-| MT | Investigate |
-| SD | Investigate |
-| RI | Investigate |
-| ME | Investigate |
-| AR | Investigate |
-| HI | Investigate |
-| VT | Investigate |
-| WI | Investigate |
+| State | Probe Result | Tier |
+|---|---|---|
+| NJ | ⚠️ County-level Clarity only — no state aggregator | B (Nov 2026) |
+| KY | ❌ nginx 403 — does NOT use Clarity | Needs research |
+| AR | ❌ nginx 403 — does NOT use Clarity | Needs research |
+| NV | ✅ Clarity confirmed | A |
+| NH | ✅ Clarity confirmed | A |
+| DE | ✅ Clarity confirmed | A |
+| AK | ✅ Clarity confirmed | A |
+| OK | ✅ Clarity confirmed | A |
+| LA | ✅ Clarity confirmed | A |
+| ND | ✅ Clarity confirmed | A |
+| WY | ✅ Clarity confirmed | A |
+| NE | ✅ Clarity confirmed | A |
+| MS | ✅ Clarity confirmed | A |
+| KS | ✅ Clarity confirmed | A |
+| IN | ✅ Clarity confirmed | A |
+| ID | ✅ Clarity confirmed | A |
+| MT | ✅ Clarity confirmed | A |
+| SD | ✅ Clarity confirmed | A |
+| RI | ✅ Clarity confirmed | A |
+| ME | ✅ Clarity confirmed | A |
+| HI | ✅ Clarity confirmed | A |
+| VT | ✅ Clarity confirmed | A |
+| WI | ✅ Clarity confirmed | A |
 
-**Probe command:**
-```bash
-# Replace STATE and electionId with a recent election from that state
-curl -s "https://results.enr.clarityelections.com/{STATE}/{electionId}/current_ver.txt"
-# Version string = Clarity confirmed. 404/empty = not on Clarity.
-```
+**20 Tier A adapters to build** (2-line each). **KY and AR** need a separate research pass to find their results system.
 
-After confirming:
+After confirming per state:
 1. Create `backend/results/adapters/XX.py`
 2. Set `results_url` in Django admin per election when that election goes live
 3. `poll-pending-results` picks it up automatically — no scheduler change needed
@@ -82,12 +77,13 @@ After confirming:
 
 Ordered by primary date.
 
-### NJ — New Jersey (June 3 primary — URGENT)
+### NJ — New Jersey (November 2026 general — Tier B)
 
-- Primary: June 3, 2026
-- **First:** Verify Clarity (probe `results.enr.clarityelections.com/NJ/...`). If confirmed → Tier A, ship today.
-- If not Clarity: source is `electionresults.nj.gov` — needs research
-- No existing `integrations/nj_*`
+- ~~June 3 primary~~ — too complex to ship in time; moved to November general target
+- **Finding (2026-05-31):** NJ uses Clarity at county level — 13 of 21 counties confirmed, no state-level aggregator. A thin `ClarityAdapter` won't work.
+- **Required:** Custom multi-county Clarity adapter that reads the per-county election IDs from `nj.gov/state/elections/election-night-results.shtml`, fetches each county's `summary.json`, and aggregates statewide vote totals.
+- June 3 county IDs documented in `docs/state-research/NJ/NJ-Election_Research.md`
+- **Adapter complexity:** Medium-high — parallel county fetches + vote aggregation across 13+ counties
 
 ### NY — New York (June 25 primary)
 
