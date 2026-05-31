@@ -16,15 +16,14 @@ Trigger endpoint: POST /internal/tasks/sync-va-elections/
 import logging
 
 from celery import shared_task
-from django.db import transaction
 from django.utils import timezone
 
-from elections.models import Candidate, Election, MeasureOption, Race
+from elections.models import Election, MeasureOption
 from ops.models import SyncLog
 
 from .client import VaElectClient
 from .exceptions import VaElectRetryableError
-from .mappers import _get_text, map_candidate, map_election, map_measure_option, map_race
+from .mappers import _get_text, map_candidate, map_election, map_race
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +31,8 @@ logger = logging.getLogger(__name__)
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_va_elections(self):
     """
-    Stage 1: Discover Virginia election slugs and upsert Election records.
-
-    For each discovered slug, fetches lightweight metadata from Enhanced Voting
-    and queues sync_va_races as a staggered subtask.
+    Stage 1: Discover Virginia election slugs and upsert Election records via
+    the aggregation ingest service. Queues sync_va_races for each election.
     """
     sync_log = SyncLog.objects.create(
         source="va_elect",
@@ -56,7 +53,9 @@ def sync_va_elections(self):
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return {"created": 0, "updated": 0, "queued": 0}
 
-        election_data: list[tuple[str, dict, str]] = []
+        from aggregation import ingest
+
+        election_objects: list[tuple[str, object]] = []  # (slug, election_obj)
 
         for slug in slugs:
             try:
@@ -73,42 +72,39 @@ def sync_va_elections(self):
                 continue
 
             source_id = mapped.pop("source_id")
-            election_data.append((source_id, {**mapped, "last_synced_at": timezone.now()}, slug))
+            identity = {
+                "state":              mapped["state"],
+                "election_type":      mapped["election_type"],
+                "election_date":      mapped["election_date"],
+                "jurisdiction_level": mapped["jurisdiction_level"],
+            }
+            fields = {k: v for k, v in mapped.items() if k not in identity}
+            enr_slug_value = (fields.get("source_metadata") or {}).get("enr_slug", "")
 
-        source_ids = [d[0] for d in election_data]
-
-        existing_source_ids = set(
-            Election.objects.filter(source_id__in=source_ids).values_list("source_id", flat=True)
-        ) if source_ids else set()
-
-        election_objects = [
-            Election(source_id=sid, **defaults)
-            for sid, defaults, _ in election_data
-        ]
-        if election_objects:
-            Election.objects.bulk_create(
-                election_objects,
-                update_conflicts=True,
-                update_fields=[
-                    "name", "election_date", "election_type", "jurisdiction_level",
-                    "state", "status", "source_metadata", "last_synced_at",
-                ],
-                unique_fields=["source_id"],
+            election_obj, was_created = ingest.ingest_election(
+                source="va_elect",
+                source_id=source_id,
+                identity=identity,
+                fields=fields,
             )
+            if was_created:
+                created_count += 1
+            else:
+                updated_count += 1
 
-        created_count = sum(1 for sid, _, _ in election_data if sid not in existing_source_ids)
-        updated_count = len(election_data) - created_count
+            # Force-write enr_slug to election.source_metadata even when a higher-
+            # precedence source (civic_api) owns the identity group — the VA results
+            # adapter and map_race both require enr_slug to be present there.
+            if enr_slug_value:
+                meta = dict(election_obj.source_metadata or {})
+                if not meta.get("enr_slug"):
+                    meta["enr_slug"] = enr_slug_value
+                    election_obj.source_metadata = meta
+                    election_obj.save(update_fields=["source_metadata"])
 
-        elections_by_source_id = {
-            e.source_id: e
-            for e in Election.objects.filter(source_id__in=source_ids)
-        } if source_ids else {}
+            election_objects.append((slug, election_obj))
 
-        for idx, (source_id, _, slug) in enumerate(election_data):
-            election_obj = elections_by_source_id.get(source_id)
-            if not election_obj:
-                logger.warning("va_elect.sync_elections.missing_pk source_id=%s", source_id)
-                continue
+        for idx, (slug, election_obj) in enumerate(election_objects):
             # Stagger subtasks at 5-second intervals — /data responses are 1–3 MB each.
             sync_va_races.apply_async(
                 args=[election_obj.pk, slug],
@@ -154,10 +150,8 @@ def sync_va_elections(self):
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_va_races(self, election_pk: int, slug: str):
     """
-    Stage 2: Fetch all ballotItems for one election and upsert Race + Candidate/MeasureOption.
-
-    All contests (statewide, district, ballot measures) are in the flat root-level
-    ballotItems[] array — no locality nesting.
+    Stage 2: Fetch all ballotItems for one election and upsert Race + Candidate/MeasureOption
+    via the aggregation ingest service.
     """
     try:
         election_obj = Election.objects.get(pk=election_pk)
@@ -172,145 +166,88 @@ def sync_va_races(self, election_pk: int, slug: str):
         status=SyncLog.Status.STARTED,
     )
     client = VaElectClient()
-    race_created = race_updated = cand_created = cand_updated = measure_created = measure_updated = 0
+    race_created = race_updated = cand_created = cand_updated = 0
 
     try:
         data = client.get_election_data(slug)
         ballot_items = data.get("ballotItems") or []
-        logger.info("va_elect.sync_races election=%s ballot_items=%d", election_obj.source_id, len(ballot_items))
+        logger.info("va_elect.sync_races election=%s ballot_items=%d",
+                    election_obj.source_id or election_obj.pk, len(ballot_items))
 
         if not ballot_items:
             sync_log.notes = "No ballot items in /data response"
             sync_log.status = SyncLog.Status.COMPLETED
             sync_log.completed_at = timezone.now()
             sync_log.save(update_fields=["notes", "status", "completed_at"])
-            return {"races": 0, "candidates": 0, "measure_options": 0}
+            return {"races": 0, "candidates": 0}
 
-        now = timezone.now()
-
-        race_objects: list[Race] = []
-        # Store per-race ballot_item for candidate/measure creation after bulk upsert
-        item_by_canonical_key: dict[str, dict] = {}
+        from aggregation import ingest
 
         for ballot_item in ballot_items:
             race_fields = map_race(election_obj, ballot_item)
-            canonical_key = race_fields.pop("canonical_key")
-            if not canonical_key:
-                logger.warning("va_elect.sync_races.null_key election=%s item_id=%s",
-                               election_obj.source_id, ballot_item.get("id"))
+            # Discard the legacy source-scoped canonical_key — ingest builds its own.
+            race_fields.pop("canonical_key", None)
+            # Ingest sets Race.source from contributing_sources precedence; don't pass it as a field.
+            race_fields.pop("source", None)
+
+            race_identity = {
+                "office_title":    race_fields.pop("office_title"),
+                "ocd_division_id": race_fields.pop("ocd_division_id", "") or "",
+                "race_type":       race_fields.pop("race_type"),
+            }
+            if not race_identity["office_title"]:
+                logger.warning(
+                    "va_elect.sync_races.null_title election=%s item_id=%s",
+                    election_obj.source_id or election_obj.pk, ballot_item.get("id"),
+                )
                 continue
 
-            race_objects.append(Race(
-                canonical_key=canonical_key,
+            race_obj, race_was_new = ingest.ingest_race(
                 election=election_obj,
-                last_synced_at=now,
-                **race_fields,
-            ))
-            item_by_canonical_key[canonical_key] = ballot_item
-
-        canonical_keys = [r.canonical_key for r in race_objects]
-
-        with transaction.atomic():
-            existing_race_keys = set(
-                Race.objects.filter(canonical_key__in=canonical_keys)
-                .values_list("canonical_key", flat=True)
-            ) if canonical_keys else set()
-
-            Race.objects.bulk_create(
-                race_objects,
-                update_conflicts=True,
-                update_fields=[
-                    "election", "race_type", "office_title", "normalized_office_title",
-                    "jurisdiction", "geography_scope", "certification_status", "source",
-                    "race_status", "vote_method", "max_selections", "ocd_division_id",
-                    "source_metadata", "last_synced_at",
-                ],
-                unique_fields=["canonical_key"],
+                source="va_elect",
+                identity=race_identity,
+                fields=race_fields,
             )
-            race_created = sum(1 for r in race_objects if r.canonical_key not in existing_race_keys)
-            race_updated = len(race_objects) - race_created
+            if race_was_new:
+                race_created += 1
+            else:
+                race_updated += 1
 
-            races_by_key: dict[str, Race] = {
-                r.canonical_key: r
-                for r in Race.objects.filter(canonical_key__in=canonical_keys).only("id", "canonical_key", "race_type")
-            } if canonical_keys else {}
+            ballot_options = (ballot_item.get("summaryResults") or {}).get("ballotOptions") or []
 
-            # --- Candidates ---
-            seen_cand_keys: set[tuple[int, str]] = set()
-            candidate_objects: list[Candidate] = []
-            measure_objects: list[MeasureOption] = []
+            if race_identity["race_type"] == "candidate":
+                seen_names: set[str] = set()
+                for opt in ballot_options:
+                    name = _get_text(opt.get("name") or [])
+                    if not name or name in seen_names:
+                        continue
+                    seen_names.add(name)
+                    cand_fields = map_candidate(opt)
+                    party = cand_fields.pop("party", "")
+                    _, cand_was_new = ingest.ingest_candidate(
+                        race=race_obj,
+                        source="va_elect",
+                        name=name,
+                        party=party,
+                        fields=cand_fields,
+                    )
+                    if cand_was_new:
+                        cand_created += 1
+                    else:
+                        cand_updated += 1
 
-            for canonical_key, ballot_item in item_by_canonical_key.items():
-                race = races_by_key.get(canonical_key)
-                if not race:
-                    continue
-
-                ballot_options = (ballot_item.get("summaryResults") or {}).get("ballotOptions") or []
-
-                if race.race_type == Race.RaceType.CANDIDATE:
-                    for opt in ballot_options:
-                        name = _get_text(opt.get("name") or [])
-                        if not name:
-                            continue
-                        cand_key = (race.id, name)
-                        if cand_key in seen_cand_keys:
-                            continue
-                        seen_cand_keys.add(cand_key)
-                        candidate_objects.append(Candidate(
-                            race=race,
-                            name=name,
-                            **map_candidate(opt),
-                        ))
-
-                elif race.race_type == Race.RaceType.MEASURE:
-                    for opt in ballot_options:
-                        label = _get_text(opt.get("name") or []) or opt.get("nativeId", "")
-                        if not label:
-                            continue
-                        measure_objects.append(MeasureOption(
-                            race=race,
-                            **map_measure_option(opt),
-                        ))
-
-            if candidate_objects:
-                existing_cand_keys = set(
-                    Candidate.objects.filter(race__in=list(races_by_key.values()))
-                    .values_list("race_id", "name")
-                )
-                cand_created = sum(
-                    1 for c in candidate_objects
-                    if (c.race.id, c.name) not in existing_cand_keys
-                )
-                cand_updated = len(candidate_objects) - cand_created
-                Candidate.objects.bulk_create(
-                    candidate_objects,
-                    update_conflicts=True,
-                    update_fields=["party", "incumbent", "candidate_status", "source_metadata"],
-                    unique_fields=["race", "name"],
-                )
-
-            if measure_objects:
-                existing_measure_keys = set(
-                    MeasureOption.objects.filter(race__in=list(races_by_key.values()))
-                    .values_list("race_id", "label")
-                )
-                measure_created = sum(
-                    1 for m in measure_objects
-                    if (m.race.id, m.label) not in existing_measure_keys
-                )
-                measure_updated = len(measure_objects) - measure_created
-                MeasureOption.objects.bulk_create(
-                    measure_objects,
-                    update_conflicts=True,
-                    update_fields=["source_metadata"],
-                    unique_fields=["race", "label"],
-                )
+            elif race_identity["race_type"] == "measure":
+                for opt in ballot_options:
+                    label = _get_text(opt.get("name") or []) or opt.get("nativeId", "")
+                    if not label:
+                        continue
+                    MeasureOption.objects.get_or_create(race=race_obj, option_label=label)
 
         election_obj.last_synced_at = timezone.now()
         election_obj.save(update_fields=["last_synced_at"])
 
-        sync_log.records_created = race_created + cand_created + measure_created
-        sync_log.records_updated = race_updated + cand_updated + measure_updated
+        sync_log.records_created = race_created + cand_created
+        sync_log.records_updated = race_updated + cand_updated
         sync_log.status = SyncLog.Status.COMPLETED
         sync_log.completed_at = timezone.now()
         sync_log.save(update_fields=["records_created", "records_updated", "status", "completed_at"])
@@ -318,7 +255,6 @@ def sync_va_races(self, election_pk: int, slug: str):
         return {
             "races": {"created": race_created, "updated": race_updated},
             "candidates": {"created": cand_created, "updated": cand_updated},
-            "measure_options": {"created": measure_created, "updated": measure_updated},
         }
 
     except VaElectRetryableError as exc:
@@ -331,7 +267,7 @@ def sync_va_races(self, election_pk: int, slug: str):
 
     except Exception as exc:
         logger.exception("va_elect.sync_races.failed election=%s slug=%s",
-                         getattr(election_obj, "source_id", "?"), slug)
+                         election_obj.source_id or election_obj.pk, slug)
         sync_log.error_count = 1
         sync_log.last_error = str(exc)
         sync_log.status = SyncLog.Status.FAILED

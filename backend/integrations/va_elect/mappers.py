@@ -187,7 +187,7 @@ def map_race(election_obj: Election, ballot_item: dict) -> dict:
                 break
 
     canonical_key = build_canonical_key(
-        election_obj.source_id,
+        election_obj.source_id or election_obj.canonical_key or "",
         office_title,
         district_label,
         contest_type,
@@ -240,7 +240,7 @@ def map_candidate(ballot_option: dict) -> dict:
 def map_measure_option(ballot_option: dict) -> dict:
     """Map a ballotOptions[] entry for a BallotMeasure to MeasureOption field values."""
     return {
-        "label": _get_text(ballot_option.get("name") or []) or ballot_option.get("nativeId", ""),
+        "option_label": _get_text(ballot_option.get("name") or []) or ballot_option.get("nativeId", ""),
         "source_metadata": {
             "enr_native_id": ballot_option.get("nativeId"),
         },

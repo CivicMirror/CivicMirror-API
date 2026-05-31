@@ -235,7 +235,7 @@ def test_sync_ma_elections_routes_through_ingest_service():
     from elections.models import Election, ElectionSourceLink
     from integrations.ma_sos.tasks import sync_ma_elections
 
-    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
 
     fake_rows = [
         {"election_id": 165300, "office": "President", "district": "Statewide",
@@ -311,7 +311,7 @@ def test_sync_ma_ballot_question_routes_through_ingest_service():
     from elections.models import Election, MeasureOption, Race
     from integrations.ma_sos.tasks import sync_ma_ballot_question
 
-    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
 
     # Pre-seed the BQ-parent Election so _get_or_create_bq_election finds it.
     e = Election.objects.create(
