@@ -3,10 +3,9 @@ Tests for the Colorado SOS mappers.
 """
 import calendar
 from datetime import date, timedelta
+from unittest.mock import MagicMock
 
 import pytest
-
-from unittest.mock import MagicMock
 
 from integrations.co_sos.mappers import (
     _first_tuesday_after_first_monday_of_november,
