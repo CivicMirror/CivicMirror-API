@@ -2,10 +2,9 @@ import logging
 from datetime import date as _date
 
 from celery import shared_task
-from django.db import transaction
 from django.utils import timezone
 
-from elections.models import Candidate, Election, MeasureOption, Race
+from elections.models import Election
 from ops.models import SyncLog
 
 from .client import VremsClient
@@ -29,11 +28,8 @@ _DEFAULT_YEARS = None  # resolved dynamically at task runtime — see sync_sc_el
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_sc_elections(self, years: list[int] | None = None):
     """
-    Stage 1: Fetch all SC elections from VREMS and upsert into the Election model.
-
-    For each election where filing is open, queues sync_sc_races as a staggered
-    subtask. Referendum elections (filingPeriodBeginDate=null) get Election records
-    but no race sync (no candidate data available from VREMS).
+    Stage 1: Fetch all SC elections from VREMS and upsert via the aggregation
+    ingest service. Queues sync_sc_races for elections where filing is open.
     """
     sync_log = SyncLog.objects.create(
         source="sc_vrems",
@@ -44,61 +40,57 @@ def sync_sc_elections(self, years: list[int] | None = None):
     created_count = updated_count = queued_count = skipped_count = 0
 
     try:
-        elections = client.get_all_elections(years=years or [_date.today().year, _date.today().year + 1])
+        elections = client.get_all_elections(
+            years=years or [_date.today().year, _date.today().year + 1]
+        )
         logger.info("sc_vrems.sync_elections found=%d", len(elections))
 
-        # Build all Election objects in memory first.
-        election_data: list[tuple[str, dict, dict]] = []
+        from aggregation import ingest
+
+        election_objects: list[tuple[object, dict]] = []  # (election_obj, vrems_election)
+
         for vrems_election in elections:
             mapped = map_election(vrems_election)
             source_id = mapped.pop("source_id")
-            election_data.append((source_id, {**mapped, "last_synced_at": timezone.now()}, vrems_election))
+            identity = {
+                "state":              mapped["state"],
+                "election_type":      mapped["election_type"],
+                "election_date":      mapped["election_date"],
+                "jurisdiction_level": mapped["jurisdiction_level"],
+            }
+            fields = {k: v for k, v in mapped.items() if k not in identity}
 
-        source_ids = [d[0] for d in election_data]
+            election_obj, was_created = ingest.ingest_election(
+                source="sc_vrems",
+                source_id=source_id,
+                identity=identity,
+                fields=fields,
+            )
+            if was_created:
+                created_count += 1
+            else:
+                updated_count += 1
+            election_objects.append((election_obj, vrems_election))
 
-        # Pre-fetch existing source_ids for create/update accounting (1 query).
-        existing_source_ids = set(
-            Election.objects.filter(source_id__in=source_ids).values_list("source_id", flat=True)
-        ) if source_ids else set()
-
-        # Bulk upsert all elections in one query.
-        election_objects = [
-            Election(source_id=sid, **defaults)
-            for sid, defaults, _ in election_data
-        ]
-        Election.objects.bulk_create(
-            election_objects,
-            update_conflicts=True,
-            update_fields=["name", "election_date", "jurisdiction_level", "state", "status", "last_synced_at"],
-            unique_fields=["source_id"],
-        )
-        created_count = sum(1 for sid, _, _ in election_data if sid not in existing_source_ids)
-        updated_count = len(election_data) - created_count
-
-        # Fetch back with PKs so subtasks can reference election.pk.
-        elections_by_source_id = {
-            e.source_id: e
-            for e in Election.objects.filter(source_id__in=source_ids)
-        } if source_ids else {}
-
-        for idx, (source_id, _, vrems_election) in enumerate(election_data):
+        for election_obj, vrems_election in election_objects:
             if is_referendum(vrems_election):
-                logger.debug("sc_vrems.skip_referendum election_id=%s name=%s", source_id, vrems_election.get("electionName"))
+                logger.debug(
+                    "sc_vrems.skip_referendum election_id=%s name=%s",
+                    vrems_election.get("electionId"),
+                    vrems_election.get("electionName"),
+                )
                 skipped_count += 1
                 continue
 
             if not is_filing_open(vrems_election):
-                logger.debug("sc_vrems.filing_not_open election_id=%s filing_opens=%s",
-                             source_id, vrems_election.get("filingPeriodBeginDate"))
+                logger.debug(
+                    "sc_vrems.filing_not_open election_id=%s filing_opens=%s",
+                    vrems_election.get("electionId"),
+                    vrems_election.get("filingPeriodBeginDate"),
+                )
                 skipped_count += 1
                 continue
 
-            election_obj = elections_by_source_id.get(source_id)
-            if not election_obj:
-                logger.warning("sc_vrems.sync_elections.missing_pk source_id=%s", source_id)
-                continue
-
-            # Stagger subtasks at 2-second intervals to avoid HTTP burst against VREMS.
             sync_sc_races.apply_async(
                 args=[election_obj.pk, vrems_election["electionId"]],
                 countdown=queued_count * 2,
@@ -115,8 +107,12 @@ def sync_sc_elections(self, years: list[int] | None = None):
             "records_created", "records_updated", "records_skipped",
             "notes", "status", "completed_at",
         ])
-        return {"created": created_count, "updated": updated_count,
-                "skipped": skipped_count, "queued": queued_count}
+        return {
+            "created": created_count,
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "queued": queued_count,
+        }
 
     except SCVremsRetryableError as exc:
         sync_log.error_count = 1
@@ -139,10 +135,8 @@ def sync_sc_elections(self, years: list[int] | None = None):
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_sc_races(self, election_pk: int, vrems_election_id: str | int):
     """
-    Stage 2: Fetch candidates from VREMS for one election and upsert Race + Candidate records.
-
-    Groups candidates into races using office + filing location + counties + party
-    (party partitioning is applied for primary elections so R/D primaries stay separate).
+    Stage 2: Fetch candidates from VREMS for one election and upsert Race + Candidate
+    records via the aggregation ingest service.
     """
     try:
         election_obj = Election.objects.get(pk=election_pk)
@@ -157,116 +151,94 @@ def sync_sc_races(self, election_pk: int, vrems_election_id: str | int):
         status=SyncLog.Status.STARTED,
     )
     client = VremsClient()
-    created_count = updated_count = 0
+    race_created = race_updated = cand_created = cand_updated = 0
 
     try:
         candidates = client.get_candidates(vrems_election_id)
-        logger.info("sc_vrems.sync_races election=%s candidates=%d",
-                    election_obj.source_id, len(candidates))
+        logger.info(
+            "sc_vrems.sync_races election=%s candidates=%d",
+            election_obj.source_id or election_obj.pk,
+            len(candidates),
+        )
 
         if not candidates:
-            logger.info("sc_vrems.sync_races.empty_table election=%s — filing may not be open yet",
-                        election_obj.source_id)
+            logger.info(
+                "sc_vrems.sync_races.empty_table election=%s — filing may not be open yet",
+                election_obj.source_id or election_obj.pk,
+            )
             sync_log.notes = "No candidates returned — filing period may not be open yet"
             sync_log.status = SyncLog.Status.COMPLETED
             sync_log.completed_at = timezone.now()
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return {"created": 0, "updated": 0}
 
-        # Build a lightweight election dict for grouping logic (only name is needed)
         vrems_election_stub = {"electionName": election_obj.name}
         race_groups = build_race_groups(vrems_election_stub, candidates)
 
-        now = timezone.now()
+        from aggregation import ingest
 
-        # --- Bulk upsert Races ---
-        race_objects: list[Race] = []
-        group_candidates_map: list[tuple[str, list]] = []
+        seen_race_pks: set[int] = set()
         for group in race_groups:
             race_defaults = map_race(election_obj, group)
-            canonical_key = race_defaults.pop("canonical_key")
-            if not canonical_key:
-                logger.warning("sc_vrems.sync_races.null_canonical_key election=%s office=%s",
-                               election_obj.source_id, race_defaults.get("office_title"))
+            # Discard the legacy source-scoped canonical_key — ingest builds its own.
+            race_defaults.pop("canonical_key", None)
+            # Ingest sets Race.source from contributing_sources precedence.
+            race_defaults.pop("source", None)
+            # Override source_metadata: use the known vrems_election_id from the task arg
+            # (not election.source_id which is NULL post-ingest), and drop party_group
+            # which is non-deterministic when R/D primary groups merge to one canonical Race.
+            meta = race_defaults.get("source_metadata", {})
+            race_defaults["source_metadata"] = {
+                "vrems_election_id": str(vrems_election_id),
+                "district": meta.get("district", ""),
+                "is_federal": meta.get("is_federal", False),
+            }
+
+            race_identity = {
+                "office_title":    race_defaults.pop("office_title"),
+                "ocd_division_id": race_defaults.pop("ocd_division_id", "") or "",
+                "race_type":       race_defaults.pop("race_type"),
+            }
+            if not race_identity["office_title"]:
+                logger.warning(
+                    "sc_vrems.sync_races.null_canonical_key election=%s office=%s",
+                    election_obj.source_id or election_obj.pk,
+                    race_defaults.get("normalized_office_title"),
+                )
                 continue
-            race_objects.append(Race(
-                canonical_key=canonical_key,
+
+            race_obj, race_was_new = ingest.ingest_race(
                 election=election_obj,
-                last_synced_at=now,
-                **race_defaults,
-            ))
-            group_candidates_map.append((canonical_key, group["candidates"]))
-
-        canonical_keys = [r.canonical_key for r in race_objects]
-
-        with transaction.atomic():
-            # Pre-fetch existing canonical_keys for accounting (1 query).
-            existing_race_keys = set(
-                Race.objects.filter(canonical_key__in=canonical_keys)
-                .values_list("canonical_key", flat=True)
-            ) if canonical_keys else set()
-
-            # Bulk upsert all races (1 query).
-            Race.objects.bulk_create(
-                race_objects,
-                update_conflicts=True,
-                update_fields=[
-                    "election", "race_type", "office_title", "jurisdiction",
-                    "geography_scope", "certification_status", "source",
-                    "race_status", "vote_method", "max_selections",
-                    "ocd_division_id", "normalized_office_title",
-                    "source_metadata", "last_synced_at",
-                ],
-                unique_fields=["canonical_key"],
+                source="sc_vrems",
+                identity=race_identity,
+                fields=race_defaults,
             )
-            race_created = sum(1 for r in race_objects if r.canonical_key not in existing_race_keys)
-            race_updated = len(race_objects) - race_created
+            if race_obj.pk not in seen_race_pks:
+                seen_race_pks.add(race_obj.pk)
+                if race_was_new:
+                    race_created += 1
+                else:
+                    race_updated += 1
 
-            # Fetch back with PKs for candidate assignment (1 query).
-            races_by_key: dict[str, Race] = {
-                r.canonical_key: r
-                for r in Race.objects.filter(canonical_key__in=canonical_keys).only("id", "canonical_key")
-            } if canonical_keys else {}
-
-            # --- Bulk upsert Candidates ---
-            # Build candidate list, deduplicating by (race_id, name) so ON CONFLICT
-            # is never asked to update the same target row twice in one statement.
-            seen_cand_keys: set[tuple[int, str]] = set()
-            candidate_objects: list[Candidate] = []
-            for canonical_key, vrems_candidates in group_candidates_map:
-                race = races_by_key.get(canonical_key)
-                if not race:
+            seen_names: set[str] = set()
+            for vc in group["candidates"]:
+                name = (vc.get("name_on_ballot") or "").strip()
+                if not name or name in seen_names:
                     continue
-                for vc in vrems_candidates:
-                    name = (vc.get("name_on_ballot") or "").strip()
-                    if not name:
-                        continue
-                    cand_key = (race.id, name)
-                    if cand_key in seen_cand_keys:
-                        continue
-                    seen_cand_keys.add(cand_key)
-                    candidate_objects.append(Candidate(race=race, name=name, **map_candidate(vc)))
-
-            if candidate_objects:
-                # Pre-fetch existing (race_id, name) pairs for accounting (1 query).
-                existing_cand_keys = set(
-                    Candidate.objects.filter(race__in=list(races_by_key.values()))
-                    .values_list("race_id", "name")
+                seen_names.add(name)
+                cand_fields = map_candidate(vc)
+                party = cand_fields.pop("party", "")
+                _, cand_was_new = ingest.ingest_candidate(
+                    race=race_obj,
+                    source="sc_vrems",
+                    name=name,
+                    party=party,
+                    fields=cand_fields,
                 )
-                cand_created = sum(
-                    1 for c in candidate_objects if (c.race.id, c.name) not in existing_cand_keys
-                )
-                cand_updated = len(candidate_objects) - cand_created
-
-                # Bulk upsert all candidates (1 query).
-                Candidate.objects.bulk_create(
-                    candidate_objects,
-                    update_conflicts=True,
-                    update_fields=["party", "incumbent", "candidate_status", "source_metadata"],
-                    unique_fields=["race", "name"],
-                )
-            else:
-                cand_created = cand_updated = 0
+                if cand_was_new:
+                    cand_created += 1
+                else:
+                    cand_updated += 1
 
         created_count = race_created + cand_created
         updated_count = race_updated + cand_updated
@@ -292,7 +264,10 @@ def sync_sc_races(self, election_pk: int, vrems_election_id: str | int):
         raise self.retry(exc=exc)
 
     except Exception as exc:
-        logger.exception("sc_vrems.sync_races.failed election=%s", election_obj.source_id)
+        logger.exception(
+            "sc_vrems.sync_races.failed election=%s",
+            getattr(election_obj, "source_id", None) or getattr(election_obj, "pk", "?"),
+        )
         sync_log.error_count = 1
         sync_log.last_error = str(exc)
         sync_log.status = SyncLog.Status.FAILED
