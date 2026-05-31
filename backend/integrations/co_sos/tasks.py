@@ -50,8 +50,8 @@ def _current_even_year() -> int:
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_co_elections(self):
     """
-    Stage 1: Seed Colorado Election records and queue Stage 2 if the
-    candidate list page has changed.
+    Stage 1: Seed Colorado Election records via the aggregation ingest service
+    and queue Stage 2 if the candidate list page has changed.
     """
     sync_log = SyncLog.objects.create(
         source="co_sos",
@@ -64,23 +64,37 @@ def sync_co_elections(self):
     try:
         year = _current_even_year()
 
-        # Seed Election records for the current even-year cycle
+        from aggregation import ingest
+
+        election_objs_by_type: dict[str, object] = {}
+
         for election_type in _ELECTION_TYPES:
             mapped = map_election(year, election_type)
             source_id = mapped.pop("source_id")
-            _, created = Election.objects.update_or_create(
+            identity = {
+                "state":              mapped["state"],
+                "election_type":      mapped["election_type"],
+                "election_date":      mapped["election_date"],
+                "jurisdiction_level": mapped["jurisdiction_level"],
+            }
+            fields = {k: v for k, v in mapped.items() if k not in identity}
+            election_obj, was_created = ingest.ingest_election(
+                source="co_sos",
                 source_id=source_id,
-                defaults={**mapped, "last_synced_at": timezone.now()},
+                identity=identity,
+                fields=fields,
             )
-            created_count += int(created)
-            updated_count += int(not created)
+            if was_created:
+                created_count += 1
+            else:
+                updated_count += 1
+            election_objs_by_type[election_type] = election_obj
 
         logger.info(
             "co_sos.sync_elections.seeded year=%d created=%d updated=%d",
             year, created_count, updated_count,
         )
 
-        # Check each election type for an updated candidate page
         for election_type in _ELECTION_TYPES:
             try:
                 fingerprint = client.get_candidate_page_fingerprint(election_type)
@@ -106,7 +120,7 @@ def sync_co_elections(self):
                 )
                 continue
 
-            election_obj = _resolve_election_for_type(election_type, year)
+            election_obj = election_objs_by_type.get(election_type)
             if election_obj is None:
                 logger.warning(
                     "co_sos.sync_elections.no_election_for_type election_type=%s year=%d",
@@ -141,17 +155,6 @@ def sync_co_elections(self):
         sync_log.completed_at = timezone.now()
         sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
         raise
-
-
-def _resolve_election_for_type(election_type: str, year: int) -> Election | None:
-    """Find the CO election matching the given type and year."""
-    return (
-        Election.objects.filter(
-            state="CO",
-            source_id=f"co_sos_{year}_{election_type}",
-        )
-        .first()
-    )
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from integrations.co_sos.tasks import _current_even_year, _resolve_election_for_type
+from integrations.co_sos.tasks import _current_even_year
 
 
 class TestCurrentEvenYear:
@@ -21,27 +21,6 @@ class TestCurrentEvenYear:
             mock_tz.localdate.return_value = date(2025, 5, 1)
             mock_tz.now = MagicMock()
             assert _current_even_year() == 2026
-
-
-@pytest.mark.django_db
-class TestResolveElectionForType:
-    def test_returns_none_when_no_matching_election(self):
-        result = _resolve_election_for_type("primary", 2026)
-        assert result is None
-
-    def test_returns_election_when_exists(self):
-        from elections.models import Election
-        election = Election.objects.create(
-            source_id="co_sos_2026_primary",
-            name="2026 Colorado Primary Election",
-            election_date=date(2026, 6, 30),
-            jurisdiction_level="state",
-            state="CO",
-            status=Election.Status.UPCOMING,
-        )
-        result = _resolve_election_for_type("primary", 2026)
-        assert result is not None
-        assert result.pk == election.pk
 
 
 @pytest.mark.django_db
@@ -64,7 +43,10 @@ class TestSyncCoElectionsTask:
             result = sync_co_elections.apply().get()
 
         assert result["created"] >= 1
-        assert Election.objects.filter(source_id="co_sos_2026_primary").exists()
+        from elections.models import ElectionSourceLink
+        assert ElectionSourceLink.objects.filter(
+            source="co_sos", source_id="co_sos_2026_primary"
+        ).exists()
         mock_stage2.delay.assert_called_once()
 
     def test_skips_candidates_when_page_unchanged(self):
