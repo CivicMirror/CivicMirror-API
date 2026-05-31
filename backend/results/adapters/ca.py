@@ -82,12 +82,15 @@ class CaliforniaAdapter(StateResultsAdapter):
                 notes=f"Election pk={election_id} not found",
             )
 
-        # Collect all CA SOS races for this election
+        # Collect all CA SOS races for this election.
+        # source_metadata__has_key='ca_endpoint' is the portable filter: only ca_sos
+        # writes this key, and the adapter requires it to fetch results — so this
+        # replaces both the legacy Race.source filter and the empty source_metadata exclude.
         races = list(
             Race.objects.filter(
                 election=election,
-                source=Race.Source.CA_SOS,
-            ).exclude(source_metadata={})
+                source_metadata__has_key='ca_endpoint',
+            )
         )
         if not races:
             logger.warning(
