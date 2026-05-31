@@ -1,11 +1,24 @@
 from django.db import migrations
 
-from ._seed_data import seed
+_SC_ROWS = [
+    ("SC", "results",  "sc_vrems",  0),
+    ("SC", "results",  "civic_api", 1),
+    ("SC", "date",     "sc_vrems",  0),
+    ("SC", "date",     "civic_api", 1),
+    ("SC", "contacts", "civic_api", 0),
+    ("SC", "contacts", "sc_vrems",  1),
+    ("SC", "identity", "civic_api", 0),
+    ("SC", "identity", "sc_vrems",  1),
+]
 
 
 def seed_sc_vrems_precedence(apps, schema_editor):
     SourcePrecedence = apps.get_model("aggregation", "SourcePrecedence")
-    seed(SourcePrecedence)
+    for state, field_group, source, rank in _SC_ROWS:
+        SourcePrecedence.objects.update_or_create(
+            state=state, field_group=field_group, source=source,
+            defaults={"rank": rank},
+        )
 
 
 def remove_sc_vrems_precedence(apps, schema_editor):
@@ -15,7 +28,7 @@ def remove_sc_vrems_precedence(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("aggregation", "0004_seed_va_precedence"),
+        ("aggregation", "0002_seed_precedence"),
     ]
 
     operations = [

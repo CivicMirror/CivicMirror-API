@@ -184,6 +184,15 @@ def sync_sc_races(self, election_pk: int, vrems_election_id: str | int):
             race_defaults.pop("canonical_key", None)
             # Ingest sets Race.source from contributing_sources precedence.
             race_defaults.pop("source", None)
+            # Override source_metadata: use the known vrems_election_id from the task arg
+            # (not election.source_id which is NULL post-ingest), and drop party_group
+            # which is non-deterministic when R/D primary groups merge to one canonical Race.
+            meta = race_defaults.get("source_metadata", {})
+            race_defaults["source_metadata"] = {
+                "vrems_election_id": str(vrems_election_id),
+                "district": meta.get("district", ""),
+                "is_federal": meta.get("is_federal", False),
+            }
 
             race_identity = {
                 "office_title":    race_defaults.pop("office_title"),
