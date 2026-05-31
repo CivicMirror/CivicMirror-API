@@ -15,7 +15,7 @@ def remove_co_sos_precedence(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("aggregation", "0005_seed_sc_vrems_precedence"),
+        ("aggregation", "0002_seed_precedence"),
     ]
 
     operations = [
