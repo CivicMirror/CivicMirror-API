@@ -26,7 +26,7 @@ class TestCurrentEvenYear:
 @pytest.mark.django_db
 class TestSyncCoElectionsTask:
     def test_seeds_election_and_queues_candidates_on_changed_page(self):
-        from elections.models import Election
+        from elections.models import ElectionSourceLink
         from integrations.co_sos.tasks import sync_co_elections
 
         fingerprint = "abc123"
@@ -43,7 +43,6 @@ class TestSyncCoElectionsTask:
             result = sync_co_elections.apply().get()
 
         assert result["created"] >= 1
-        from elections.models import ElectionSourceLink
         assert ElectionSourceLink.objects.filter(
             source="co_sos", source_id="co_sos_2026_primary"
         ).exists()
@@ -104,7 +103,7 @@ class TestSyncCoCandidatesTask:
         from elections.models import Candidate, Race
         from integrations.co_sos.tasks import sync_co_candidates
 
-        SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+        SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
         election = self._make_election()
 
         with (
@@ -145,12 +144,13 @@ def test_sync_co_elections_routes_through_ingest_service():
     from elections.models import ElectionSourceLink
     from integrations.co_sos.tasks import sync_co_elections
 
-    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
 
     with (
         patch("integrations.co_sos.tasks.ColoradoSosClient") as MockClient,
         patch("integrations.co_sos.tasks.cache") as mock_cache,
         patch("integrations.co_sos.tasks.sync_co_candidates"),
+        patch("integrations.co_sos.tasks._current_even_year", return_value=2026),
     ):
         MockClient.return_value.get_candidate_page_fingerprint.return_value = "fp123"
         mock_cache.get.return_value = None
@@ -170,7 +170,7 @@ def test_sync_co_candidates_routes_through_ingest_service():
     from elections.models import Candidate, Election, Race
     from integrations.co_sos.tasks import sync_co_candidates
 
-    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
 
     e = Election.objects.create(
         name="2026 Colorado Primary Election",
