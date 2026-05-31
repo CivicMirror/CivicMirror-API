@@ -18,13 +18,12 @@ from celery import shared_task
 from django.core.cache import cache
 from django.utils import timezone
 
-from elections.models import Candidate, Election, Race
+from elections.models import Candidate, Election
 from ops.models import SyncLog
 
 from .client import IowaSosClient
 from .exceptions import IowaSosRetryableError
 from .mappers import (
-    build_race_canonical_key,
     build_race_groups,
     map_candidate,
     map_election,
@@ -58,7 +57,9 @@ def sync_ia_elections(self):
     created_count = updated_count = queued_count = 0
 
     try:
-        # --- Track 1: parse calendar PDF → upsert Elections ---
+        from aggregation import ingest
+
+        # --- Track 1: parse calendar PDF → upsert Elections via ingest ---
         try:
             pdf_bytes = client.fetch_calendar_pdf()
             parsed_elections = parse_calendar_pdf(pdf_bytes)
@@ -68,15 +69,29 @@ def sync_ia_elections(self):
             logger.error("ia_sos.sync_elections.calendar_fetch_failed: %s", exc)
             parsed_elections = []
 
+        election_objs_by_type: dict[str, object] = {}
+
         for parsed in parsed_elections:
             mapped = map_election(parsed)
             source_id = mapped.pop("source_id")
-            _, created = Election.objects.update_or_create(
+            identity = {
+                "state":              mapped["state"],
+                "election_type":      mapped["election_type"],
+                "election_date":      mapped["election_date"],
+                "jurisdiction_level": mapped["jurisdiction_level"],
+            }
+            fields = {k: v for k, v in mapped.items() if k not in identity}
+            election_obj, was_created = ingest.ingest_election(
+                source="ia_sos",
                 source_id=source_id,
-                defaults={**mapped, "last_synced_at": timezone.now()},
+                identity=identity,
+                fields=fields,
             )
-            created_count += int(created)
-            updated_count += int(not created)
+            if was_created:
+                created_count += 1
+            else:
+                updated_count += 1
+            election_objs_by_type[mapped["election_type"]] = election_obj
 
         logger.info(
             "ia_sos.sync_elections.calendar created=%d updated=%d",
@@ -110,8 +125,7 @@ def sync_ia_elections(self):
                 )
                 continue
 
-            # Find or create the matching Election for this type
-            election_obj = _resolve_election_for_type(election_type)
+            election_obj = election_objs_by_type.get(election_type)
             if election_obj is None:
                 logger.warning(
                     "ia_sos.sync_elections.no_election_for_type election_type=%s "
@@ -149,29 +163,11 @@ def sync_ia_elections(self):
         raise
 
 
-def _resolve_election_for_type(election_type: str) -> Election | None:
-    """
-    Find the most relevant upcoming/active Iowa election matching the given type.
-    Looks for source_ids like 'ia_sos_2026_primary' in descending date order.
-    """
-    from django.utils import timezone as tz
-    today = tz.localdate()
-    return (
-        Election.objects.filter(
-            state="IA",
-            source_id__startswith="ia_sos_",
-            source_id__contains=election_type,
-            election_date__gte=today,
-        )
-        .order_by("election_date")
-        .first()
-    )
-
-
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_ia_candidates(self, election_pk: int, pdf_url: str, fingerprint: str, cache_key: str):
     """
-    Stage 2: Parse the Iowa SOS candidate list PDF and upsert Race + Candidate records.
+    Stage 2: Parse the Iowa SOS candidate list PDF and upsert Race + Candidate records
+    via the aggregation ingest service.
 
     After successful sync, updates the cache fingerprint so repeated runs
     do not re-fetch an unchanged PDF.
@@ -199,7 +195,7 @@ def sync_ia_candidates(self, election_pk: int, pdf_url: str, fingerprint: str, c
         if not candidates_raw:
             logger.info(
                 "ia_sos.sync_candidates.empty election=%s url=%s",
-                election_obj.source_id, pdf_url,
+                election_obj.source_id or election_obj.pk, pdf_url,
             )
             sync_log.notes = "No candidates parsed from PDF"
             sync_log.status = SyncLog.Status.COMPLETED
@@ -208,31 +204,56 @@ def sync_ia_candidates(self, election_pk: int, pdf_url: str, fingerprint: str, c
             return {"created": 0, "updated": 0, "withdrawn": 0}
 
         race_groups = build_race_groups(election_obj.name, candidates_raw)
+
+        from aggregation import ingest
+
         seen_candidate_pks: set[int] = set()
+        seen_race_pks: set[int] = set()
 
         for group in race_groups:
             race_defaults = map_race(election_obj, group)
-            canonical_key = race_defaults.pop("canonical_key")
+            race_defaults.pop("canonical_key", None)
+            race_defaults.pop("source", None)
 
-            race, race_created = Race.objects.update_or_create(
-                canonical_key=canonical_key,
-                defaults={"election": election_obj, **race_defaults, "last_synced_at": timezone.now()},
+            race_identity = {
+                "office_title":    race_defaults.pop("office_title"),
+                "ocd_division_id": race_defaults.pop("ocd_division_id", "") or "",
+                "race_type":       race_defaults.pop("race_type"),
+            }
+            if not race_identity["office_title"]:
+                continue
+
+            race_obj, race_was_new = ingest.ingest_race(
+                election=election_obj,
+                source="ia_sos",
+                identity=race_identity,
+                fields=race_defaults,
             )
-            created_count += int(race_created)
-            updated_count += int(not race_created)
+            if race_obj.pk not in seen_race_pks:
+                seen_race_pks.add(race_obj.pk)
+                if race_was_new:
+                    created_count += 1
+                else:
+                    updated_count += 1
 
             for raw_candidate in group["candidates"]:
                 name = (raw_candidate.get("candidate_name") or "").strip()
                 if not name:
                     continue
-                cand_obj, cand_created = Candidate.objects.update_or_create(
-                    race=race,
+                cand_fields = map_candidate(raw_candidate)
+                party = cand_fields.pop("party", "")
+                cand_obj, cand_was_new = ingest.ingest_candidate(
+                    race=race_obj,
+                    source="ia_sos",
                     name=name,
-                    defaults=map_candidate(raw_candidate),
+                    party=party,
+                    fields=cand_fields,
                 )
                 seen_candidate_pks.add(cand_obj.pk)
-                created_count += int(cand_created)
-                updated_count += int(not cand_created)
+                if cand_was_new:
+                    created_count += 1
+                else:
+                    updated_count += 1
 
         # Mark previously-active candidates no longer in the PDF as WITHDRAWN
         withdrawn_qs = (
@@ -247,20 +268,17 @@ def sync_ia_candidates(self, election_pk: int, pdf_url: str, fingerprint: str, c
         if withdrawn_count:
             logger.info(
                 "ia_sos.sync_candidates.withdrawn election=%s count=%d",
-                election_obj.source_id, withdrawn_count,
+                election_obj.source_id or election_obj.pk, withdrawn_count,
             )
 
         election_obj.last_synced_at = timezone.now()
         election_obj.save(update_fields=["last_synced_at"])
 
-        # Record the fingerprint so we skip unchanged PDFs in future runs
         cache.set(cache_key, fingerprint, _PDF_CACHE_TTL)
 
         sync_log.records_created = created_count
         sync_log.records_updated = updated_count
-        sync_log.notes = (
-            f"pdf_url={pdf_url} | withdrawn={withdrawn_count}"
-        )
+        sync_log.notes = f"pdf_url={pdf_url} | withdrawn={withdrawn_count}"
         sync_log.status = SyncLog.Status.COMPLETED
         sync_log.completed_at = timezone.now()
         sync_log.save(update_fields=[
@@ -277,7 +295,10 @@ def sync_ia_candidates(self, election_pk: int, pdf_url: str, fingerprint: str, c
         raise self.retry(exc=exc)
 
     except Exception as exc:
-        logger.exception("ia_sos.sync_candidates.failed election=%s", election_obj.source_id)
+        logger.exception(
+            "ia_sos.sync_candidates.failed election=%s",
+            getattr(election_obj, "source_id", None) or getattr(election_obj, "pk", "?"),
+        )
         sync_log.error_count = 1
         sync_log.last_error = str(exc)
         sync_log.status = SyncLog.Status.FAILED
