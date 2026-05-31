@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from elections.models import Candidate, Election, Race
+from elections.models import Candidate, Election, ElectionSourceLink, Race
 from ops.models import SyncLog
 
 # ---------------------------------------------------------------------------
@@ -44,7 +44,9 @@ def test_sync_ia_elections_creates_election(MockCache, mock_parse, MockClient):
     from integrations.ia_sos.tasks import sync_ia_elections
     result = sync_ia_elections()
 
-    assert Election.objects.filter(source_id="ia_sos_2026_primary").exists()
+    assert ElectionSourceLink.objects.filter(
+        source="ia_sos", source_id="ia_sos_2026_primary"
+    ).exists()
     assert result["created"] == 1
     assert result["updated"] == 0
 
@@ -63,7 +65,7 @@ def test_sync_ia_elections_idempotent(MockCache, mock_parse, MockClient):
     sync_ia_elections()
     result = sync_ia_elections()
 
-    assert Election.objects.filter(source_id="ia_sos_2026_primary").count() == 1
+    assert ElectionSourceLink.objects.filter(source="ia_sos", source_id="ia_sos_2026_primary").count() == 1
     assert result["updated"] == 1
 
 
@@ -85,19 +87,10 @@ def test_sync_ia_elections_queues_candidate_sync_on_new_pdf(
     MockClient.return_value.get_candidate_pdf_info.return_value = pdf_info
     MockCache.get.return_value = None  # no cached fingerprint → new PDF
 
-    # Ensure the election record exists so _resolve_election_for_type finds it
-    Election.objects.create(
-        source_id="ia_sos_2026_primary",
-        name="2026 Iowa Primary Election",
-        election_date=date(2026, 6, 2),
-        state="IA",
-        jurisdiction_level=Election.JurisdictionLevel.STATE,
-        status=Election.Status.UPCOMING,
-    )
-
     from integrations.ia_sos.tasks import sync_ia_elections
     result = sync_ia_elections()
 
+    # After ingest, election is looked up from the dict built in the ingest loop
     mock_sync_cands.delay.assert_called_once()
     assert result["queued"] == 1
 
@@ -154,16 +147,20 @@ def test_sync_ia_elections_records_synclog(MockCache, mock_parse, MockClient):
 @patch("integrations.ia_sos.tasks.cache")
 def test_sync_ia_candidates_creates_races_and_candidates(MockCache, mock_parse, MockClient):
     """Stage 2 should upsert Race + Candidate records from a candidate PDF."""
+    from aggregation.models import SourcePrecedence
     MockClient.return_value.fetch_pdf.return_value = b"%PDF"
     MockCache.get.return_value = None
 
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
     election = Election.objects.create(
-        source_id="ia_sos_2026_primary",
+        canonical_key="IA:primary:2026-06-02:state",
         name="2026 Iowa Primary Election",
         election_date=date(2026, 6, 2),
+        election_type="primary",
         state="IA",
         jurisdiction_level=Election.JurisdictionLevel.STATE,
         status=Election.Status.UPCOMING,
+        contributing_sources=["ia_sos"],
     )
 
     from integrations.ia_sos.tasks import sync_ia_candidates
@@ -187,16 +184,20 @@ def test_sync_ia_candidates_marks_withdrawn(MockCache, mock_parse, MockClient):
     """
     Candidates in the DB but absent from the latest PDF should be marked WITHDRAWN.
     """
+    from aggregation.models import SourcePrecedence
     MockClient.return_value.fetch_pdf.return_value = b"%PDF"
     MockCache.get.return_value = None
 
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
     election = Election.objects.create(
-        source_id="ia_sos_2026_primary",
+        canonical_key="IA:primary:2026-06-02:state",
         name="2026 Iowa Primary Election",
         election_date=date(2026, 6, 2),
+        election_type="primary",
         state="IA",
         jurisdiction_level=Election.JurisdictionLevel.STATE,
         status=Election.Status.UPCOMING,
+        contributing_sources=["ia_sos"],
     )
     race = Race.objects.create(
         election=election,
@@ -205,8 +206,9 @@ def test_sync_ia_candidates_marks_withdrawn(MockCache, mock_parse, MockClient):
         geography_scope="statewide",
         race_type=Race.RaceType.CANDIDATE,
         source=Race.Source.IA_SOS,
-        canonical_key="ia_sos:ia_sos_2026_primary:governor:statewide:dem",
+        canonical_key="IA:primary:2026-06-02:state|governor:statewide:candidate",
         certification_status=Race.CertificationStatus.UPCOMING,
+        contributing_sources=["ia_sos"],
     )
     # This candidate is in the DB but not in the next PDF run
     withdrawn = Candidate.objects.create(
@@ -243,12 +245,14 @@ def test_sync_ia_candidates_handles_empty_pdf(MockCache, mock_parse, MockClient)
     MockCache.get.return_value = None
 
     election = Election.objects.create(
-        source_id="ia_sos_2026_primary",
+        canonical_key="IA:primary:2026-06-02:state",
         name="2026 Iowa Primary Election",
         election_date=date(2026, 6, 2),
+        election_type="primary",
         state="IA",
         jurisdiction_level=Election.JurisdictionLevel.STATE,
         status=Election.Status.UPCOMING,
+        contributing_sources=["ia_sos"],
     )
 
     from integrations.ia_sos.tasks import sync_ia_candidates
@@ -269,3 +273,73 @@ def test_sync_ia_candidates_missing_election():
     from integrations.ia_sos.tasks import sync_ia_candidates
     result = sync_ia_candidates(99999, "https://sos.iowa.gov/elections/pdf/x.pdf", "", "key")
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Integration tests — ingest service routing (real DB)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_sync_ia_elections_routes_through_ingest_service():
+    """Each IA election lands as a canonical Election with contributing_sources=['ia_sos']."""
+    from aggregation.models import SourcePrecedence
+    from elections.models import ElectionSourceLink
+    from integrations.ia_sos.tasks import sync_ia_elections
+
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
+
+    with (
+        patch("integrations.ia_sos.tasks.IowaSosClient") as MockClient,
+        patch("integrations.ia_sos.tasks.parse_calendar_pdf", return_value=[PARSED_ELECTION]),
+        patch("integrations.ia_sos.tasks.cache") as mock_cache,
+        patch("integrations.ia_sos.tasks.sync_ia_candidates"),
+    ):
+        MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
+        MockClient.return_value.get_candidate_pdf_info.return_value = None
+        mock_cache.get.return_value = None
+        sync_ia_elections()
+
+    link = ElectionSourceLink.objects.filter(source="ia_sos", source_id="ia_sos_2026_primary").first()
+    assert link is not None
+    assert "ia_sos" in link.election.contributing_sources
+    assert link.election.canonical_key.startswith("IA:")
+
+
+@pytest.mark.django_db
+def test_sync_ia_candidates_routes_through_ingest_service():
+    """sync_ia_candidates writes canonical Race + Candidate via ingest."""
+    from aggregation.models import SourcePrecedence
+    from elections.models import Candidate, Election, Race
+    from integrations.ia_sos.tasks import sync_ia_candidates
+
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
+
+    e = Election.objects.create(
+        name="2026 Iowa Primary Election",
+        election_date=date(2026, 6, 2),
+        election_type="primary",
+        jurisdiction_level="state",
+        state="IA",
+        canonical_key="IA:primary:2026-06-02:state",
+        contributing_sources=["ia_sos"],
+    )
+
+    html = [
+        {"office": "Governor", "candidate_name": "Alice Johnson", "party": "DEM", "district": ""},
+    ]
+
+    with (
+        patch("integrations.ia_sos.tasks.IowaSosClient") as MockClient,
+        patch("integrations.ia_sos.tasks.parse_candidate_list_pdf", return_value=html),
+        patch("integrations.ia_sos.tasks.cache") as mock_cache,
+    ):
+        MockClient.return_value.fetch_pdf.return_value = b"%PDF"
+        mock_cache.set = MagicMock()
+        sync_ia_candidates(e.pk, "https://sos.iowa.gov/candidates.pdf", "fp123", "ia_sos:fingerprint:primary")
+
+    race = Race.objects.filter(election=e).first()
+    assert race is not None
+    assert "ia_sos" in race.contributing_sources
+    cands = list(Candidate.objects.filter(race=race))
+    assert len(cands) == 1
+    assert cands[0].name == "Alice Johnson"

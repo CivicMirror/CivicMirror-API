@@ -7,8 +7,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from elections.models import Election, Race
-from unittest.mock import MagicMock
-
 from integrations.ia_sos.mappers import (
     build_election_source_id,
     build_race_canonical_key,
