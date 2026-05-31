@@ -1,9 +1,11 @@
 """
 Tests for SC VREMS Celery tasks.
 """
+from datetime import date as _date
 from unittest.mock import patch
 
 import pytest
+from django.test import override_settings
 
 from elections.models import Candidate, Election, Race
 from ops.models import SyncLog
@@ -267,9 +269,6 @@ def test_sync_sc_races_vrems_status_in_metadata(MockClient):
 # ------------------------------------------------------------------
 # Integration tests — ingest service routing (real DB)
 # ------------------------------------------------------------------
-
-from datetime import date as _date
-from django.test import override_settings
 
 
 @pytest.mark.django_db
