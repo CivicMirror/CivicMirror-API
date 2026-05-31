@@ -29,7 +29,10 @@ def test_sync_sc_elections_creates_election(MockClient):
         from integrations.sc_vrems.tasks import sync_sc_elections
         result = sync_sc_elections()
 
-    assert Election.objects.filter(source_id="vrems_sc_22598").exists()
+    from elections.models import ElectionSourceLink
+    assert ElectionSourceLink.objects.filter(
+        source="sc_vrems", source_id="vrems_sc_22598"
+    ).exists()
     assert result["created"] == 1
     mock_races.apply_async.assert_called_once()
 
@@ -51,9 +54,10 @@ def test_sync_sc_elections_skips_referendum(MockClient):
         from integrations.sc_vrems.tasks import sync_sc_elections
         result = sync_sc_elections()
 
-    # Election record is still created
-    assert Election.objects.filter(source_id="vrems_sc_22700").exists()
-    # But no race sync is queued
+    from elections.models import ElectionSourceLink
+    assert ElectionSourceLink.objects.filter(
+        source="sc_vrems", source_id="vrems_sc_22700"
+    ).exists()
     mock_races.apply_async.assert_not_called()
     assert result["skipped"] == 1
 
@@ -75,7 +79,10 @@ def test_sync_sc_elections_skips_future_filing(MockClient):
         from integrations.sc_vrems.tasks import sync_sc_elections
         result = sync_sc_elections()
 
-    assert Election.objects.filter(source_id="vrems_sc_22741").exists()
+    from elections.models import ElectionSourceLink
+    assert ElectionSourceLink.objects.filter(
+        source="sc_vrems", source_id="vrems_sc_22741"
+    ).exists()
     mock_races.apply_async.assert_not_called()
     assert result["skipped"] == 1
 
@@ -109,7 +116,10 @@ def test_sync_sc_elections_idempotent(MockClient):
         sync_sc_elections()
         result2 = sync_sc_elections()
 
-    assert Election.objects.filter(source_id="vrems_sc_22598").count() == 1
+    from elections.models import ElectionSourceLink
+    assert ElectionSourceLink.objects.filter(
+        source="sc_vrems", source_id="vrems_sc_22598"
+    ).count() == 1
     assert result2["created"] == 0
     assert result2["updated"] == 1
 

@@ -29,11 +29,8 @@ _DEFAULT_YEARS = None  # resolved dynamically at task runtime — see sync_sc_el
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_sc_elections(self, years: list[int] | None = None):
     """
-    Stage 1: Fetch all SC elections from VREMS and upsert into the Election model.
-
-    For each election where filing is open, queues sync_sc_races as a staggered
-    subtask. Referendum elections (filingPeriodBeginDate=null) get Election records
-    but no race sync (no candidate data available from VREMS).
+    Stage 1: Fetch all SC elections from VREMS and upsert via the aggregation
+    ingest service. Queues sync_sc_races for elections where filing is open.
     """
     sync_log = SyncLog.objects.create(
         source="sc_vrems",
@@ -44,61 +41,57 @@ def sync_sc_elections(self, years: list[int] | None = None):
     created_count = updated_count = queued_count = skipped_count = 0
 
     try:
-        elections = client.get_all_elections(years=years or [_date.today().year, _date.today().year + 1])
+        elections = client.get_all_elections(
+            years=years or [_date.today().year, _date.today().year + 1]
+        )
         logger.info("sc_vrems.sync_elections found=%d", len(elections))
 
-        # Build all Election objects in memory first.
-        election_data: list[tuple[str, dict, dict]] = []
+        from aggregation import ingest
+
+        election_objects: list[tuple[object, dict]] = []  # (election_obj, vrems_election)
+
         for vrems_election in elections:
             mapped = map_election(vrems_election)
             source_id = mapped.pop("source_id")
-            election_data.append((source_id, {**mapped, "last_synced_at": timezone.now()}, vrems_election))
+            identity = {
+                "state":              mapped["state"],
+                "election_type":      mapped["election_type"],
+                "election_date":      mapped["election_date"],
+                "jurisdiction_level": mapped["jurisdiction_level"],
+            }
+            fields = {k: v for k, v in mapped.items() if k not in identity}
 
-        source_ids = [d[0] for d in election_data]
+            election_obj, was_created = ingest.ingest_election(
+                source="sc_vrems",
+                source_id=source_id,
+                identity=identity,
+                fields=fields,
+            )
+            if was_created:
+                created_count += 1
+            else:
+                updated_count += 1
+            election_objects.append((election_obj, vrems_election))
 
-        # Pre-fetch existing source_ids for create/update accounting (1 query).
-        existing_source_ids = set(
-            Election.objects.filter(source_id__in=source_ids).values_list("source_id", flat=True)
-        ) if source_ids else set()
-
-        # Bulk upsert all elections in one query.
-        election_objects = [
-            Election(source_id=sid, **defaults)
-            for sid, defaults, _ in election_data
-        ]
-        Election.objects.bulk_create(
-            election_objects,
-            update_conflicts=True,
-            update_fields=["name", "election_date", "jurisdiction_level", "state", "status", "last_synced_at"],
-            unique_fields=["source_id"],
-        )
-        created_count = sum(1 for sid, _, _ in election_data if sid not in existing_source_ids)
-        updated_count = len(election_data) - created_count
-
-        # Fetch back with PKs so subtasks can reference election.pk.
-        elections_by_source_id = {
-            e.source_id: e
-            for e in Election.objects.filter(source_id__in=source_ids)
-        } if source_ids else {}
-
-        for idx, (source_id, _, vrems_election) in enumerate(election_data):
+        for election_obj, vrems_election in election_objects:
             if is_referendum(vrems_election):
-                logger.debug("sc_vrems.skip_referendum election_id=%s name=%s", source_id, vrems_election.get("electionName"))
+                logger.debug(
+                    "sc_vrems.skip_referendum election_id=%s name=%s",
+                    vrems_election.get("electionId"),
+                    vrems_election.get("electionName"),
+                )
                 skipped_count += 1
                 continue
 
             if not is_filing_open(vrems_election):
-                logger.debug("sc_vrems.filing_not_open election_id=%s filing_opens=%s",
-                             source_id, vrems_election.get("filingPeriodBeginDate"))
+                logger.debug(
+                    "sc_vrems.filing_not_open election_id=%s filing_opens=%s",
+                    vrems_election.get("electionId"),
+                    vrems_election.get("filingPeriodBeginDate"),
+                )
                 skipped_count += 1
                 continue
 
-            election_obj = elections_by_source_id.get(source_id)
-            if not election_obj:
-                logger.warning("sc_vrems.sync_elections.missing_pk source_id=%s", source_id)
-                continue
-
-            # Stagger subtasks at 2-second intervals to avoid HTTP burst against VREMS.
             sync_sc_races.apply_async(
                 args=[election_obj.pk, vrems_election["electionId"]],
                 countdown=queued_count * 2,
@@ -115,8 +108,12 @@ def sync_sc_elections(self, years: list[int] | None = None):
             "records_created", "records_updated", "records_skipped",
             "notes", "status", "completed_at",
         ])
-        return {"created": created_count, "updated": updated_count,
-                "skipped": skipped_count, "queued": queued_count}
+        return {
+            "created": created_count,
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "queued": queued_count,
+        }
 
     except SCVremsRetryableError as exc:
         sync_log.error_count = 1
