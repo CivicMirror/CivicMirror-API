@@ -202,6 +202,7 @@ class Candidate(models.Model):
     contact_office = models.CharField(max_length=255, blank=True)
     normalized_party = models.CharField(max_length=40, blank=True)
     field_provenance = models.JSONField(default=dict, blank=True)
+    contributing_sources = models.JSONField(default=list, blank=True)
 
     class Meta:
         constraints = [
