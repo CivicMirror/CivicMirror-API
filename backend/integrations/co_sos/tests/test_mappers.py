@@ -3,6 +3,7 @@ Tests for the Colorado SOS mappers.
 """
 import calendar
 from datetime import date, timedelta
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -15,6 +16,7 @@ from integrations.co_sos.mappers import (
     co_election_date,
     map_candidate,
     map_election,
+    map_race,
 )
 
 
@@ -121,3 +123,46 @@ class TestMapCandidate:
         row = {"is_withdrawn": False, "is_write_in": False, "party": "Republican Party", "office": "Governor", "district": "Statewide"}
         result = map_candidate(row)
         assert result["party"] == "Republican Party"
+
+
+# ---------------------------------------------------------------------------
+# Mapper bug-fix tests (TDD: written before fixes applied)
+# ---------------------------------------------------------------------------
+
+class TestMapElectionIncludesElectionType:
+    def test_primary_election_type_present(self):
+        result = map_election(2026, "primary")
+        assert "election_type" in result, "map_election must include 'election_type'"
+        assert result["election_type"] == "primary"
+
+    def test_general_election_type_present(self):
+        result = map_election(2026, "general")
+        assert result["election_type"] == "general"
+
+
+class TestMapRaceNullSourceId:
+    def _make_election(self, source_id=None):
+        mock = MagicMock()
+        mock.source_id = source_id
+        mock.canonical_key = "CO:primary:2026-06-28:state"
+        mock.status = "upcoming"
+        return mock
+
+    def _race_group(self):
+        return {
+            "office": "Governor",
+            "district": "Statewide",
+            "party_group": "Democratic Party",
+            "candidates": [],
+        }
+
+    def test_map_race_does_not_crash_with_null_source_id(self):
+        result = map_race(self._make_election(source_id=None), self._race_group())
+        assert isinstance(result["canonical_key"], str)
+        assert "None" not in result["canonical_key"]
+
+    def test_map_race_source_metadata_election_id_not_none(self):
+        result = map_race(self._make_election(source_id=None), self._race_group())
+        election_id = result["source_metadata"]["co_sos_election_id"]
+        assert election_id is not None, "co_sos_election_id must not be None when source_id is None"
+        assert isinstance(election_id, str)

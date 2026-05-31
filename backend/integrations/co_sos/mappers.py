@@ -80,6 +80,7 @@ def map_election(year: int, election_type: str) -> dict:
         "source_id": build_election_source_id(year, election_type),
         "name": f"{year} Colorado {type_label} Election",
         "election_date": election_date,
+        "election_type": election_type,
         "jurisdiction_level": Election.JurisdictionLevel.STATE,
         "state": "CO",
         "status": infer_election_status(election_date),
@@ -164,6 +165,8 @@ def map_race(election_obj: Election, race_group: dict) -> dict:
         else Race.CertificationStatus.RESULTS_PENDING
     )
 
+    election_ref = election_obj.source_id or election_obj.canonical_key or ""
+
     return {
         "race_type": Race.RaceType.CANDIDATE,
         "office_title": office,
@@ -177,10 +180,10 @@ def map_race(election_obj: Election, race_group: dict) -> dict:
         "ocd_division_id": "",
         "normalized_office_title": normalize(office),
         "canonical_key": build_race_canonical_key(
-            election_obj.source_id, office, district, party_group
+            election_ref, office, district, party_group
         ),
         "source_metadata": {
-            "co_sos_election_id": election_obj.source_id,
+            "co_sos_election_id": election_ref,
             "district": district,
             "party_group": party_group,
             "is_federal": is_federal,
