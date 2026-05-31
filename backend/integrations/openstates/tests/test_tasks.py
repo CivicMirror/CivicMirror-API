@@ -87,6 +87,7 @@ def test_sync_openstates_legislators_updates_matching_candidate(mock_client_cls)
     assert result['updated'] == 1
     assert result['created'] == 0
     assert candidate.openstates_person_id == 'os-1'
+    assert 'openstates' in candidate.contributing_sources
     assert candidate.party == 'Democratic'
     assert candidate.website_url == 'https://alex.example.com'
     assert candidate.source_metadata['openstates']['person_id'] == 'os-1'
