@@ -116,15 +116,17 @@ Tracks Stage 1 (Election + Race Creation) and Stage 2 (Results Ingestion) implem
 |------|-------|----------------------------|-------------------------|-----------------------------|
 | **WV** | West Virginia | ✅ Complete | ✅ Complete (14 races in prod) | ✅ Complete — Clarity adapter (`wv.py`) |
 | **CO** | Colorado | ✅ Complete | ✅ Complete (races in prod) | ✅ Complete — Clarity adapter (`co.py`) |
-| **SC** | South Carolina | ✅ Complete — VREMS (`sync_sc_elections`) | ✅ Complete — VREMS (`sync_sc_races`); 122 elections/2026 incl. Local | ✅ Adapter built — Clarity (`sc.py`) |
-| **IA** | Iowa | ✅ Available | ⚠️ Bootstrap only (post-election) | ✅ Adapter built — Clarity (`ia.py`) |
-| **CA** | California | ✅ Available | ✅ 38 races in prod (Civic API + SOS REST) | ❌ No adapter |
+| **SC** | South Carolina | ✅ Complete — VREMS (`sync_sc_elections`) | ✅ Complete — VREMS (`sync_sc_races`); 122 elections/2026 incl. Local | ✅ Complete — Clarity (`sc.py`); `results_url` auto-set by SC ENR via ingest |
+| **IA** | Iowa | ✅ Complete | ✅ Complete — `sync_ia_candidates` (PDF candidate list, auto-synced) | ✅ Adapter built — Clarity (`ia.py`) |
+| **CA** | California | ✅ Complete — CA SOS (`sync_ca_elections`) | ✅ Complete — CA SOS (`sync_ca_races`); REST API endpoint catalog | ❌ No adapter (results filter bug pending — see Future-Features.md) |
 | **PA** | Pennsylvania | ✅ Available | ⚠️ Blocked (2026 data not yet published) | ❌ Pending Socrata adapter |
 | **MI** | Michigan | ✅ Available | ⚠️ Blocked (`michiganelections.io` 503) | ❌ Pending API recovery |
+| **VA** | Virginia | ✅ Complete — VA Elect (`sync_va_elections`) | ✅ Complete — VA Elect (`sync_va_races`); Enhanced Voting API | ❌ No adapter |
+| **MA** | Massachusetts | ✅ Complete — MA SOS (`sync_ma_elections`) | ✅ Complete — MA SOS (`sync_ma_races` + `sync_ma_ballot_question`) | ✅ Complete — electionstats CSV (`sync_ma_races` vote totals) |
 | All others | — | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter |
 
-**Full Coverage** (all three stages ✅): **WV**, **CO**, **SC**  
-**Adapter built, bootstrap path**: **IA** (needs `results_url` set in Django admin)  
+**Full Coverage** (all three stages ✅): **WV**, **CO**, **SC**, **MA**  
+**Adapter built, needs `results_url`**: **IA** (Clarity adapter exists; `results_url` auto-populated once SC ENR-style linking is added)  
 **Blocked adapters**: PA (data publication ~2-4 weeks), MI (API 503)
 
 ---
