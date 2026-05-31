@@ -1,5 +1,7 @@
 # Source Aggregation Layer — Implementation Plan (Phase 0 + 1)
 
+> ✅ **ARCHIVED — COMPLETED 2026-05-31** — Phase 0+1 fully shipped. Aggregation layer live in production. Phase 2 (all remaining adapters) also complete. This plan is kept for historical reference.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a source-agnostic aggregation layer that merges multiple sources onto one canonical Election→Race→Candidate tree with DB-configurable field-level precedence, and prove it end-to-end on California (Google Civic + CA SOS).

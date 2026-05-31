@@ -1,8 +1,8 @@
 # CivicMirror API — Phased Build Plan
 
-**Repo:** `tokendad/CivicMirror-API` (`/data/Projects/API-CivicMirror`)
+**Repo:** `tokendad/CivicMirror-API` (`/data/Projects/CivicMirror/CivicMirror-API`)
 **Companion app:** `/data/Projects/CivicMirror` (the frontend; its backend is our primary reference)
-**Status:** Phase 5 complete — OpenStates, FEC, and orchestrator integrations live.
+**Status:** All phases complete — API in production. Phase 2 aggregation layer fully shipped 2026-05-31.
 
 | Phase | Status | Commit |
 |---|---|---|
@@ -69,8 +69,8 @@ The CivicMirror frontend project (`/data/Projects/CivicMirror/backend`) already 
 | `/data/Projects/CivicMirror/backend/integrations/civic/mappers.py` | map_election_payload, map_contest_to_race_defaults, etc. |
 | `/data/Projects/CivicMirror/backend/integrations/civic/addresses.py` | REPRESENTATIVE_ADDRESSES |
 | `/data/Projects/CivicMirror/backend/integrations/civic/cache.py` | Voter info Redis cache |
-| `Docs/ADRs/ADR-001-API-Endpoint-Structure.md` | Endpoint layout |
-| `Docs/ADRs/ADR-002-Scheduler-Architecture.md` | Scheduler + OIDC auth |
+| `docs/adr/ADR-001-API-Endpoint-Structure.md` | Endpoint layout |
+| `docs/adr/ADR-002-Scheduler-Architecture.md` | Scheduler + OIDC auth |
 
 ---
 
@@ -348,7 +348,7 @@ VIP_GMAIL_WATCH_TOPIC        # projects/{project}/topics/civicmirror-vip-email
 GMAIL_WATCH_USER_ID          # civicmirror-vip@gmail.com
 ```
 
-See `Docs/ADRs/ADR-005-VIP-Email-Monitoring.md` for full architecture, parser code, and risk mitigation.
+See `docs/adr/ADR-005-VIP-Email-Monitoring.md` for full architecture, parser code, and risk mitigation.
 
 ---
 

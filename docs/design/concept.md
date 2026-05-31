@@ -7,7 +7,7 @@ companion_app: https://github.com/tokendad/CivicMirror
 
 # Election Data Aggregator — Concept
 
-> 🚧 **Status: Concept / Pre-development**
+> ✅ **Status: Production** — API deployed to Cloud Run (`civicmirror-api` + `civicmirror-worker`); all Phase 1–6 work complete. This document is the original concept; see `docs/design/BUILD-PLAN.md` for the full phased delivery history.
 
 ## Purpose
 
@@ -104,7 +104,7 @@ The data version is exposed at `/{state}/{electionId}/current_ver.txt`. Always f
 
 ### States Known to Use Clarity
 
-WV, CO, IA, SC, GA (partial), and others. Access varies — some states return 403; consult `Docs/State Research/` for per-state access status.
+WV, CO, IA, SC, GA (partial), and others. Access varies — some states return 403; consult `docs/state-research/` for per-state access status.
 
 ---
 
@@ -134,7 +134,7 @@ Background data ingestion uses **Google Cloud Scheduler** (not Celery Beat) to t
 
 | Job | Endpoint | Interval |
 |---|---|---|
-| Election sync | `POST /internal/tasks/sync-elections/` | Every 6 hours |
+| Election sync | `POST /internal/tasks/sync-elections/` | Every hour |
 | Results polling | `POST /internal/tasks/poll-results/` | Daily 06:00 UTC |
 
 Cloud Scheduler authenticates using OIDC (GCP service account). Local development uses a shared secret fallback (`INTERNAL_TASK_TOKEN` env var). Celery workers handle actual task execution and run as a separate Cloud Run service.
@@ -162,12 +162,12 @@ Local development uses `docker-compose.dev.yaml` with PostgreSQL, Redis, Django,
 
 ## Roadmap
 
-- [ ] Define canonical data schema / JSON structure
-- [ ] Prototype ingestion pipeline for Google Civic API
-- [ ] Add OpenStates and Ballotpedia adapters
-- [ ] Build normalization / deduplication layer
-- [ ] Expose unified REST API
-- [ ] CivicMirror integration
+- [x] Define canonical data schema / JSON structure
+- [x] Prototype ingestion pipeline for Google Civic API
+- [x] Add OpenStates and FEC adapters *(Ballotpedia: no free API found)*
+- [x] Build normalization / deduplication layer *(aggregation ingest service — Phase 2)*
+- [x] Expose unified REST API
+- [x] CivicMirror integration
 - [ ] Public API documentation
 
 --- 

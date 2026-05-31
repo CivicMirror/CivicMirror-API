@@ -9,7 +9,7 @@ Both the CivicMirror frontend and this API backend share the **`civicmirror-2026
 | Service | Description |
 |---|---|
 | `civicmirror-frontend` | CivicMirror web app (existing) |
-| `civicmirror-backend` | This Django/Celery API (new) |
+| `civicmirror-api` | This Django/Celery API (new) |
 | `civicmirror-worker` | Celery worker for background tasks (new) |
 
 Shared infrastructure (Cloud SQL, Memorystore, Artifact Registry) is reused where it already exists.
@@ -27,7 +27,7 @@ Shared infrastructure (Cloud SQL, Memorystore, Artifact Registry) is reused wher
 export PROJECT_ID=civicmirror-2026
 export REGION=us-central1
 export REPO=civicmirror-api
-export API_SERVICE=civicmirror-backend
+export API_SERVICE=civicmirror-api
 export WORKER_SERVICE=civicmirror-worker
 export FRONTEND_SERVICE=civicmirror-frontend   # existing frontend service
 export SCHEDULER_SA=civicmirror-scheduler
@@ -269,10 +269,10 @@ export API_URL=$(gcloud run services describe $API_SERVICE \
 ### Create scheduler jobs
 
 ```bash
-# sync-elections: every 6 hours
+# sync-elections: hourly
 gcloud scheduler jobs create http sync-elections \
   --location=$REGION \
-  --schedule="0 */6 * * *" \
+  --schedule="0 * * * *" \
   --uri="$API_URL/internal/tasks/sync-elections/" \
   --http-method=POST \
   --oidc-service-account-email=$SCHEDULER_SA_EMAIL \
@@ -296,10 +296,10 @@ gcloud scheduler jobs create http sync-openstates \
   --oidc-service-account-email=$SCHEDULER_SA_EMAIL \
   --oidc-token-audience="$API_URL/internal/tasks/sync-openstates/"
 
-# sync-fec: weekly Sunday 03:00 UTC (FEC data updates weekly)
+# sync-fec: every 6 hours
 gcloud scheduler jobs create http sync-fec \
   --location=$REGION \
-  --schedule="0 3 * * 0" \
+  --schedule="0 */6 * * *" \
   --uri="$API_URL/internal/tasks/sync-fec/" \
   --http-method=POST \
   --oidc-service-account-email=$SCHEDULER_SA_EMAIL \

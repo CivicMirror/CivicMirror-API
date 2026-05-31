@@ -1,7 +1,7 @@
 # Source Aggregation & Normalization Layer
 
 **Date:** 2026-05-27
-**Status:** Approved (design) — ground-up clean-schema approach; implementation plan covers Phase 0+1
+**Status:** ✅ Implemented — Phase 0+1 shipped; Phase 2 (all adapters) complete 2026-05-31
 **Area:** `backend/aggregation/` (new), `backend/elections/`, all source adapters under `backend/integrations/`, `backend/results/`
 
 ## Problem

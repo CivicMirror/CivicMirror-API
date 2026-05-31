@@ -1,7 +1,7 @@
 # Release idempotency locks on terminal task state
 
 **Date:** 2026-05-27
-**Status:** Approved
+**Status:** ✅ Implemented — lock-release callbacks live in `backend/internal/tasks.py`
 **Area:** `backend/internal/` task triggers & idempotency locks
 
 ## Problem

@@ -11,29 +11,6 @@ Each entry should answer: *what*, *where it'd land in the code*, *why*, and any
 
 ## Open
 
-### 2026-05-28 — Decision: keep non-migrated schedulers paused through Phase 2
-**What:** SC (VREMS/ENR), CO, IA, MA, VA, FEC, OpenStates, and `poll-pending-results`
-scheduler jobs stay paused for the duration of Phase 2 — no per-state "interim
-old-write mode" run. Only `sync-elections-hourly` (Civic) and `sync-ca-sos`
-remain enabled.
-
-**Why:** No users are impacted by missing data for those states. Keeps the DB
-clean (no source-siloed `canonical_key=NULL` rows produced by un-migrated
-adapters) and avoids per-state mini-cutovers — each state's Phase-2 PR can simply
-unpause its scheduler, trigger a sync, and verify against canonical rows.
-
-**Per-state Phase-2 PR checklist (template):**
-1. Rewrite the adapter's sync task(s) onto `aggregation.ingest`.
-2. Update tests (preserve behavioral intent; assert against canonical rows /
-   `ElectionSourceLink`).
-3. If results adapter exists for that state: switch its filter to
-   `contributing_sources__contains=[...]` (see the related follow-up below).
-4. Add any state-specific precedence rows to the seed.
-5. Merge → unpause that state's scheduler(s) → trigger → verify in API
-   (`canonical_key` set, `sources` contains the source).
-
----
-
 ### ~~2026-05-28 — Phase-2 follow-up: results adapters filter by `source`, not `contributing_sources`~~ ✅ FIXED 2026-05-31
 **Fixed in:** `backend/results/adapters/ca.py` and `backend/integrations/ca_sos/tasks.py`.
 Used `source_metadata__has_key='ca_endpoint'` (portable SQLite + PostgreSQL) rather than
@@ -87,4 +64,9 @@ after a sync.
 
 ## Done
 
-(none yet — move entries here with the commit/PR SHA when shipped)
+### 2026-05-28 — Decision: keep non-migrated schedulers paused through Phase 2
+**Completed 2026-05-31** — All Phase-2 adapters merged (PRs #3–#9). All 10 paused
+schedulers resumed. Phase 2 is complete.
+
+### ~~Phase-2 follow-up: results adapters filter by `source`, not `contributing_sources`~~ ✅ FIXED
+See entry above — fixed in `ab79ebe`.
