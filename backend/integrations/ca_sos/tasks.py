@@ -264,7 +264,7 @@ def sync_ca_races(self, election_pk: int, catalog_json: str, fingerprint: str):
         # Mark candidates absent from this run as WITHDRAWN
         withdrawn_qs = (
             Candidate.objects
-            .filter(race__election=election_obj, race__source="ca_sos")
+            .filter(race__election=election_obj, race__source_metadata__has_key='ca_endpoint')
             .exclude(pk__in=seen_candidate_pks)
             .filter(candidate_status=Candidate.CandidateStatus.RUNNING)
         )

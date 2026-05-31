@@ -34,23 +34,12 @@ unpause its scheduler, trigger a sync, and verify against canonical rows.
 
 ---
 
-### 2026-05-28 — Phase-2 follow-up: results adapters filter by `source`, not `contributing_sources`
-**Where:** `backend/results/adapters/ca.py:88`, `ma.py`, `va.py`, and any CO/IA Clarity
-results adapters that filter Races by `source=Race.Source.<X>`.
-
-**Why:** After the aggregation merge, `Race.source` is set to the highest-precedence
-contributing source for that race's *identity* group — not the originating adapter.
-For CA that means merged races have `source="civic_api"` even though CA SOS
-contributed; the CA results adapter's `Race.objects.filter(source=Race.Source.CA_SOS)`
-query then finds **zero races** to poll. Change to a `contributing_sources` JSON
-contains query, e.g. `.filter(contributing_sources__contains=["ca_sos"])`.
-
-**Hidden today:** `poll-pending-results` is currently paused as part of the Phase-1
-cutover. This bug bites the first time it's unpaused (or when any state's results
-adapter is exercised).
-
-**Scope:** Touch every results adapter that filters by `source`. Quick fix per
-adapter, plus a regression test that proves a merged race is found.
+### ~~2026-05-28 — Phase-2 follow-up: results adapters filter by `source`, not `contributing_sources`~~ ✅ FIXED 2026-05-31
+**Fixed in:** `backend/results/adapters/ca.py` and `backend/integrations/ca_sos/tasks.py`.
+Used `source_metadata__has_key='ca_endpoint'` (portable SQLite + PostgreSQL) rather than
+`contributing_sources__contains` (PostgreSQL-only). CA was the only results adapter with
+a `Race.source` filter — MA uses `electionstats_id`, VA uses `enr_slug`, CO/IA use
+ClarityAdapter (no source filter). Withdrawn-candidate sweep in `sync_ca_races` also fixed.
 
 ---
 
