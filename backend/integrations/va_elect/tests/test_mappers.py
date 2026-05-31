@@ -254,7 +254,7 @@ def test_map_measure_option_yes():
         "nativeId": "bms1",
     }
     result = map_measure_option(opt)
-    assert result["label"] == "Yes"
+    assert result["option_label"] == "Yes"
     assert result["source_metadata"]["enr_native_id"] == "bms1"
 
 
@@ -264,4 +264,34 @@ def test_map_measure_option_fallback_to_native_id():
         "nativeId": "bms2",
     }
     result = map_measure_option(opt)
-    assert result["label"] == "bms2"
+    assert result["option_label"] == "bms2"
+
+
+def test_map_measure_option_returns_option_label():
+    """map_measure_option must use option_label, matching the MeasureOption model field."""
+    opt = {"name": [{"languageId": "en", "text": "Yes"}], "nativeId": "bms1"}
+    result = map_measure_option(opt)
+    assert "option_label" in result, "must return 'option_label', not 'label'"
+    assert "label" not in result, "must not return bare 'label' key"
+    assert result["option_label"] == "Yes"
+
+
+def test_map_race_handles_null_source_id():
+    """map_race must not crash when election_obj.source_id is None (post-ingest elections)."""
+    mock_election = MagicMock()
+    mock_election.source_id = None
+    mock_election.canonical_key = "VA:general:2025-11-04:state"
+    mock_election.status = "upcoming"
+    mock_election.source_metadata = {"enr_slug": "2025-November-General"}
+
+    ballot_item = {
+        "id": "item-001",
+        "contestType": "Candidate",
+        "name": [{"languageId": "en", "text": "Governor"}],
+        "summaryResults": {"ballotOptions": []},
+        "referendum": [],
+        "reportingUnits": None,
+    }
+    result = map_race(mock_election, ballot_item)
+    assert isinstance(result["canonical_key"], str)
+    assert "None" not in result["canonical_key"]
