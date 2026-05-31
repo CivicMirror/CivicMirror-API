@@ -130,15 +130,33 @@ def poll_sc_enr_elections(self):
                     save_fields.append("election")
                     linked_count += 1
 
-                    # Propagate resolved URL → Election.results_url if not already set.
-                    if not election_obj.results_url:
-                        election_obj.results_url = enr_obj.enr_resolved_url
-                        election_obj.save(update_fields=["results_url"])
-                        logger.info(
-                            "sc_enr.results_url_set election_pk=%d url=%s",
-                            election_obj.pk,
-                            enr_obj.enr_resolved_url,
-                        )
+                    # Route results_url write through the aggregation ingest service
+                    # so precedence, contributing_sources, and ElectionSourceLink are
+                    # maintained consistently with other Phase-2 adapters.
+                    if enr_obj.enr_resolved_url:
+                        try:
+                            from aggregation import ingest
+                            ingest.ingest_election(
+                                source="sc_enr",
+                                source_id=f"sc_enr_{enr_obj.eid}",
+                                identity={
+                                    "state":              election_obj.state,
+                                    "election_type":      election_obj.election_type,
+                                    "election_date":      election_obj.election_date,
+                                    "jurisdiction_level": election_obj.jurisdiction_level,
+                                },
+                                fields={"results_url": enr_obj.enr_resolved_url},
+                            )
+                            logger.info(
+                                "sc_enr.results_url_set election_pk=%d url=%s",
+                                election_obj.pk,
+                                enr_obj.enr_resolved_url,
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "sc_enr.results_url_ingest_failed eid=%d error=%s",
+                                enr_obj.eid, exc,
+                            )
 
                 if save_fields:
                     enr_obj.save(update_fields=save_fields)

@@ -116,7 +116,7 @@ def test_poll_sc_enr_skips_resolve_if_url_already_set(mock_synclog, mock_client_
 @patch("integrations.sc_enr.tasks.ENRClient")
 @patch("integrations.sc_enr.tasks.SyncLog")
 def test_poll_sc_enr_propagates_results_url_when_linked(mock_synclog, mock_client_cls):
-    """Auto-linking a state ENRElection should copy enr_resolved_url → Election.results_url."""
+    """Auto-linking a state ENRElection should route results_url through ingest."""
     mock_client = MagicMock()
     mock_client_cls.return_value = mock_client
     mock_client.get_elections.return_value = [_make_feed_entry()]
@@ -124,12 +124,11 @@ def test_poll_sc_enr_propagates_results_url_when_linked(mock_synclog, mock_clien
 
     with patch("integrations.sc_enr.tasks.map_enr_election") as mock_map, \
          patch("integrations.sc_enr.tasks.ENRElection") as mock_enr, \
-         patch("integrations.sc_enr.tasks.attempt_election_link") as mock_link:
+         patch("integrations.sc_enr.tasks.attempt_election_link") as mock_link, \
+         patch("aggregation.ingest.ingest_election") as mock_ingest_election:
 
         mock_map.return_value = _make_mapped()
 
-        # Configure mock ENRElection choices to match real string values so
-        # tasks.py scope/confidence comparisons work correctly.
         mock_enr.Scope.STATE = "state"
         mock_enr.Scope.COUNTY = "county"
         mock_enr.LinkConfidence.MANUAL = "manual"
@@ -137,6 +136,7 @@ def test_poll_sc_enr_propagates_results_url_when_linked(mock_synclog, mock_clien
         mock_enr.LinkConfidence.AUTO = "auto"
 
         new_obj = MagicMock()
+        new_obj.eid = 130000
         new_obj.enr_resolved_url = ""
         new_obj.scope = "state"
         new_obj.election = None
@@ -150,11 +150,16 @@ def test_poll_sc_enr_propagates_results_url_when_linked(mock_synclog, mock_clien
         mock_election.pk = 9
         mock_election.results_url = ""
         mock_link.return_value = (mock_election, "auto")
+        mock_ingest_election.return_value = (mock_election, False)
 
         poll_sc_enr_elections()
 
-    assert mock_election.results_url == "https://www.enr-scvotes.org/SC/130000/web.777/"
-    mock_election.save.assert_called_once_with(update_fields=["results_url"])
+    # results_url write goes through ingest_election, not direct save
+    mock_election.save.assert_not_called()
+    mock_ingest_election.assert_called_once()
+    call_kwargs = mock_ingest_election.call_args.kwargs
+    assert call_kwargs["source"] == "sc_enr"
+    assert call_kwargs["fields"]["results_url"] == "https://www.enr-scvotes.org/SC/130000/web.777/"
 
 
 # ------------------------------------------------------------------
