@@ -25,7 +25,7 @@ from datetime import date
 from celery import shared_task
 from django.utils import timezone
 
-from elections.models import Candidate, Election, MeasureOption, Race
+from elections.models import Election, MeasureOption
 from ops.models import SyncLog
 
 from . import parsers
@@ -207,6 +207,7 @@ def sync_ma_races(self, election_pk: int, electionstats_id: int):
     race_created = race_updated = cand_created = cand_updated = 0
 
     try:
+
         csv_bytes = client.download_election_csv(electionstats_id, precincts=False)
         candidate_rows = parsers.parse_election_csv(csv_bytes)
 
