@@ -10,14 +10,6 @@ ROWS = [
     ("CA", "contacts", "ca_sos",    1),
     ("CA", "identity", "civic_api", 0),
     ("CA", "identity", "ca_sos",    1),
-    ("MA", "results",  "ma_sos",    0),
-    ("MA", "results",  "civic_api", 1),
-    ("MA", "date",     "ma_sos",    0),
-    ("MA", "date",     "civic_api", 1),
-    ("MA", "contacts", "civic_api", 0),
-    ("MA", "contacts", "ma_sos",    1),
-    ("MA", "identity", "civic_api", 0),
-    ("MA", "identity", "ma_sos",    1),
 ]
 
 

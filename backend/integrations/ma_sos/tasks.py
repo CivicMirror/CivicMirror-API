@@ -113,6 +113,13 @@ def sync_ma_elections(self):
             }
             # Everything else (name, status, source_metadata, …) becomes ingest fields.
             fields = {k: v for k, v in mapped.items() if k not in identity}
+            # Extract electionstats_id from fields before ingest — source_metadata may
+            # not be written back to election_obj if a higher-precedence source already
+            # owns the identity fields on an existing canonical election.
+            electionstats_id = (fields.get("source_metadata") or {}).get("electionstats_id")
+            if not electionstats_id:
+                skipped_count += 1
+                continue
             election_obj, was_created = ingest.ingest_election(
                 source="ma_sos", source_id=source_id, identity=identity, fields=fields,
             )
@@ -121,12 +128,8 @@ def sync_ma_elections(self):
             else:
                 updated_count += 1
 
-            electionstats_id = (election_obj.source_metadata or {}).get("electionstats_id")
-            if not electionstats_id:
-                skipped_count += 1
-                continue
             sync_ma_races.apply_async(
-                args=[election_obj.pk],
+                args=[election_obj.pk, electionstats_id],
                 countdown=idx * 3,
             )
             queued_count += 1
@@ -181,11 +184,11 @@ def sync_ma_elections(self):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def sync_ma_races(self, election_pk: int):
+def sync_ma_races(self, election_pk: int, electionstats_id: int):
     """
     Stage 2: Download election CSV, parse candidates, and upsert Race + Candidate records.
 
-    Looks up the election by PK, builds the CSV URL from source_metadata["electionstats_id"],
+    Looks up the election by PK, builds the CSV URL from the provided electionstats_id,
     parses candidate column headers and party row, then bulk-upserts.
     """
     try:
@@ -204,14 +207,6 @@ def sync_ma_races(self, election_pk: int):
     race_created = race_updated = cand_created = cand_updated = 0
 
     try:
-        electionstats_id = (election_obj.source_metadata or {}).get("electionstats_id")
-        if not electionstats_id:
-            sync_log.notes = "No electionstats_id in election.source_metadata"
-            sync_log.status = SyncLog.Status.COMPLETED_WITH_WARNINGS
-            sync_log.completed_at = timezone.now()
-            sync_log.save(update_fields=["notes", "status", "completed_at"])
-            return
-
         csv_bytes = client.download_election_csv(electionstats_id, precincts=False)
         candidate_rows = parsers.parse_election_csv(csv_bytes)
 
@@ -225,12 +220,14 @@ def sync_ma_races(self, election_pk: int):
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return
 
-        # Build the race row from the election's stored metadata
+        # Build the race row from stored metadata; fall back to empty strings if
+        # a higher-precedence source owns source_metadata on the canonical election.
+        meta = election_obj.source_metadata or {}
         election_row = {
             "election_id": electionstats_id,
-            "office": election_obj.source_metadata.get("office", ""),
-            "district": election_obj.source_metadata.get("district", ""),
-            "stage": election_obj.source_metadata.get("stage", "General"),
+            "office": meta.get("office", ""),
+            "district": meta.get("district", ""),
+            "stage": meta.get("stage", "General"),
         }
 
         # Infer office/district from election name if not in metadata

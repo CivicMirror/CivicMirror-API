@@ -140,7 +140,7 @@ def test_sync_ma_races_upserts_race_and_candidates(
 
     with patch("aggregation.ingest.ingest_race", return_value=(mock_race_obj, True)) as mock_ingest_race, \
          patch("aggregation.ingest.ingest_candidate", return_value=(MagicMock(), True)) as mock_ingest_cand:
-        sync_ma_races.run(1)
+        sync_ma_races.run(1, 165323)
 
     # Verify ingest_race was called once (one race per election CSV)
     mock_ingest_race.assert_called_once()
@@ -159,7 +159,7 @@ def test_sync_ma_races_missing_election_returns(mock_tz, mock_election_cls, mock
     mock_election_cls.objects.get.side_effect = RealElection.DoesNotExist()
     mock_tz.now.return_value = MagicMock()
 
-    result = sync_ma_races.run(99999)
+    result = sync_ma_races.run(99999, 12345)
     assert result is None
 
 
@@ -270,7 +270,7 @@ def test_sync_ma_races_routes_through_ingest_service():
     from elections.models import Candidate, Election, Race
     from integrations.ma_sos.tasks import sync_ma_races
 
-    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
 
     e = Election.objects.create(
         name="2024 MA U.S. House 1st Congressional General",
@@ -293,7 +293,7 @@ def test_sync_ma_races_routes_through_ingest_service():
     with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient:
         inst = MockClient.return_value
         inst.download_election_csv.return_value = fake_csv
-        sync_ma_races.run(e.pk)
+        sync_ma_races.run(e.pk, 165323)
 
     race = Race.objects.filter(election=e).first()
     assert race is not None
