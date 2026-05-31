@@ -2,6 +2,7 @@
 Tests for SC VREMS mappers.
 """
 from datetime import date
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -16,6 +17,7 @@ from integrations.sc_vrems.mappers import (
     map_candidate_status,
     map_election,
     map_jurisdiction_level,
+    map_race,
     normalize,
 )
 
@@ -229,3 +231,73 @@ def test_map_candidate_preserves_vrems_status():
     mapped = map_candidate(row)
     assert mapped["source_metadata"]["vrems_status"] == "Elected"
     assert mapped["candidate_status"] == Candidate.CandidateStatus.RUNNING
+
+
+# ------------------------------------------------------------------
+# Bug fixes: election_type in map_election; null source_id in map_race
+# ------------------------------------------------------------------
+
+def test_map_election_includes_election_type():
+    """map_election must return election_type for ingest identity."""
+    vrems = {
+        "electionId": "22598",
+        "electionName": "6/9/2026 Statewide Primary",
+        "displayName": "6/9/2026 Statewide Primary",
+        "electionDate": "2026-06-09",
+        "electionType": "General",
+    }
+    result = map_election(vrems)
+    assert "election_type" in result, "map_election must include 'election_type'"
+    assert result["election_type"] == "primary"
+
+
+def test_map_election_general_type():
+    """General elections map to 'general' election_type."""
+    vrems = {
+        "electionId": "22600",
+        "electionName": "11/3/2026 Statewide General",
+        "displayName": "11/3/2026 Statewide General",
+        "electionDate": "2026-11-03",
+        "electionType": "General",
+    }
+    result = map_election(vrems)
+    assert result["election_type"] == "general"
+
+
+def test_map_race_handles_null_source_id():
+    """map_race must not crash when election_obj.source_id is None."""
+    mock_election = MagicMock()
+    mock_election.source_id = None
+    mock_election.canonical_key = "SC:primary:2026-06-09:state"
+    mock_election.status = "upcoming"
+
+    race_group = {
+        "office": "Governor",
+        "filing_location": "State",
+        "associated_counties": "",
+        "party_group": "Republican",
+        "candidates": [],
+    }
+    result = map_race(mock_election, race_group)
+    assert isinstance(result["canonical_key"], str)
+    assert "None" not in result["canonical_key"]
+
+
+def test_map_race_source_metadata_no_none_election_id():
+    """map_race source_metadata must not store None for vrems_election_id."""
+    mock_election = MagicMock()
+    mock_election.source_id = None
+    mock_election.canonical_key = "SC:primary:2026-06-09:state"
+    mock_election.status = "upcoming"
+
+    race_group = {
+        "office": "Governor",
+        "filing_location": "State",
+        "associated_counties": "",
+        "party_group": "Republican",
+        "candidates": [],
+    }
+    result = map_race(mock_election, race_group)
+    vrems_id = result["source_metadata"]["vrems_election_id"]
+    assert vrems_id is not None, "vrems_election_id must not be None when source_id is None"
+    assert isinstance(vrems_id, str)
