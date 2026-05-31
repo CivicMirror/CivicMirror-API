@@ -58,7 +58,7 @@ def sync_openstates_legislators(self, state: str):
             enrichment_payload['name'] = mapped.get('display_name', '')
 
             try:
-                _, action = matcher.enrich_or_create(
+                candidate, action = matcher.enrich_or_create(
                     race=None,
                     source='openstates',
                     external_id=person_id,
@@ -79,6 +79,14 @@ def sync_openstates_legislators(self, state: str):
                 if action == 'ambiguous':
                     warning_count += 1
                     last_warning = f'Ambiguous candidate match for openstates:{person_id}'
+                candidate = None
+
+            if action in ('enriched', 'created') and candidate is not None:
+                sources = list(candidate.contributing_sources or [])
+                if 'openstates' not in sources:
+                    sources.append('openstates')
+                    candidate.contributing_sources = sources
+                    candidate.save(update_fields=['contributing_sources'])
 
         sync_log.records_updated = updated_count
         sync_log.records_skipped = skipped_count
