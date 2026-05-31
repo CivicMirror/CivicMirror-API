@@ -1,5 +1,7 @@
 # CO SOS Aggregation Migration Plan
 
+> ✅ **ARCHIVED — COMPLETED 2026-05-31** — Merged as PR #6. CO SOS adapter routes through aggregation ingest. Kept for historical reference.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Route the `co_sos` adapter through the aggregation ingest service, replacing `Election.objects.update_or_create` / `Race.objects.update_or_create` / `Candidate.objects.update_or_create` calls.

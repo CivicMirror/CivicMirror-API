@@ -1,5 +1,7 @@
 # CA Aggregation Cutover (Phase 1)
 
+> ✅ **COMPLETED 2026-05-31** — Phase 1 cutover executed. CA elections are live on canonical rows with `civic_api` + `ca_sos` contributing sources. Kept for reference.
+
 Run after the Phase 0+1 code is deployed. Destructive — confirm before each step.
 
 ## 1. Pause not-yet-migrated scheduler jobs
