@@ -165,6 +165,12 @@ def sync_fec_candidates(self, cycle_year: int | None = None):
                 candidate, action = candidate_matcher.enrich(race, 'fec', external_id, candidate_payload)
                 if action != 'enriched':
                     skipped_count += 1
+                if action == 'enriched' and candidate is not None:
+                    sources = list(candidate.contributing_sources or [])
+                    if 'fec' not in sources:
+                        sources.append('fec')
+                        candidate.contributing_sources = sources
+                        candidate.save(update_fields=['contributing_sources'])
                 _save_source_links(source_record, race=race, candidate=candidate)
 
         sync_log.records_created = created_count

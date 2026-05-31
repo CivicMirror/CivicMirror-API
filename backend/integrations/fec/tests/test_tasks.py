@@ -106,6 +106,7 @@ def test_sync_fec_candidates_enriches_candidate_and_links_source_record(settings
     assert candidate.fec_candidate_id == 'H4MA07001'
     assert source_record.linked_race == race
     assert source_record.linked_candidate == candidate
+    assert 'fec' in candidate.contributing_sources
 
 
 @pytest.mark.django_db
