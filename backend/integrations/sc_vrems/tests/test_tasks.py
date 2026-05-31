@@ -134,7 +134,7 @@ def test_sync_sc_elections_idempotent(MockClient):
 @patch("integrations.sc_vrems.tasks.VremsClient")
 def test_sync_sc_races_creates_race_and_candidates(MockClient):
     from aggregation.models import SourcePrecedence
-    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
 
     election = Election.objects.create(
         source_id="vrems_sc_22598",
@@ -182,7 +182,7 @@ def test_sync_sc_races_creates_race_and_candidates(MockClient):
 @patch("integrations.sc_vrems.tasks.VremsClient")
 def test_sync_sc_races_empty_table_logged(MockClient):
     from aggregation.models import SourcePrecedence
-    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
 
     election = Election.objects.create(
         source_id="vrems_sc_22741",
@@ -208,7 +208,7 @@ def test_sync_sc_races_empty_table_logged(MockClient):
 @patch("integrations.sc_vrems.tasks.VremsClient")
 def test_sync_sc_races_idempotent(MockClient):
     from aggregation.models import SourcePrecedence
-    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
 
     election = Election.objects.create(
         source_id="vrems_sc_22598",
@@ -239,7 +239,7 @@ def test_sync_sc_races_idempotent(MockClient):
 @patch("integrations.sc_vrems.tasks.VremsClient")
 def test_sync_sc_races_vrems_status_in_metadata(MockClient):
     from aggregation.models import SourcePrecedence
-    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
 
     election = Election.objects.create(
         source_id="vrems_sc_22598",
@@ -279,7 +279,7 @@ def test_sync_sc_elections_routes_through_ingest_service():
     from elections.models import Election, ElectionSourceLink
     from integrations.sc_vrems.tasks import sync_sc_elections
 
-    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
 
     vrems_data = [
         {
@@ -312,7 +312,7 @@ def test_sync_sc_races_routes_through_ingest_service():
     from elections.models import Candidate, Election, Race
     from integrations.sc_vrems.tasks import sync_sc_races
 
-    SourcePrecedence.objects.create(state="*", field_group="*", source="civic_api", rank=0)
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
 
     e = Election.objects.create(
         name="6/9/2026 Statewide Primary",
