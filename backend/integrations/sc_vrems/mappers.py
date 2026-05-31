@@ -44,6 +44,20 @@ def is_primary_election(election_name: str) -> bool:
     return "primary" in election_name.lower()
 
 
+def infer_election_type(election_name: str) -> str:
+    """Infer Election.ElectionType value from the election name string."""
+    name_lower = election_name.lower()
+    if "primary" in name_lower:
+        return "primary"
+    if "special" in name_lower:
+        return "special"
+    if "runoff" in name_lower:
+        return "other"
+    if "municipal" in name_lower:
+        return "municipal"
+    return "general"
+
+
 def map_jurisdiction_level(election_type: str, election_name: str) -> str:
     name_lower = election_name.lower()
     if any(kw in name_lower for kw in _FEDERAL_KEYWORDS):
@@ -78,6 +92,7 @@ def map_election(vrems_election: dict) -> dict:
         "source_id": f"vrems_sc_{vrems_election['electionId']}",
         "name": vrems_election.get("displayName") or election_name,
         "election_date": election_date,
+        "election_type": infer_election_type(election_name),
         "jurisdiction_level": map_jurisdiction_level(election_type, election_name),
         "state": "SC",
         "status": infer_election_status(election_date),
@@ -155,6 +170,8 @@ def map_race(election_obj: Election, race_group: dict) -> dict:
         else Race.CertificationStatus.RESULTS_PENDING
     )
 
+    election_ref = election_obj.source_id or election_obj.canonical_key or ""
+
     return {
         "race_type": Race.RaceType.CANDIDATE,
         "office_title": office,
@@ -168,10 +185,10 @@ def map_race(election_obj: Election, race_group: dict) -> dict:
         "ocd_division_id": "",
         "normalized_office_title": normalize(office),
         "canonical_key": build_canonical_key(
-            election_obj.source_id, office, filing_location, counties, party_group
+            election_ref, office, filing_location, counties, party_group
         ),
         "source_metadata": {
-            "vrems_election_id": election_obj.source_id,
+            "vrems_election_id": election_ref,
             "filing_location": filing_location,
             "associated_counties": counties,
             "party_group": party_group,
