@@ -132,13 +132,11 @@ def test_build_winner_set_none():
 # ---------------------------------------------------------------------------
 
 _TOWN_VOTES = {
-    "2": {"17127": [{"36347": {"V": "5290", "TO": "55.78%"}}]},  # Ansonia → SM Mayor
+    "2": {"17127": [{"36347": {"V": "5290", "TO": "55.78%"}}], "88888": []},  # Ansonia → SM Mayor + non-SM
     "4": {"17171": [{"37000": {"V": "3200", "TO": "60.00%"}}]},  # Avon → SM Mayor
     # officeID 99999 appears in two towns → multi-town, excluded
     "5": {"99999": []},
     "6": {"99999": []},
-    # officeID 88888 is single-town but non-SM → excluded
-    "2": {"17127": [{"36347": {"V": "5290", "TO": "55.78%"}}], "88888": []},
 }
 
 _TOWN_IDS = {"2": "Ansonia", "4": "Avon", "5": "Barkhamsted", "6": "Berlin"}
