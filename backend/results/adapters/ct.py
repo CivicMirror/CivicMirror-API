@@ -18,13 +18,14 @@ Required Election.source_metadata key:
     ct_election_id   str  PCC EMS election ID (e.g. "91", "97")
 
 Ingestion flow:
-    1. GET /election/{id}/Version.json       → {"Version": 70782}
+    1. GET /election/{id}/Version.json              → {"Version": 70782}
     2. Version cache check (unchanged → skip)
-    3. GET reports_Electiondata.json         → IO flag (certified = official)
-    4. GET Lookupdata.json                   → offices, candidates, parties (~1 MB)
-    5. GET stateVotes_Electiondata.json      → all vote totals
-    6. GET candidateGrouping_Electiondata.json → winner candidates per office
-    7. GET ballotQuestion_Electiondata.json  → statewide ballot measures
+    3. GET reports_Electiondata.json                → IO flag (certified = official)
+    4. GET Lookupdata.json                          → offices, candidates, parties (~1 MB)
+    5. GET stateVotes_Electiondata.json             → all vote totals
+    6. GET candidateGrouping_Electiondata.json      → winner candidates per office
+    7. GET ballotQuestion_Electiondata.json         → statewide ballot measures
+    8. GET townVotes_Electiondata.json              → town-to-office mapping for title disambiguation
 
 Version caching:
     Cache key:  ct_elect:ver:{election_pk}
@@ -36,10 +37,15 @@ Data quirks:
     - candidateGrouping defines winner set; offices absent from it → is_winner=None.
     - V/TO fields are strings ("5,290", "55.78%"); must be cleaned before parsing.
     - Candidate NM="." indicates anonymized / placeholder rows; they are skipped.
+    - Municipal elections have many offices with identical NM ("Mayor", "Town Council").
+      townVotes is used to build an office→town map; offices belonging to exactly one
+      town receive a qualified title ("{town} — {office}") and jurisdiction_fragment.
+      Multi-town/statewide offices (same officeID across several towns) are left as-is.
 """
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from typing import Optional
 
 import requests
@@ -51,7 +57,7 @@ from .registry import register
 logger = logging.getLogger(__name__)
 
 _EMS_BASE = "https://ctemspublic.tgstg.net/ng-app/data"
-_TIMEOUT_SHORT = 15   # Version.json
+_TIMEOUT_SHORT = 15   # Version.json, reports, ballot questions
 _TIMEOUT_LONG = 60    # Lookupdata.json (~1 MB), stateVotes (~250 KB)
 
 
@@ -103,20 +109,61 @@ def _build_winner_set(candidate_grouping: dict) -> tuple[set, set]:
     return winner_pairs, offices_with_winners
 
 
+def _build_office_town_map(town_votes: dict, town_ids: dict) -> dict:
+    """
+    Return {officeID: town_name} for offices that appear in exactly one town.
+
+    Municipal offices ("Mayor", "Town Council") belong to a single town and
+    need the town name prepended to their office title to avoid bootstrap
+    collisions when identically-named offices from different towns are ingested
+    into the same election.  Offices that span multiple towns (state legislators,
+    congressional races) are excluded — their office names already include a
+    district identifier.
+    """
+    office_towns: dict = defaultdict(set)
+    for town_id, offices in (town_votes or {}).items():
+        if isinstance(offices, dict):
+            for oid in offices.keys():
+                office_towns[str(oid)].add(str(town_id))
+
+    result: dict = {}
+    for oid, towns in office_towns.items():
+        if len(towns) == 1:
+            town_id = next(iter(towns))
+            town_name = (town_ids or {}).get(town_id, '').strip()
+            if town_name:
+                result[oid] = town_name
+    return result
+
+
 def _parse_state_votes(
     state_votes: dict,
     office_map: dict,
     candidate_map: dict,
     winner_pairs: set,
     offices_with_winners: set,
+    office_town_map: dict,
     result_type: str,
 ) -> list[ResultRow]:
-    """Convert stateVotes_Electiondata into ResultRow objects."""
+    """Convert stateVotes_Electiondata into ResultRow objects.
+
+    For municipal offices that belong to a single town, the office title is
+    qualified as "{town} — {office}" and jurisdiction_fragment is set to the
+    town name to prevent bootstrap collisions across identically-named races.
+    """
     rows: list[ResultRow] = []
     for oid, cand_list in state_votes.items():
         oid = str(oid)
         office_info = office_map.get(oid, {})
-        office_title = (office_info.get('NM') or '').strip() or None
+        base_title = (office_info.get('NM') or '').strip()
+
+        town_name = office_town_map.get(oid, '')
+        if town_name:
+            office_title = f"{town_name} — {base_title}" if base_title else town_name
+            jurisdiction_fragment = town_name
+        else:
+            office_title = base_title or None
+            jurisdiction_fragment = ''
 
         if not isinstance(cand_list, list):
             continue
@@ -145,6 +192,7 @@ def _parse_state_votes(
                     vote_pct=_safe_float(cv.get('TO')),
                     is_winner=is_winner,
                     result_type=result_type,
+                    jurisdiction_fragment=jurisdiction_fragment,
                     raw={'officeID': oid, 'candidateID': cid, 'OT': office_info.get('OT', '')},
                 ))
 
@@ -268,6 +316,12 @@ class ConnecticutAdapter(StateResultsAdapter):
             bq_resp.raise_for_status()
             ballot_questions = bq_resp.json()
 
+            tv_resp = requests.get(
+                f"{base}/townVotes_Electiondata.json", timeout=_TIMEOUT_LONG,
+            )
+            tv_resp.raise_for_status()
+            town_votes = tv_resp.json()
+
         except requests.RequestException as exc:
             logger.error(
                 "ct_elect.adapter.data_fetch_failed ct_id=%s ver=%s: %s",
@@ -281,12 +335,14 @@ class ConnecticutAdapter(StateResultsAdapter):
 
         office_map = _flatten_office_list(lookup.get('officeList', []))
         candidate_map = lookup.get('candidateIds', {})
+        town_ids = lookup.get('townIds', {})
         winner_pairs, offices_with_winners = _build_winner_set(candidate_grouping)
+        office_town_map = _build_office_town_map(town_votes, town_ids)
 
         # --- Parse ---------------------------------------------------------------
         rows = _parse_state_votes(
             state_votes, office_map, candidate_map,
-            winner_pairs, offices_with_winners, result_type,
+            winner_pairs, offices_with_winners, office_town_map, result_type,
         )
         rows += _parse_ballot_questions(ballot_questions, result_type)
 
