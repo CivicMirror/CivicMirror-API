@@ -7,10 +7,12 @@ Source: https://ctemspublic.tgstg.net  (AngularJS SPA, public, no auth)
 The EMS serves pre-generated static JSON files refreshed every ~3 minutes
 during live elections.  60+ elections are available from Nov 2016 onward.
 
-Migration note: CT purchased TotalVote (same vendor/API as the AR adapter) in
-June 2024.  Deployment timeline is TBD; the PCC EMS is confirmed active through
-Nov 2026.  When CT goes TotalVote, update source_metadata to use
-totalvote_election_id instead.
+Migration note: CT purchased TotalVote from KNOWiNK LLC in June 2024.
+TotalVote's ENR module exposes a multi-tenant REST API at
+enr-results-api.totalresults.com (public, no auth).  Deployment timeline is
+TBD; the PCC EMS is confirmed active through Nov 2026.  When CT goes TotalVote,
+set source_metadata["totalvote_election_id"] and switch to a TotalVote adapter
+targeting cId="connecticut" (or whatever slug CT is assigned).
 
 Required Election.source_metadata key:
     ct_election_id   str  PCC EMS election ID (e.g. "91", "97")
