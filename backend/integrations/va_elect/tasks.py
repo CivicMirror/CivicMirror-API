@@ -15,6 +15,7 @@ Trigger endpoint: POST /internal/tasks/sync-va-elections/
 """
 import logging
 
+import requests
 from celery import shared_task
 from django.utils import timezone
 
@@ -60,7 +61,7 @@ def sync_va_elections(self):
         for slug in slugs:
             try:
                 meta = client.get_election_metadata(slug)
-            except VaElectRetryableError as exc:
+            except (VaElectRetryableError, requests.exceptions.HTTPError) as exc:
                 logger.warning("va_elect.sync_elections.meta_failed slug=%s: %s", slug, exc)
                 skipped_count += 1
                 continue
