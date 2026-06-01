@@ -97,32 +97,54 @@ _GROUPING = {
     "16857": [{"35152": {"V": "208649", "TO": "63.14%"}}],
 }
 
+# Matching stateVotes with non-zero vote counts for both offices in _GROUPING
+_GROUPING_SV = {
+    "16524": [
+        {"35495": {"V": "953646", "TO": "55.83%"}},
+        {"35830": {"V": "678256", "TO": "39.70%"}},
+    ],
+    "16857": [
+        {"35152": {"V": "208649", "TO": "63%"}},
+        {"35153": {"V": "115065", "TO": "34.82%"}},
+    ],
+}
+
 
 def test_build_winner_set_pairs():
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _GROUPING_SV)
     assert ("16524", "35495") in pairs
     assert ("16857", "35152") in pairs
 
 
 def test_build_winner_set_offices():
-    _, offices = _build_winner_set(_GROUPING)
+    _, offices = _build_winner_set(_GROUPING, _GROUPING_SV)
     assert "16524" in offices
     assert "16857" in offices
 
 
 def test_build_winner_set_loser_not_in_pairs():
-    pairs, _ = _build_winner_set(_GROUPING)
+    pairs, _ = _build_winner_set(_GROUPING, _GROUPING_SV)
     assert ("16524", "99999") not in pairs
 
 
+def test_build_winner_set_zero_vote_office_excluded():
+    # Office 16524 in grouping but stateVotes has all-zero rows → must be excluded
+    sv_zeros = {
+        "16524": [{"35495": {"V": "0", "TO": "0%"}}, {"35830": {"V": "0", "TO": "0%"}}],
+    }
+    pairs, offices = _build_winner_set(_GROUPING, sv_zeros)
+    assert ("16524", "35495") not in pairs
+    assert "16524" not in offices
+
+
 def test_build_winner_set_empty():
-    pairs, offices = _build_winner_set({})
+    pairs, offices = _build_winner_set({}, {})
     assert pairs == set()
     assert offices == set()
 
 
 def test_build_winner_set_none():
-    pairs, offices = _build_winner_set(None)
+    pairs, offices = _build_winner_set(None, None)
     assert pairs == set()
     assert offices == set()
 
@@ -212,7 +234,7 @@ _STATE_VOTES = {
 
 
 def test_parse_state_votes_row_count():
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _STATE_VOTES)
     rows = _parse_state_votes(
         _STATE_VOTES, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
     )
@@ -220,7 +242,7 @@ def test_parse_state_votes_row_count():
 
 
 def test_parse_state_votes_office_title():
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _STATE_VOTES)
     rows = _parse_state_votes(
         _STATE_VOTES, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
     )
@@ -229,7 +251,7 @@ def test_parse_state_votes_office_title():
 
 
 def test_parse_state_votes_candidate_name():
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _STATE_VOTES)
     rows = _parse_state_votes(
         _STATE_VOTES, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
     )
@@ -240,7 +262,7 @@ def test_parse_state_votes_candidate_name():
 
 
 def test_parse_state_votes_vote_count_comma_stripped():
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _STATE_VOTES)
     rows = _parse_state_votes(
         _STATE_VOTES, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
     )
@@ -249,7 +271,7 @@ def test_parse_state_votes_vote_count_comma_stripped():
 
 
 def test_parse_state_votes_vote_pct():
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _STATE_VOTES)
     rows = _parse_state_votes(
         _STATE_VOTES, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
     )
@@ -258,7 +280,7 @@ def test_parse_state_votes_vote_pct():
 
 
 def test_parse_state_votes_winner_true_for_grouping_candidate():
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _STATE_VOTES)
     rows = _parse_state_votes(
         _STATE_VOTES, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
     )
@@ -267,7 +289,7 @@ def test_parse_state_votes_winner_true_for_grouping_candidate():
 
 
 def test_parse_state_votes_winner_false_for_loser():
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _STATE_VOTES)
     rows = _parse_state_votes(
         _STATE_VOTES, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
     )
@@ -277,7 +299,7 @@ def test_parse_state_votes_winner_false_for_loser():
 
 def test_parse_state_votes_winner_none_for_office_absent_from_grouping():
     # Presidential race (16518) is NOT in _GROUPING → is_winner should be None
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _STATE_VOTES)
     rows = _parse_state_votes(
         _STATE_VOTES, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
     )
@@ -286,20 +308,20 @@ def test_parse_state_votes_winner_none_for_office_absent_from_grouping():
 
 
 def test_parse_state_votes_winner_none_when_vote_count_zero():
-    # candidateGrouping may have placeholder entries before votes exist;
-    # is_winner must be None (not True/False) when vote_count == 0.
-    grouping = {"16524": [{"35495": {"V": "0", "TO": "0.00%"}}]}
-    pairs, offices = _build_winner_set(grouping)
+    # _build_winner_set excludes offices with all-zero votes, so winner_pairs is empty;
+    # _parse_state_votes must return is_winner=None for all rows.
     sv = {"16524": [
         {"35495": {"V": "0", "TO": "0.00%"}},
         {"35830": {"V": "0", "TO": "0.00%"}},
     ]}
+    grouping = {"16524": [{"35495": {"V": "0", "TO": "0.00%"}}]}
+    pairs, offices = _build_winner_set(grouping, sv)  # offices excluded — all zero votes
     rows = _parse_state_votes(sv, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official")
     assert all(r.is_winner is None for r in rows)
 
 
 def test_parse_state_votes_result_type():
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _STATE_VOTES)
     rows = _parse_state_votes(
         _STATE_VOTES, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
     )
@@ -307,7 +329,7 @@ def test_parse_state_votes_result_type():
 
 
 def test_parse_state_votes_unofficial_result_type():
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _STATE_VOTES)
     rows = _parse_state_votes(
         _STATE_VOTES, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "unofficial",
     )
@@ -316,13 +338,13 @@ def test_parse_state_votes_unofficial_result_type():
 
 def test_parse_state_votes_dot_candidate_skipped():
     sv = {"16524": [{"42781": {"V": "0", "TO": "0.00%"}}]}
-    pairs, offices = _build_winner_set({})
+    pairs, offices = _build_winner_set({}, {})
     rows = _parse_state_votes(sv, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official")
     assert rows == []
 
 
 def test_parse_state_votes_empty():
-    pairs, offices = _build_winner_set({})
+    pairs, offices = _build_winner_set({}, {})
     rows = _parse_state_votes({}, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official")
     assert rows == []
 
@@ -333,7 +355,7 @@ def test_parse_state_votes_municipal_title_qualified_with_town():
     sv = {"17127": [{"36347": {"V": "5290", "TO": "55.78%"}}]}
     office_town_map = {"17127": "Ansonia"}
 
-    pairs, offices = _build_winner_set({})
+    pairs, offices = _build_winner_set({}, {})
     rows = _parse_state_votes(
         sv, municipal_office_map, municipal_candidate_map,
         pairs, offices, office_town_map, "official",
@@ -343,7 +365,7 @@ def test_parse_state_votes_municipal_title_qualified_with_town():
 
 
 def test_parse_state_votes_statewide_title_unqualified():
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _STATE_VOTES)
     rows = _parse_state_votes(
         {"16524": [{"35495": {"V": "100", "TO": "55%"}}]},
         _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
@@ -353,7 +375,7 @@ def test_parse_state_votes_statewide_title_unqualified():
 
 
 def test_parse_state_votes_raw_contains_office_id():
-    pairs, offices = _build_winner_set(_GROUPING)
+    pairs, offices = _build_winner_set(_GROUPING, _STATE_VOTES)
     rows = _parse_state_votes(
         {"16524": [{"35495": {"V": "100", "TO": "100.0%"}}]},
         _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
@@ -456,6 +478,32 @@ def test_parse_ballot_questions_dash_value_skipped():
 
 def test_parse_ballot_questions_empty():
     assert _parse_ballot_questions({}, _TOWN_NAME_SET, "official") == []
+
+
+def test_parse_ballot_questions_statewide_question_not_duplicated_as_town_row():
+    # When stateVotes has a statewide question AND the same question appears under
+    # a town key (per-town breakdown), only the State Wide row should be produced.
+    data = {
+        "State Wide": [{"QN": "Shall the Constitution be amended?", "YES": "843153", "NO": "610694", "NTH": "-", "NTL": "-"}],
+        "Andover": [{"QN": "Shall the Constitution be amended?", "YES": "1200", "NO": "800", "NTH": "-", "NTL": "-"}],
+    }
+    rows = _parse_ballot_questions(data, _TOWN_NAME_SET, "official")
+    # Only 2 rows (YES+NO from State Wide); Andover breakdown is skipped
+    assert len(rows) == 2
+    assert all(r.jurisdiction_fragment == "" for r in rows)
+
+
+def test_parse_ballot_questions_unique_town_question_not_skipped():
+    # A town question with different text from statewide questions must NOT be skipped
+    data = {
+        "State Wide": [{"QN": "Statewide question", "YES": "100", "NO": "50", "NTH": "-", "NTL": "-"}],
+        "Andover": [{"QN": "Local liquor question", "YES": "200", "NO": "150", "NTH": "-", "NTL": "-"}],
+    }
+    rows = _parse_ballot_questions(data, _TOWN_NAME_SET, "official")
+    # 2 from State Wide + 2 from Andover = 4
+    assert len(rows) == 4
+    andover_rows = [r for r in rows if r.jurisdiction_fragment == "Andover"]
+    assert len(andover_rows) == 2
 
 
 # ---------------------------------------------------------------------------
