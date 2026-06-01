@@ -163,7 +163,7 @@ class ArkansasAdapter(StateResultsAdapter):
             )
 
         meta = election.source_metadata or {}
-        cid = (meta.get('totalvote_cid') or _DEFAULT_CID).strip()
+        cid = (str(meta.get('totalvote_cid') or '') or _DEFAULT_CID).strip()
         tr_id = str(meta.get('totalvote_election_id', '')).strip()
 
         if not tr_id:
@@ -269,7 +269,7 @@ class ArkansasAdapter(StateResultsAdapter):
                     "ar_elect.adapter.granular_fetch_failed contestType=%s: %s",
                     ct, exc,
                 )
-                continue
+                raise
 
             contests = (r.json().get('response') or {}).get('contests') or {}
             if not isinstance(contests, dict):
@@ -285,6 +285,7 @@ class ArkansasAdapter(StateResultsAdapter):
                     choice_info = choice_name_map.get(choice_id, {})
                     candidate_name = (choice_info.get('name') or '').strip() or None
                     is_write_in = bool(choice_info.get('isWriteIn', False))
+                    raw_winner = choice.get('isWinner')
 
                     rows.append(ResultRow(
                         office_title=office,
@@ -292,7 +293,7 @@ class ArkansasAdapter(StateResultsAdapter):
                         option_label=None,
                         vote_count=_safe_int(choice.get('totalVotes', 0)),
                         vote_pct=_safe_float(choice.get('votePercent')),
-                        is_winner=choice.get('isWinner'),
+                        is_winner=bool(raw_winner) if raw_winner is not None else None,
                         result_type=result_type,
                         is_write_in_aggregate=is_write_in,
                         raw={
