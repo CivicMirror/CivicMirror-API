@@ -50,3 +50,4 @@ South Dakota's SOS website provides county-level historical results via download
 
 ## Total Vote system found,  but gated behind a login
 https://sdtest.totalvote.com/Login.aspx?ReturnUrl=%2fReports%2fReportViewer.aspx%3fRptID%3dcurrentcandidates&RptID=currentcandidates
+https://cfr.totalvote.com/   *test site?*
