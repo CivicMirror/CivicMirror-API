@@ -42,7 +42,7 @@ class XXAdapter(ClarityAdapter):
 |---|---|---|
 | NJ | ⚠️ County-level Clarity only — no state aggregator | B (Nov 2026) |
 | KY | ❌ nginx 403 — does NOT use Clarity | Needs research |
-| AR | ❌ nginx 403 — does NOT use Clarity | Needs research |
+| AR | ❌ nginx 403 — does NOT use Clarity → TotalVote/TotalResults REST API | ✅ Tier B complete (PR #10, 2026-06-01) |
 | NV | ✅ Clarity confirmed | A |
 | NH | ✅ Clarity confirmed | A |
 | DE | ✅ Clarity confirmed | A |
@@ -64,7 +64,7 @@ class XXAdapter(ClarityAdapter):
 | VT | ✅ Clarity confirmed | A |
 | WI | ✅ Clarity confirmed | A |
 
-**20 Tier A adapters to build** (2-line each). **KY and AR** need a separate research pass to find their results system.
+**19 Tier A adapters to build** (2-line each). **KY** needs a separate research pass to find its results system. **AR** resolved — TotalVote/TotalResults Tier B adapter shipped (PR #10).
 
 After confirming per state:
 1. Create `backend/results/adapters/XX.py`
@@ -134,7 +134,7 @@ After summer primaries are covered, build for the November 2026 general election
 | **OH** | XLSX downloads (DATA Act 2023) | Daily county snapshots from 88 counties |
 | **PA** | Socrata `data.pa.gov` | Awaiting 2026 data publication |
 | **IL** | `elections.il.gov` Vote Total Search | 1998–present |
-| **CT** | Socrata `data.ct.gov` | Historical 1787+; verify Clarity too |
+| **CT** | ~~Socrata `data.ct.gov`~~ PCC EMS `ctemspublic.tgstg.net` | ✅ Custom adapter shipped (PR #11, 2026-06-01). TotalVote transition expected pre-Nov 2026; repoint `source_metadata` to `totalvote_election_id` when live. |
 | **MN** | Downloads + interactive dashboard | `sos.mn.gov` |
 | **OR** | Downloads | High ballot-measure activity |
 

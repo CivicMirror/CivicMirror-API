@@ -123,9 +123,12 @@ Tracks Stage 1 (Election + Race Creation) and Stage 2 (Results Ingestion) implem
 | **MI** | Michigan | ✅ Available | ⚠️ Blocked (`michiganelections.io` 503) | ❌ Pending API recovery |
 | **VA** | Virginia | ✅ Complete — VA Elect (`sync_va_elections`) | ✅ Complete — VA Elect (`sync_va_races`); Enhanced Voting API | ❌ No adapter |
 | **MA** | Massachusetts | ✅ Complete — MA SOS (`sync_ma_elections`) | ✅ Complete — MA SOS (`sync_ma_races` + `sync_ma_ballot_question`) | ✅ Complete — electionstats CSV (`sync_ma_races` vote totals) |
+| **AR** | Arkansas | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete — TotalVote/TotalResults REST adapter (`ar.py`); GUID + legacy numeric paths; `totalvote_election_id` in `source_metadata` |
+| **CT** | Connecticut | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete — PCC EMS static JSON adapter (`ct.py`); `ct_election_id` in `source_metadata`; TotalVote migration path documented |
 | All others | — | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter |
 
 **Full Coverage** (all three stages ✅): **WV**, **CO**, **SC**, **MA**  
+**Results adapter only** (Stage 2 ✅, Stage 1 via Civic API): **AR**, **CT**  
 **Adapter built, needs `results_url`**: **IA** (Clarity adapter exists; `results_url` auto-populated once SC ENR-style linking is added)  
 **Blocked adapters**: PA (data publication ~2-4 weeks), MI (API 503)
 
