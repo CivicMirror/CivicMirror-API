@@ -77,3 +77,11 @@ No public REST API identified (yet). The Flateau Database Act may result in stru
 ## Source Coverage Analysis
 
 New York is among the more capable state sources, offering a searchable elections database, live election night reporting (`nyenr.elections.ny.gov`), certified results downloads back to 2011, and OpenElections CSVs for historical depth. The new Dr. John L. Flateau Database Act (effective April 1, 2026) will further mandate election-district-level structured data, though implementation is pending. Primary gaps are candidate contact/bio/platform information and officials/incumbency data, which should be supplemented with **Google Civic Information API** (candidates, offices, districts by address), **Ballotpedia** (candidate bios, ballot measures detail, incumbency), **OpenStates** (NY state legislative data), and **OpenFEC** (federal campaign finance). GeoJSON district boundaries remain unconfirmed from the state source and should be sourced via Google Civic API until the Flateau Act's structured data becomes available.
+
+## additional research 06/01/2026
+- https://flateau.elections.ny.gov/
+- Har File For flateau saved
+- https://flateau.elections.ny.gov/results  - Contains CVS and JSON
+- CountyBoardRoster.csv - County Borads Information and websites
+- https://elections.ny.gov/system/files/documents/2025/12/2026-political-calendar-quad-fold-12.9.2025-final.pdf   - 2026 calendar
+- 
