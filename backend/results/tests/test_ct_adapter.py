@@ -132,42 +132,55 @@ def test_build_winner_set_none():
 # ---------------------------------------------------------------------------
 
 _TOWN_VOTES = {
-    "2": {  # townID 2 = Ansonia
-        "17127": [{"36347": {"V": "5290", "TO": "55.78%"}}],
-    },
-    "4": {  # townID 4 = Avon
-        "17171": [{"37000": {"V": "3200", "TO": "60.00%"}}],
-    },
-    # officeID 99999 appears in two towns → multi-town, excluded from map
+    "2": {"17127": [{"36347": {"V": "5290", "TO": "55.78%"}}]},  # Ansonia → SM Mayor
+    "4": {"17171": [{"37000": {"V": "3200", "TO": "60.00%"}}]},  # Avon → SM Mayor
+    # officeID 99999 appears in two towns → multi-town, excluded
     "5": {"99999": []},
     "6": {"99999": []},
+    # officeID 88888 is single-town but non-SM → excluded
+    "2": {"17127": [{"36347": {"V": "5290", "TO": "55.78%"}}], "88888": []},
 }
 
 _TOWN_IDS = {"2": "Ansonia", "4": "Avon", "5": "Barkhamsted", "6": "Berlin"}
 
+_OFFICE_MAP_WITH_TYPES = {
+    "17127": {"ID": "17127", "NM": "Mayor", "OT": "SM"},
+    "17171": {"ID": "17171", "NM": "Mayor", "OT": "SM"},
+    "88888": {"ID": "88888", "NM": "State Representative 1", "OT": "A"},
+    "99999": {"ID": "99999", "NM": "State Senator", "OT": "SEN"},
+}
 
-def test_build_office_town_map_single_town():
-    result = _build_office_town_map(_TOWN_VOTES, _TOWN_IDS)
+
+def test_build_office_town_map_sm_single_town():
+    tv = {"2": {"17127": []}}
+    result = _build_office_town_map(tv, _TOWN_IDS, _OFFICE_MAP_WITH_TYPES)
     assert result["17127"] == "Ansonia"
-    assert result["17171"] == "Avon"
 
 
 def test_build_office_town_map_multi_town_excluded():
-    result = _build_office_town_map(_TOWN_VOTES, _TOWN_IDS)
+    tv = {"5": {"99999": []}, "6": {"99999": []}}
+    result = _build_office_town_map(tv, _TOWN_IDS, _OFFICE_MAP_WITH_TYPES)
     assert "99999" not in result
 
 
+def test_build_office_town_map_non_sm_single_town_excluded():
+    # OT="A" office that happens to be in only one town must NOT get a town prefix
+    tv = {"2": {"88888": []}}
+    result = _build_office_town_map(tv, _TOWN_IDS, _OFFICE_MAP_WITH_TYPES)
+    assert "88888" not in result
+
+
 def test_build_office_town_map_empty_town_votes():
-    assert _build_office_town_map({}, _TOWN_IDS) == {}
+    assert _build_office_town_map({}, _TOWN_IDS, _OFFICE_MAP_WITH_TYPES) == {}
 
 
 def test_build_office_town_map_none():
-    assert _build_office_town_map(None, _TOWN_IDS) == {}
+    assert _build_office_town_map(None, _TOWN_IDS, _OFFICE_MAP_WITH_TYPES) == {}
 
 
 def test_build_office_town_map_unknown_town_id_excluded():
-    tv = {"999": {"17127": []}}  # townID 999 not in town_ids
-    result = _build_office_town_map(tv, _TOWN_IDS)
+    tv = {"999": {"17127": []}}  # townID 999 not in _TOWN_IDS
+    result = _build_office_town_map(tv, _TOWN_IDS, _OFFICE_MAP_WITH_TYPES)
     assert "17127" not in result
 
 
@@ -274,6 +287,19 @@ def test_parse_state_votes_winner_none_for_office_absent_from_grouping():
     assert all(r.is_winner is None for r in pres_rows)
 
 
+def test_parse_state_votes_winner_none_when_vote_count_zero():
+    # candidateGrouping may have placeholder entries before votes exist;
+    # is_winner must be None (not True/False) when vote_count == 0.
+    grouping = {"16524": [{"35495": {"V": "0", "TO": "0.00%"}}]}
+    pairs, offices = _build_winner_set(grouping)
+    sv = {"16524": [
+        {"35495": {"V": "0", "TO": "0.00%"}},
+        {"35830": {"V": "0", "TO": "0.00%"}},
+    ]}
+    rows = _parse_state_votes(sv, _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official")
+    assert all(r.is_winner is None for r in rows)
+
+
 def test_parse_state_votes_result_type():
     pairs, offices = _build_winner_set(_GROUPING)
     rows = _parse_state_votes(
@@ -303,6 +329,31 @@ def test_parse_state_votes_empty():
     assert rows == []
 
 
+def test_parse_state_votes_municipal_title_qualified_with_town():
+    municipal_office_map = {"17127": {"ID": "17127", "NM": "Mayor", "OT": "SM"}}
+    municipal_candidate_map = {"36347": {"NM": "Jane Smith", "P": "1"}}
+    sv = {"17127": [{"36347": {"V": "5290", "TO": "55.78%"}}]}
+    office_town_map = {"17127": "Ansonia"}
+
+    pairs, offices = _build_winner_set({})
+    rows = _parse_state_votes(
+        sv, municipal_office_map, municipal_candidate_map,
+        pairs, offices, office_town_map, "official",
+    )
+    assert rows[0].office_title == "Ansonia — Mayor"
+    assert rows[0].jurisdiction_fragment == "Ansonia"
+
+
+def test_parse_state_votes_statewide_title_unqualified():
+    pairs, offices = _build_winner_set(_GROUPING)
+    rows = _parse_state_votes(
+        {"16524": [{"35495": {"V": "100", "TO": "55%"}}]},
+        _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
+    )
+    assert rows[0].office_title == "United States Senator"
+    assert rows[0].jurisdiction_fragment == ""
+
+
 def test_parse_state_votes_raw_contains_office_id():
     pairs, offices = _build_winner_set(_GROUPING)
     rows = _parse_state_votes(
@@ -314,40 +365,11 @@ def test_parse_state_votes_raw_contains_office_id():
     assert rows[0].raw["OT"] == "SW"
 
 
-def test_parse_state_votes_municipal_title_qualified_with_town():
-    municipal_office_map = {
-        "17127": {"ID": "17127", "NM": "Mayor", "OT": "SM"},
-    }
-    municipal_candidate_map = {
-        "36347": {"NM": "Jane Smith", "P": "1"},
-    }
-    sv = {"17127": [{"36347": {"V": "5290", "TO": "55.78%"}}]}
-    office_town_map = {"17127": "Ansonia"}
-
-    pairs, offices = _build_winner_set({})
-    rows = _parse_state_votes(
-        sv, municipal_office_map, municipal_candidate_map,
-        pairs, offices, office_town_map, "official",
-    )
-    assert len(rows) == 1
-    assert rows[0].office_title == "Ansonia — Mayor"
-    assert rows[0].jurisdiction_fragment == "Ansonia"
-
-
-def test_parse_state_votes_statewide_title_unqualified():
-    # Statewide office not in office_town_map → title unchanged
-    pairs, offices = _build_winner_set(_GROUPING)
-    rows = _parse_state_votes(
-        {"16524": [{"35495": {"V": "100", "TO": "55%"}}]},
-        _OFFICE_MAP, _CANDIDATE_MAP, pairs, offices, {}, "official",
-    )
-    assert rows[0].office_title == "United States Senator"
-    assert rows[0].jurisdiction_fragment == ""
-
-
 # ---------------------------------------------------------------------------
 # _parse_ballot_questions
 # ---------------------------------------------------------------------------
+
+_TOWN_NAME_SET = {"Andover", "Bethany", "Bethel", "Avon"}
 
 _BALLOT_DATA = {
     "State Wide": [
@@ -359,66 +381,83 @@ _BALLOT_DATA = {
             "NTL": "-",
         }
     ],
-    "Andover": [
-        {"QN": "Local question", "YES": "100", "NO": "50", "NTH": "-", "NTL": "-"}
+    "Bethany": [
+        {"QN": "Shall the sale of alcoholic liquor be allowed?", "YES": "1747", "NO": "498", "NTH": "-", "NTL": "-"}
+    ],
+    "Unknown_Key": [  # not in town_name_set → skipped
+        {"QN": "Ignore me", "YES": "100", "NO": "50", "NTH": "-", "NTL": "-"}
     ],
 }
 
 
-def test_parse_ballot_questions_statewide_only():
-    rows = _parse_ballot_questions(_BALLOT_DATA, "official")
-    # Should produce exactly 2 rows (YES + NO) from "State Wide"; Andover skipped
+def test_parse_ballot_questions_statewide_produces_two_rows():
+    rows = _parse_ballot_questions({"State Wide": _BALLOT_DATA["State Wide"]}, _TOWN_NAME_SET, "official")
     assert len(rows) == 2
 
 
 def test_parse_ballot_questions_option_labels():
-    rows = _parse_ballot_questions(_BALLOT_DATA, "official")
+    rows = _parse_ballot_questions({"State Wide": _BALLOT_DATA["State Wide"]}, _TOWN_NAME_SET, "official")
     labels = {r.option_label for r in rows}
     assert labels == {"YES", "NO"}
 
 
-def test_parse_ballot_questions_vote_counts():
-    rows = _parse_ballot_questions(_BALLOT_DATA, "official")
+def test_parse_ballot_questions_statewide_vote_counts():
+    rows = _parse_ballot_questions({"State Wide": _BALLOT_DATA["State Wide"]}, _TOWN_NAME_SET, "official")
     yes_row = next(r for r in rows if r.option_label == "YES")
     no_row = next(r for r in rows if r.option_label == "NO")
     assert yes_row.vote_count == 843153
     assert no_row.vote_count == 610694
 
 
-def test_parse_ballot_questions_office_title():
-    rows = _parse_ballot_questions(_BALLOT_DATA, "official")
-    assert all("Constitution" in (r.office_title or "") for r in rows)
+def test_parse_ballot_questions_statewide_no_fragment():
+    rows = _parse_ballot_questions({"State Wide": _BALLOT_DATA["State Wide"]}, _TOWN_NAME_SET, "official")
+    assert all(r.jurisdiction_fragment == "" for r in rows)
+
+
+def test_parse_ballot_questions_town_question_included():
+    rows = _parse_ballot_questions(_BALLOT_DATA, _TOWN_NAME_SET, "official")
+    town_rows = [r for r in rows if r.jurisdiction_fragment == "Bethany"]
+    assert len(town_rows) == 2
+    assert all("Bethany" in (r.office_title or "") for r in town_rows)
+
+
+def test_parse_ballot_questions_town_question_title_qualified():
+    rows = _parse_ballot_questions(_BALLOT_DATA, _TOWN_NAME_SET, "official")
+    town_rows = [r for r in rows if r.jurisdiction_fragment == "Bethany"]
+    yes_row = next(r for r in town_rows if r.option_label == "YES")
+    assert yes_row.office_title.startswith("Bethany — ")
+
+
+def test_parse_ballot_questions_unknown_key_skipped():
+    rows = _parse_ballot_questions(_BALLOT_DATA, _TOWN_NAME_SET, "official")
+    # Unknown_Key should produce 0 rows
+    assert all("Ignore" not in (r.office_title or "") for r in rows)
 
 
 def test_parse_ballot_questions_candidate_name_is_none():
-    rows = _parse_ballot_questions(_BALLOT_DATA, "official")
+    rows = _parse_ballot_questions(_BALLOT_DATA, _TOWN_NAME_SET, "official")
     assert all(r.candidate_name is None for r in rows)
 
 
 def test_parse_ballot_questions_is_winner_is_none():
-    rows = _parse_ballot_questions(_BALLOT_DATA, "official")
+    rows = _parse_ballot_questions(_BALLOT_DATA, _TOWN_NAME_SET, "official")
     assert all(r.is_winner is None for r in rows)
 
 
 def test_parse_ballot_questions_result_type():
-    rows = _parse_ballot_questions(_BALLOT_DATA, "unofficial")
+    rows = _parse_ballot_questions(_BALLOT_DATA, _TOWN_NAME_SET, "unofficial")
     assert all(r.result_type == "unofficial" for r in rows)
 
 
 def test_parse_ballot_questions_dash_value_skipped():
     data = {"State Wide": [{"QN": "Q", "YES": "-", "NO": "100", "NTH": "-", "NTL": "-"}]}
-    rows = _parse_ballot_questions(data, "official")
+    rows = _parse_ballot_questions(data, _TOWN_NAME_SET, "official")
     assert len(rows) == 1
     assert rows[0].option_label == "NO"
 
 
-def test_parse_ballot_questions_no_statewide_key():
-    rows = _parse_ballot_questions({"Andover": []}, "official")
-    assert rows == []
-
-
 def test_parse_ballot_questions_empty():
-    assert _parse_ballot_questions({}, "official") == []
+    assert _parse_ballot_questions({}, _TOWN_NAME_SET, "official") == []
 
 
 # ---------------------------------------------------------------------------
@@ -457,7 +496,7 @@ def _lookup_resp():
             "35830": {"NM": "Matthew M. Corey", "P": "6"},
         },
         "partyIds": {"1": {"CD": "D", "NM": "Democratic Party"}, "6": {"CD": "R", "NM": "Republican Party"}},
-        "townIds": {},
+        "townIds": {"1": "Andover", "2": "Ansonia"},
     }
     return m
 
@@ -479,17 +518,24 @@ def _grouping_resp():
     return m
 
 
-def _ballot_resp(empty=False):
+def _ballot_resp(empty=False, with_town=False):
     m = MagicMock()
-    m.json.return_value = {} if empty else {
-        "State Wide": [{"QN": "Amendment?", "YES": "843153", "NO": "610694", "NTH": "-", "NTL": "-"}]
-    }
+    if empty:
+        m.json.return_value = {}
+    elif with_town:
+        m.json.return_value = {
+            "Andover": [{"QN": "Local question", "YES": "200", "NO": "100", "NTH": "-", "NTL": "-"}]
+        }
+    else:
+        m.json.return_value = {
+            "State Wide": [{"QN": "Amendment?", "YES": "843153", "NO": "610694", "NTH": "-", "NTL": "-"}]
+        }
     return m
 
 
 def _town_votes_resp():
     m = MagicMock()
-    # officeID 16524 (US Senate) belongs to multiple towns → excluded from office_town_map
+    # officeID 16524 in both towns → multi-town, excluded from office_town_map
     m.json.return_value = {
         "1": {"16524": [{"35495": {"V": "1000", "TO": "55%"}}]},
         "2": {"16524": [{"35495": {"V": "2000", "TO": "55%"}}]},
@@ -497,14 +543,14 @@ def _town_votes_resp():
     return m
 
 
-def _full_side_effect(version=70782, is_official=True, empty_ballot=False):
+def _full_side_effect(version=70782, is_official=True, empty_ballot=False, town_ballot=False):
     return [
         _ver_resp(version),
         _reports_resp(is_official),
         _lookup_resp(),
         _state_votes_resp(),
         _grouping_resp(),
-        _ballot_resp(empty_ballot),
+        _ballot_resp(empty_ballot, town_ballot),
         _town_votes_resp(),
     ]
 
@@ -551,7 +597,7 @@ def test_fetch_results_version_unchanged():
     assert result.unchanged is True
     assert result.source_version == "70782"
     assert result.rows == []
-    assert mock_get.call_count == 1  # only the Version.json call
+    assert mock_get.call_count == 1
 
 
 @pytest.mark.django_db
@@ -571,8 +617,7 @@ def test_fetch_results_full_official():
     assert result.mapping_confidence == "full"
     assert result.unchanged is False
     assert result.source_version == "70782"
-    # 2 candidate rows + 2 ballot question rows
-    assert len(result.rows) == 4
+    assert len(result.rows) == 4  # 2 candidate rows + 2 ballot YES/NO rows
     assert all(r.result_type == "official" for r in result.rows)
 
 
@@ -639,6 +684,27 @@ def test_fetch_results_ballot_rows_correct():
 
 
 @pytest.mark.django_db
+def test_fetch_results_town_ballot_questions_included():
+    adapter = ConnecticutAdapter()
+
+    with patch("elections.models.Election.objects") as mock_mgr, \
+         patch("results.adapters.ct.requests.get") as mock_get, \
+         patch("results.adapters.ct.cache") as mock_cache:
+
+        mock_mgr.get.return_value = _make_election({"ct_election_id": "97"})
+        mock_cache.get.return_value = None
+        mock_get.side_effect = _full_side_effect(town_ballot=True)
+
+        result = adapter.fetch_results(None, election_id=7)
+
+    bq_rows = [r for r in result.rows if r.option_label is not None]
+    # town "Andover" is in townIds → 2 rows (YES+NO)
+    assert len(bq_rows) == 2
+    assert all(r.jurisdiction_fragment == "Andover" for r in bq_rows)
+    assert all("Andover" in (r.office_title or "") for r in bq_rows)
+
+
+@pytest.mark.django_db
 def test_fetch_results_no_ballot_questions():
     adapter = ConnecticutAdapter()
 
@@ -652,7 +718,6 @@ def test_fetch_results_no_ballot_questions():
 
         result = adapter.fetch_results(None, election_id=7)
 
-    # Only candidate rows, no ballot rows
     assert all(r.option_label is None for r in result.rows)
 
 
