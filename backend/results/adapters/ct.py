@@ -23,9 +23,8 @@ Ingestion flow:
     3. GET reports_Electiondata.json                → IO flag (certified = official)
     4. GET Lookupdata.json                          → offices, candidates, parties (~1 MB)
     5. GET stateVotes_Electiondata.json             → all vote totals
-    6. GET candidateGrouping_Electiondata.json      → winner candidates per office
-    7. GET ballotQuestion_Electiondata.json         → statewide + town ballot measures
-    8. GET townVotes_Electiondata.json              → town→office map for title disambiguation
+    6. GET ballotQuestion_Electiondata.json         → statewide + town ballot measures
+    7. GET townVotes_Electiondata.json              → town→office map for title disambiguation
 
 Version caching:
     Cache key:  ct_elect:ver:{election_pk}
@@ -34,26 +33,24 @@ Version caching:
 
 Data quirks:
     - officeList is a *list of single-key dicts*, not a plain dict; must be flattened.
-    - candidateGrouping may contain placeholder entries before votes are cast (confirmed
-      in election 108 HAR).  _build_winner_set accepts state_votes and only marks
-      offices as having winner data when at least one candidate has a non-zero vote count.
+    - candidateGrouping_Electiondata.json is CT fusion (cross-endorsement) grouping data,
+      NOT a called-winners list.  The CT EMS does not publish an explicit winner field;
+      is_winner is always None.  Winners can be inferred externally from vote_count.
     - V/TO fields are strings ("5,290", "55.78%"); must be cleaned before parsing.
     - Candidate NM="." indicates anonymized / placeholder rows; they are skipped.
+    - CT uses fusion voting: the same candidate may appear under multiple party lines
+      with separate candidateIDs and separate stateVotes rows.  _parse_state_votes
+      aggregates rows by (office_title, candidate_name, jurisdiction_fragment) via
+      _aggregate_fusion_rows so each candidate appears once with a combined vote total.
     - Municipal offices (OT="SM") may have identical names ("Mayor", "Town Council")
-      across different towns.  _build_office_town_map restricts qualification to SM offices
-      in exactly one town, prepending the town name as "{town} — {office}" and setting
-      jurisdiction_fragment.  Non-SM races are left as-is even when single-town.
-    - CT uses fusion (cross-endorsement) voting: the same candidate may appear under
-      multiple party lines with separate candidateIDs and separate stateVotes rows.
-      _parse_state_votes aggregates rows by (office_title, candidate_name, jurisdiction)
-      so the ingest task sees one row per candidate with the combined vote total.
+      across different towns.  _build_office_town_map qualifies SM offices that belong
+      to exactly one town as "{town} — {office}" and sets jurisdiction_fragment.
+      Non-SM races are left as-is even when they fall in a single town.
     - ballotQuestion keys can be "State Wide" (statewide measures) or CT town names
-      (local referenda).  When a statewide question appears under "State Wide", its
-      per-town breakdown entries (same question text, different town keys) are skipped
-      to avoid bootstrapping 169 duplicate races for the same measure.
+      (local referenda).  Per-town breakdowns of a statewide question are skipped to
+      avoid bootstrapping 169 duplicate races for the same measure.
     - Ballot question office_title is prefixed with "Question: " so that
-      _bootstrap_races_from_results (in results/tasks.py) classifies them as MEASURE
-      races (via _is_measure_race keyword matching) rather than CANDIDATE races.
+      _bootstrap_races_from_results classifies them as MEASURE races.
 """
 from __future__ import annotations
 
@@ -74,8 +71,6 @@ _TIMEOUT_SHORT = 15   # Version.json, reports, ballot questions
 _TIMEOUT_LONG = 60    # Lookupdata.json (~1 MB), stateVotes (~250 KB)
 
 # Only offices explicitly tagged as local/municipal get a town-qualified title.
-# Single-town state-representative and other district offices are excluded even
-# when they happen to fall within one town boundary.
 _LOCAL_OFFICE_TYPES: frozenset = frozenset({"SM"})
 
 
@@ -108,50 +103,14 @@ def _flatten_office_list(office_list: list) -> dict:
     return result
 
 
-def _build_winner_set(candidate_grouping: dict, state_votes: dict) -> tuple[set, set]:
-    """
-    Build (winner_pairs, offices_with_winners) from candidateGrouping, restricted to
-    offices where at least one candidate has a non-zero vote count in stateVotes.
-
-    candidateGrouping may contain placeholder entries before any voting occurs
-    (confirmed in election 108 HAR where all stateVotes totals are "0").  By
-    cross-checking against stateVotes, offices with no recorded votes are excluded
-    from winner detection, preventing is_winner from being set on pre-election data.
-    """
-    offices_with_votes: set = {
-        str(oid)
-        for oid, clist in (state_votes or {}).items()
-        if isinstance(clist, list) and any(
-            _safe_int(cv.get('V', 0)) > 0
-            for entry in clist
-            if isinstance(entry, dict)
-            for cv in entry.values()
-        )
-    }
-
-    winner_pairs: set = set()
-    offices_with_winners: set = set()
-    for oid, cand_list in (candidate_grouping or {}).items():
-        oid = str(oid)
-        if oid not in offices_with_votes:
-            continue
-        offices_with_winners.add(oid)
-        for entry in cand_list or []:
-            if isinstance(entry, dict):
-                for cid in entry.keys():
-                    winner_pairs.add((oid, str(cid)))
-    return winner_pairs, offices_with_winners
-
-
 def _build_office_town_map(town_votes: dict, town_ids: dict, office_map: dict) -> dict:
     """
     Return {officeID: town_name} for municipal (OT="SM") offices that appear
     in exactly one town.
 
     Only OT="SM" offices are included.  Single-town state-representative or
-    other district offices are intentionally excluded: their office names already
-    include a district identifier and prefixing them with a town name would
-    produce titles that do not match CivicMirror race records.
+    other district offices are excluded: their names include a district identifier
+    and prefixing them with a town name would produce non-matching race titles.
     """
     office_towns: dict = defaultdict(set)
     for town_id, offices in (town_votes or {}).items():
@@ -180,13 +139,12 @@ def _aggregate_fusion_rows(rows: list[ResultRow]) -> list[ResultRow]:
     CT uses fusion (cross-endorsement) voting: a candidate may appear on the
     Democratic AND Working Families lines with distinct candidateIDs and separate
     stateVotes entries.  Without aggregation, the ingest task's update_or_create
-    (keyed by race + candidate name) would overwrite the first party-line total
-    with the second, producing an incorrect vote count.
+    (keyed by race + candidate name) overwrites the first party-line total with
+    the second, producing an incorrect combined vote count.
 
     Rows are keyed by (office_title, candidate_name, jurisdiction_fragment).
-    Duplicate rows are merged: vote_count is summed; vote_pct is set to None
-    (percentages cannot be reliably combined without the office total);
-    is_winner is True if any constituent row was True.
+    vote_count is summed; vote_pct is set to None (cannot be reliably recalculated
+    without the office total); is_winner is None (CT EMS has no winner field).
     Ballot measure rows (candidate_name=None) are passed through unchanged.
     """
     merged: dict = {}
@@ -202,22 +160,13 @@ def _aggregate_fusion_rows(rows: list[ResultRow]) -> list[ResultRow]:
             merged[key] = row
         else:
             existing = merged[key]
-            # Propagate winner=True if any line won; False if either confirmed a loss;
-            # otherwise None.
-            if existing.is_winner or row.is_winner:
-                new_winner = True
-            elif existing.is_winner is False or row.is_winner is False:
-                new_winner = False
-            else:
-                new_winner = None
-
             merged[key] = ResultRow(
                 office_title=existing.office_title,
                 candidate_name=existing.candidate_name,
                 option_label=None,
                 vote_count=existing.vote_count + row.vote_count,
                 vote_pct=None,
-                is_winner=new_winner,
+                is_winner=None,
                 result_type=existing.result_type,
                 jurisdiction_fragment=existing.jurisdiction_fragment,
                 is_write_in_aggregate=existing.is_write_in_aggregate or row.is_write_in_aggregate,
@@ -237,23 +186,18 @@ def _parse_state_votes(
     state_votes: dict,
     office_map: dict,
     candidate_map: dict,
-    winner_pairs: set,
-    offices_with_winners: set,
     office_town_map: dict,
     result_type: str,
 ) -> list[ResultRow]:
     """Convert stateVotes_Electiondata into ResultRow objects.
 
-    Municipal (SM) offices whose officeID is in office_town_map receive a
-    qualified title "{town} — {office}" and jurisdiction_fragment=town_name,
-    preventing bootstrap collisions when identically-named offices from
-    different towns are ingested into the same election.
+    Municipal (SM) offices in office_town_map get a qualified title
+    "{town} — {office}" with jurisdiction_fragment set.  Fusion party-line
+    rows for the same candidate are aggregated by _aggregate_fusion_rows.
 
-    Winner detection uses the pre-filtered winner_pairs from _build_winner_set,
-    which already excludes offices with no recorded votes.
-
-    Fusion (cross-endorsement) rows for the same candidate are aggregated by
-    _aggregate_fusion_rows before being returned.
+    is_winner is always None: the CT EMS does not publish an explicit winner
+    field.  candidateGrouping_Electiondata.json is fusion grouping data (which
+    candidates share a combined total), not a called-winners list.
     """
     rows: list[ResultRow] = []
     for oid, cand_list in state_votes.items():
@@ -282,20 +226,13 @@ def _parse_state_votes(
                 if not name or name == '.':
                     continue
 
-                vote_count = _safe_int(cv.get('V', 0))
-
-                if oid in offices_with_winners:
-                    is_winner = (oid, cid) in winner_pairs
-                else:
-                    is_winner = None
-
                 rows.append(ResultRow(
                     office_title=office_title,
                     candidate_name=name,
                     option_label=None,
-                    vote_count=vote_count,
+                    vote_count=_safe_int(cv.get('V', 0)),
                     vote_pct=_safe_float(cv.get('TO')),
-                    is_winner=is_winner,
+                    is_winner=None,
                     result_type=result_type,
                     jurisdiction_fragment=jurisdiction_fragment,
                     raw={'officeID': oid, 'candidateID': cid, 'OT': office_info.get('OT', '')},
@@ -311,19 +248,16 @@ def _parse_ballot_questions(
 ) -> list[ResultRow]:
     """Convert ballot questions into ResultRow objects (YES/NO options).
 
-    The "State Wide" key produces rows with no jurisdiction prefix.
-    Keys matching a CT town name produce rows for local-only questions
-    (i.e. questions NOT already present in the "State Wide" section) with
-    office_title="{town} — {question}" and jurisdiction_fragment=town_name.
-    Skipping town-level breakdown entries for statewide questions prevents
-    bootstrapping ~169 duplicate races when a statewide question's per-town
-    totals are also included in the JSON.
-    Other keys are ignored.
+    "State Wide" key → statewide rows with no jurisdiction prefix.
+    Town name keys → local-only questions (not in "State Wide") with
+    "{town} — Question: {text}" titles and jurisdiction_fragment set.
+    Skipping per-town breakdowns of statewide questions prevents bootstrapping
+    ~169 duplicate races when a statewide measure also publishes town totals.
+    "Question: " prefix ensures _bootstrap_races_from_results classifies every
+    ballot question as a MEASURE race (via _is_measure_race keyword matching).
     """
     rows: list[ResultRow] = []
 
-    # Build the set of statewide question texts so we can skip their per-town
-    # breakdowns when iterating town keys below.
     statewide_question_texts: set = {
         (q.get('QN') or '').strip()
         for q in (ballot_data.get('State Wide') or [])
@@ -341,11 +275,8 @@ def _parse_ballot_questions(
 
         for question in (questions or []):
             base_q = (question.get('QN') or '').strip()
-            # Skip town-level entries that are per-town breakdowns of a statewide measure
             if fragment and base_q in statewide_question_texts:
                 continue
-            # Prefix with "Question: " so _bootstrap_races_from_results (results/tasks.py)
-            # classifies this as a MEASURE race (via _is_measure_race keyword matching).
             qualified_q = f"Question: {base_q}" if base_q else "Question"
             office_title = (prefix + qualified_q).strip() or None
             for label in ('YES', 'NO'):
@@ -448,12 +379,6 @@ class ConnecticutAdapter(StateResultsAdapter):
             sv_resp.raise_for_status()
             state_votes = sv_resp.json()
 
-            cg_resp = requests.get(
-                f"{base}/candidateGrouping_Electiondata.json", timeout=_TIMEOUT_LONG,
-            )
-            cg_resp.raise_for_status()
-            candidate_grouping = cg_resp.json()
-
             bq_resp = requests.get(
                 f"{base}/ballotQuestion_Electiondata.json", timeout=_TIMEOUT_SHORT,
             )
@@ -481,13 +406,11 @@ class ConnecticutAdapter(StateResultsAdapter):
         candidate_map = lookup.get('candidateIds', {})
         town_ids = lookup.get('townIds', {})
         town_name_set = set(town_ids.values())
-        winner_pairs, offices_with_winners = _build_winner_set(candidate_grouping, state_votes)
         office_town_map = _build_office_town_map(town_votes, town_ids, office_map)
 
         # --- Parse ---------------------------------------------------------------
         rows = _parse_state_votes(
-            state_votes, office_map, candidate_map,
-            winner_pairs, offices_with_winners, office_town_map, result_type,
+            state_votes, office_map, candidate_map, office_town_map, result_type,
         )
         rows += _parse_ballot_questions(ballot_questions, town_name_set, result_type)
 
