@@ -47,3 +47,7 @@ No public REST API identified.
 ## Source Coverage Analysis
 
 South Dakota's SOS website provides county-level historical results via downloadable Excel files for Primary, General, and Special elections, but the state source lacks ballot measure data — a significant gap given South Dakota's status as one of the country's most active initiative states. Candidate biographical/contact data, official/incumbent records, and district boundary data are also entirely absent, and no live results feed is documented. **Ballotpedia** is the highest-priority supplementary source for South Dakota ballot measures; **Google Civic Information API** fills candidate, official, and district gaps; **OpenStates** covers SD state legislative incumbents; **OpenFEC** adds federal candidates; and **MEDSL** provides normalized historical CSV data for cross-validation.
+
+## Total Vote system found,  but gated behind a login
+https://sdtest.totalvote.com/Login.aspx?ReturnUrl=%2fReports%2fReportViewer.aspx%3fRptID%3dcurrentcandidates&RptID=currentcandidates
+https://cfr.totalvote.com/   *test site?*
