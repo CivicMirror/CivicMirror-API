@@ -33,12 +33,16 @@ _SBE_CSV_BASE = "https://apps.elections.virginia.gov/SBE_CSV/ELECTIONS"
 
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
-# Matches ENR href patterns like:
+# Matches old-style ENR href slugs like:
 #   /results/public/Virginia/2025-November-General
 #   /results/public/Virginia/2024NovemberGeneral
 #   /results/public/Virginia/2024_June_Democratic_Primary
+#
+# Deliberately skips new-style URLs that include an /elections/ sub-path
+# (e.g. /results/public/Virginia/elections/2026-March-10-Special) — those
+# use an Angular SPA with no public API equivalent yet.
 _ENR_HREF_RE = re.compile(
-    r"/results/public/[Vv]irginia/([A-Za-z0-9_\-]+/?)",
+    r"/results/public/[Vv]irginia/(?!elections/)([A-Za-z0-9_\-]+)",
     re.IGNORECASE,
 )
 
