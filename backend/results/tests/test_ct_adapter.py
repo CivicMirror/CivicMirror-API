@@ -7,9 +7,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests as req_lib
 
-from results.adapters.base import AdapterResult
+from results.adapters.base import AdapterResult, ResultRow
 from results.adapters.ct import (
     ConnecticutAdapter,
+    _aggregate_fusion_rows,
     _build_office_town_map,
     _build_winner_set,
     _flatten_office_list,
@@ -386,6 +387,106 @@ def test_parse_state_votes_raw_contains_office_id():
 
 
 # ---------------------------------------------------------------------------
+# _aggregate_fusion_rows
+# ---------------------------------------------------------------------------
+
+def _make_candidate_row(name, votes, office="Governor", is_winner=None, cid="cid1"):
+    return ResultRow(
+        office_title=office,
+        candidate_name=name,
+        option_label=None,
+        vote_count=votes,
+        vote_pct=None,
+        is_winner=is_winner,
+        result_type="official",
+        raw={"candidateID": cid},
+    )
+
+
+def _make_measure_row(label, votes):
+    return ResultRow(
+        office_title="Question: Is this a question?",
+        candidate_name=None,
+        option_label=label,
+        vote_count=votes,
+        vote_pct=None,
+        is_winner=None,
+        result_type="official",
+        raw={},
+    )
+
+
+def test_aggregate_fusion_rows_no_fusion():
+    rows = [
+        _make_candidate_row("Alice", 1000, cid="c1"),
+        _make_candidate_row("Bob", 500, cid="c2"),
+    ]
+    result = _aggregate_fusion_rows(rows)
+    assert len(result) == 2
+
+
+def test_aggregate_fusion_rows_sums_votes():
+    rows = [
+        _make_candidate_row("Murphy", 953646, office="US Senate", cid="dem"),
+        _make_candidate_row("Murphy", 47049, office="US Senate", cid="wfp"),
+    ]
+    result = _aggregate_fusion_rows(rows)
+    assert len(result) == 1
+    assert result[0].vote_count == 1000695
+
+
+def test_aggregate_fusion_rows_winner_propagated():
+    rows = [
+        _make_candidate_row("Murphy", 953646, office="US Senate", is_winner=True, cid="dem"),
+        _make_candidate_row("Murphy", 47049, office="US Senate", is_winner=False, cid="wfp"),
+    ]
+    result = _aggregate_fusion_rows(rows)
+    assert result[0].is_winner is True
+
+
+def test_aggregate_fusion_rows_vote_pct_is_none_after_merge():
+    rows = [
+        ResultRow(office_title="US Senate", candidate_name="Murphy", option_label=None,
+                  vote_count=953646, vote_pct=55.83, is_winner=True, result_type="official",
+                  raw={"candidateID": "dem"}),
+        ResultRow(office_title="US Senate", candidate_name="Murphy", option_label=None,
+                  vote_count=47049, vote_pct=2.75, is_winner=False, result_type="official",
+                  raw={"candidateID": "wfp"}),
+    ]
+    result = _aggregate_fusion_rows(rows)
+    assert result[0].vote_pct is None
+
+
+def test_aggregate_fusion_rows_measure_rows_passthrough():
+    rows = [
+        _make_measure_row("YES", 1000),
+        _make_measure_row("NO", 500),
+    ]
+    result = _aggregate_fusion_rows(rows)
+    assert len(result) == 2
+    assert all(r.option_label is not None for r in result)
+
+
+def test_aggregate_fusion_rows_different_offices_not_merged():
+    rows = [
+        _make_candidate_row("Smith", 1000, office="Mayor"),
+        _make_candidate_row("Smith", 500, office="Town Council"),  # different office
+    ]
+    result = _aggregate_fusion_rows(rows)
+    assert len(result) == 2
+
+
+def test_aggregate_fusion_rows_raw_includes_fusion_ids():
+    rows = [
+        _make_candidate_row("Murphy", 953646, office="US Senate", cid="dem"),
+        _make_candidate_row("Murphy", 47049, office="US Senate", cid="wfp"),
+    ]
+    result = _aggregate_fusion_rows(rows)
+    raw = result[0].raw
+    assert "wfp" in raw.get("fusion_candidateIDs", [])
+
+
+# ---------------------------------------------------------------------------
 # _parse_ballot_questions
 # ---------------------------------------------------------------------------
 
@@ -434,6 +535,12 @@ def test_parse_ballot_questions_statewide_no_fragment():
     assert all(r.jurisdiction_fragment == "" for r in rows)
 
 
+def test_parse_ballot_questions_office_title_has_question_prefix():
+    # office_title must contain "question" so _is_measure_race() classifies it as MEASURE
+    rows = _parse_ballot_questions({"State Wide": _BALLOT_DATA["State Wide"]}, _TOWN_NAME_SET, "official")
+    assert all("Question:" in (r.office_title or "") for r in rows)
+
+
 def test_parse_ballot_questions_town_question_included():
     rows = _parse_ballot_questions(_BALLOT_DATA, _TOWN_NAME_SET, "official")
     town_rows = [r for r in rows if r.jurisdiction_fragment == "Bethany"]
@@ -445,7 +552,7 @@ def test_parse_ballot_questions_town_question_title_qualified():
     rows = _parse_ballot_questions(_BALLOT_DATA, _TOWN_NAME_SET, "official")
     town_rows = [r for r in rows if r.jurisdiction_fragment == "Bethany"]
     yes_row = next(r for r in town_rows if r.option_label == "YES")
-    assert yes_row.office_title.startswith("Bethany — ")
+    assert yes_row.office_title.startswith("Bethany — Question:")
 
 
 def test_parse_ballot_questions_unknown_key_skipped():
@@ -727,6 +834,7 @@ def test_fetch_results_ballot_rows_correct():
     assert yes_row.vote_count == 843153
     assert yes_row.candidate_name is None
     assert yes_row.is_winner is None
+    assert "Question:" in (yes_row.office_title or "")
 
 
 @pytest.mark.django_db
