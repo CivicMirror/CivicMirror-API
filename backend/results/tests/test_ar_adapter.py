@@ -1,8 +1,8 @@
 """
 Unit tests for the Arkansas TotalVote/TotalResults results adapter.
-HTTP calls and DB access are fully mocked — no network or DB required.
+HTTP calls are mocked; tests marked django_db require a test database.
 """
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests as req_lib
@@ -14,7 +14,6 @@ from results.adapters.ar import (
     _safe_float,
     _safe_int,
 )
-from results.adapters.base import AdapterResult
 
 # ---------------------------------------------------------------------------
 # Helper function tests
