@@ -25,11 +25,11 @@ Use this table to identify the next best integration target. States with multipl
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **AK** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **AL** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| **AR** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **AR** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **AZ** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **CA** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **CO** | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| **CT** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **CT** | ⚠️ | ⚠️ | ❌ | ✅ | ❌ | ✅ | ✅ |
 | **DE** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **FL** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **GA** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
@@ -98,7 +98,6 @@ States closest to a full ✅ row based on available public data:
 |---|---|---|
 | **CA** | REST API available | `https://api.sos.ca.gov` |
 | **AZ** | FTP XML live feed | `ftp://ftp.azsos.gov/ElectionResults/` |
-| **CT** | Socrata/SODA API | CT Open Data Portal |
 | **PA** | Socrata/SODA API | PA Open Data Portal |
 | **NC** | FTP — live + GIS | NC SBE FTP site |
 | **MI** | Community REST API | `michiganelections.io` |
@@ -108,4 +107,4 @@ States closest to a full ✅ row based on available public data:
 
 ---
 
-*Last updated: 2026-05-31*
+*Last updated: 2026-06-01*
