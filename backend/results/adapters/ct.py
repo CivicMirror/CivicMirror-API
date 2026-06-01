@@ -43,10 +43,17 @@ Data quirks:
       across different towns.  _build_office_town_map restricts qualification to SM offices
       in exactly one town, prepending the town name as "{town} — {office}" and setting
       jurisdiction_fragment.  Non-SM races are left as-is even when single-town.
+    - CT uses fusion (cross-endorsement) voting: the same candidate may appear under
+      multiple party lines with separate candidateIDs and separate stateVotes rows.
+      _parse_state_votes aggregates rows by (office_title, candidate_name, jurisdiction)
+      so the ingest task sees one row per candidate with the combined vote total.
     - ballotQuestion keys can be "State Wide" (statewide measures) or CT town names
       (local referenda).  When a statewide question appears under "State Wide", its
       per-town breakdown entries (same question text, different town keys) are skipped
       to avoid bootstrapping 169 duplicate races for the same measure.
+    - Ballot question office_title is prefixed with "Question: " so that
+      _bootstrap_races_from_results (in results/tasks.py) classifies them as MEASURE
+      races (via _is_measure_race keyword matching) rather than CANDIDATE races.
 """
 from __future__ import annotations
 
@@ -166,6 +173,66 @@ def _build_office_town_map(town_votes: dict, town_ids: dict, office_map: dict) -
     return result
 
 
+def _aggregate_fusion_rows(rows: list[ResultRow]) -> list[ResultRow]:
+    """
+    Aggregate multiple party-line rows for the same candidate in the same race.
+
+    CT uses fusion (cross-endorsement) voting: a candidate may appear on the
+    Democratic AND Working Families lines with distinct candidateIDs and separate
+    stateVotes entries.  Without aggregation, the ingest task's update_or_create
+    (keyed by race + candidate name) would overwrite the first party-line total
+    with the second, producing an incorrect vote count.
+
+    Rows are keyed by (office_title, candidate_name, jurisdiction_fragment).
+    Duplicate rows are merged: vote_count is summed; vote_pct is set to None
+    (percentages cannot be reliably combined without the office total);
+    is_winner is True if any constituent row was True.
+    Ballot measure rows (candidate_name=None) are passed through unchanged.
+    """
+    merged: dict = {}
+    passthrough: list[ResultRow] = []
+
+    for row in rows:
+        if row.candidate_name is None:
+            passthrough.append(row)
+            continue
+
+        key = (row.office_title, row.candidate_name, row.jurisdiction_fragment)
+        if key not in merged:
+            merged[key] = row
+        else:
+            existing = merged[key]
+            # Propagate winner=True if any line won; False if either confirmed a loss;
+            # otherwise None.
+            if existing.is_winner or row.is_winner:
+                new_winner = True
+            elif existing.is_winner is False or row.is_winner is False:
+                new_winner = False
+            else:
+                new_winner = None
+
+            merged[key] = ResultRow(
+                office_title=existing.office_title,
+                candidate_name=existing.candidate_name,
+                option_label=None,
+                vote_count=existing.vote_count + row.vote_count,
+                vote_pct=None,
+                is_winner=new_winner,
+                result_type=existing.result_type,
+                jurisdiction_fragment=existing.jurisdiction_fragment,
+                is_write_in_aggregate=existing.is_write_in_aggregate or row.is_write_in_aggregate,
+                raw={
+                    **existing.raw,
+                    'fusion_candidateIDs': (
+                        existing.raw.get('fusion_candidateIDs', [existing.raw.get('candidateID')])
+                        + [row.raw.get('candidateID')]
+                    ),
+                },
+            )
+
+    return list(merged.values()) + passthrough
+
+
 def _parse_state_votes(
     state_votes: dict,
     office_map: dict,
@@ -184,6 +251,9 @@ def _parse_state_votes(
 
     Winner detection uses the pre-filtered winner_pairs from _build_winner_set,
     which already excludes offices with no recorded votes.
+
+    Fusion (cross-endorsement) rows for the same candidate are aggregated by
+    _aggregate_fusion_rows before being returned.
     """
     rows: list[ResultRow] = []
     for oid, cand_list in state_votes.items():
@@ -231,7 +301,7 @@ def _parse_state_votes(
                     raw={'officeID': oid, 'candidateID': cid, 'OT': office_info.get('OT', '')},
                 ))
 
-    return rows
+    return _aggregate_fusion_rows(rows)
 
 
 def _parse_ballot_questions(
@@ -274,7 +344,10 @@ def _parse_ballot_questions(
             # Skip town-level entries that are per-town breakdowns of a statewide measure
             if fragment and base_q in statewide_question_texts:
                 continue
-            office_title = (prefix + base_q).strip() or None
+            # Prefix with "Question: " so _bootstrap_races_from_results (results/tasks.py)
+            # classifies this as a MEASURE race (via _is_measure_race keyword matching).
+            qualified_q = f"Question: {base_q}" if base_q else "Question"
+            office_title = (prefix + qualified_q).strip() or None
             for label in ('YES', 'NO'):
                 raw_val = question.get(label, '0')
                 if raw_val == '-':
