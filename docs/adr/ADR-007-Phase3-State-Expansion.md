@@ -73,6 +73,19 @@ A version string confirms Clarity. Only create the adapter after confirmation. N
 
 A Tier A results adapter has immediate value even without a full SOS adapter — `poll_pending_results` fires nightly and will pick up results for any election already in the DB (from Civic API). Ship Tier A adapters before waiting for Tier B work.
 
+## Outcomes (updated 2026-06-01)
+
+### Completed adapters
+
+| State | Tier | Adapter | Merged | Notes |
+|---|---|---|---|---|
+| **AR** | B | `results/adapters/ar.py` | 2026-06-01 (PR #10) | TotalVote/TotalResults REST API; GUID + legacy numeric paths; `totalvote_election_id` in `source_metadata` |
+| **CT** | B (custom) | `results/adapters/ct.py` | 2026-06-01 (PR #11) | PCC EMS static JSON; `ct_election_id` in `source_metadata`; TotalVote migration path documented; monitor pre-Nov 2026 |
+
+**AR** validated the "Tier B without a full SOS adapter" pattern — the TotalVote REST API is richer than Clarity and eliminates the need for election-by-election `results_url` config. AR elections/races still come from Civic API (Stage 1 only).
+
+**CT** was originally slated for Group 3 (November 2026 general). Moved up because the PCC EMS JSON schema was fully mapped from the HAR research and the adapter could be built cleanly without waiting for November.
+
 ## Consequences
 
 ### Positive

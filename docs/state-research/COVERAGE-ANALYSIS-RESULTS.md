@@ -26,11 +26,11 @@ For each state, gaps in the primary state source were identified and mapped to t
 |---|---|---|---|---|---|---|
 | **AK** | CSV/JSON downloads | ❌ | ❓ investigate | ❌ | ❌ | RCV type complexity; ballot measures |
 | **AL** | Excel/Portal | ❌ | ❌ | ⚠️ portal | ❌ | Ballot measures, candidate bios |
-| **AR** | ZIP downloads | ❌ | ❌ | ❌ | ❌ | Vendor transition risk; all candidate data |
+| **AR** | TotalVote/TotalResults REST API | ❌ | ❌ | ✅ adapter live | ❌ | Candidate data (no state source); pre-2024 results use legacy numeric API path |
 | **AZ** | XML/FTP feed | ❌ | ❌ (own system) | ✅ ≤2 min | ❌ | Candidate bios, district GeoJSON |
 | **CA** | REST API | ✅ | ❌ (own system) | ✅ | ❌ | Candidate contact/platform; local results |
 | **CO** | Clarity + Historical DB | ❌ (Clarity) | ✅ confirmed | ✅ | ❌ | Candidate bios, incumbent metadata |
-| **CT** | Socrata/SODA + EMS | ✅ (Socrata) | ❓ investigate | ✅ (EMS) | ❌ | Candidate data, ballot measure verification |
+| **CT** | PCC EMS (`ctemspublic.tgstg.net`) + Socrata | ✅ (Socrata) | ❓ investigate | ✅ adapter live | ❌ | Candidate data; TotalVote migration risk (monitor pre-Nov 2026) |
 | **DE** | CSV downloads | ❌ | ❓ county level | ❌ | ❌ | Live feed; ballot measures |
 | **FL** | Structured downloads | ❌ | ❌ | ❌ | ❌ | Confirm ballot measures; candidate data |
 | **GA** | Data Hub + partial Clarity | ❌ | ⚠️ partial | ⚠️ | ❌ | Pre-2012 PDF-locked; ballot measures |
