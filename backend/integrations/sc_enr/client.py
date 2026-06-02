@@ -2,19 +2,20 @@
 ENR client for www.enr-scvotes.org.
 
 Provides election discovery via elections.json and URL resolution for each EID.
-The site requires a browser User-Agent — requests with the default python-requests
-UA receive HTTP 403 from CloudFront. _CLARITY_HEADERS from clarity.py provides
-the correct UA and is reused here to keep the two modules in sync.
+All requests are routed through the CivicMirror Cloudflare proxy because GCP
+Cloud Run IPs are blocked by CloudFront (silent 200/empty response). The proxy
+supplies its own browser headers; _HEADERS here is the local-dev fallback only.
 
 URL resolution: each EID navigates via a server-side redirect to a fully resolved
-path containing the /web.XXXXXX/ deployment segment. This segment is required to
-construct the current_ver.txt and summary.json paths used by ClarityAdapter.
+path containing the /web.XXXXXX/ deployment segment. The proxy follows the redirect
+server-side and returns the final URL in X-Upstream-Url.
 """
 import logging
 import time
 
 import requests
 
+from core.http import ProxyAuthError, ProxyDomainNotAllowedError, proxy_get
 from .exceptions import SCEnrError, SCEnrRetryableError
 
 logger = logging.getLogger(__name__)
@@ -39,16 +40,18 @@ class ENRClient:
         self.timeout = timeout
         self.max_retries = max_retries
 
-    def _get(self, url: str, **kwargs) -> requests.Response:
-        """GET with retries on transient errors."""
+    def _get(self, url: str) -> requests.Response:
+        """GET with retries on transient errors, routed through CF proxy."""
         for attempt in range(self.max_retries + 1):
             try:
-                resp = requests.get(
+                resp = proxy_get(
                     url,
                     headers=_HEADERS,
+                    use_proxy=True,
                     timeout=self.timeout,
-                    **kwargs,
                 )
+            except (ProxyAuthError, ProxyDomainNotAllowedError) as exc:
+                raise SCEnrError(str(exc)) from exc
             except requests.RequestException as exc:
                 if attempt >= self.max_retries:
                     raise SCEnrRetryableError(f"ENR GET failed: {exc}") from exc
@@ -76,10 +79,7 @@ class ENRClient:
         A cache-buster param is included per the observed Angular app pattern.
         """
         try:
-            resp = self._get(
-                ENR_ELECTIONS_URL,
-                params={"v": int(time.time() * 1000)},
-            )
+            resp = self._get(f"{ENR_ELECTIONS_URL}?v={int(time.time() * 1000)}")
         except SCEnrRetryableError:
             raise
         except Exception as exc:
@@ -111,13 +111,14 @@ class ENRClient:
             path = f"{ENR_BASE}/SC/{eid}/"
 
         try:
-            resp = self._get(path, allow_redirects=True)
+            resp = self._get(path)
         except SCEnrRetryableError:
             raise
         except Exception as exc:
             raise SCEnrError(f"ENR URL resolution failed for EID={eid}: {exc}") from exc
 
-        resolved = resp.url
+        # The CF proxy follows redirects server-side; X-Upstream-Url is the final URL.
+        resolved = resp.headers.get("X-Upstream-Url") or resp.url
         # Ensure trailing slash for consistent path construction downstream.
         if not resolved.endswith("/"):
             resolved += "/"
