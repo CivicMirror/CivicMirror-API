@@ -31,10 +31,10 @@ def normalize(text: str) -> str:
 
 def ca_primary_date(year: int) -> date:
     """
-    California primary: first Tuesday after the first Monday in March.
+    California primary: first Tuesday after the first Monday in June.
     (Consolidated Statewide Primary — even-numbered years)
     """
-    first = date(year, 3, 1)
+    first = date(year, 6, 1)
     days_to_monday = (calendar.MONDAY - first.weekday()) % 7
     first_monday = first + timedelta(days=days_to_monday)
     return first_monday + timedelta(days=1)

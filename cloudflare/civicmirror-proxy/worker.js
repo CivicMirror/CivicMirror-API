@@ -111,6 +111,7 @@ export default {
       if (val) responseHeaders.set(header, val);
     }
     responseHeaders.set("X-Upstream-Status", String(upstream.status));
+    responseHeaders.set("X-Upstream-Url", upstream.url);
 
     // HEAD responses must not have a body per RFC 9110.
     const body = method === "HEAD" ? null : upstream.body;
