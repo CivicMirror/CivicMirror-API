@@ -121,15 +121,17 @@ Tracks Stage 1 (Election + Race Creation) and Stage 2 (Results Ingestion) implem
 | **CA** | California | ✅ Complete — CA SOS (`sync_ca_elections`) | ✅ Complete — CA SOS (`sync_ca_races`); REST API endpoint catalog | ❌ No adapter (results filter bug pending — see Future-Features.md) |
 | **PA** | Pennsylvania | ✅ Available | ⚠️ Blocked (2026 data not yet published) | ❌ Pending Socrata adapter |
 | **MI** | Michigan | ✅ Available | ⚠️ Blocked (`michiganelections.io` 503) | ❌ Pending API recovery |
-| **VA** | Virginia | ✅ Complete — VA Elect (`sync_va_elections`) | ✅ Complete — VA Elect (`sync_va_races`); Enhanced Voting API | ❌ No adapter |
+| **VA** | Virginia | ✅ Complete — VA Elect (`sync_va_elections`) | ✅ Complete — VA Elect (`sync_va_races`); Enhanced Voting API | ✅ Complete — Enhanced Voting ENR (`va.py`); `enr_slug` auto-populated; version-cached per election |
 | **MA** | Massachusetts | ✅ Complete — MA SOS (`sync_ma_elections`) | ✅ Complete — MA SOS (`sync_ma_races` + `sync_ma_ballot_question`) | ✅ Complete — electionstats CSV (`sync_ma_races` vote totals) |
 | **AR** | Arkansas | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete — TotalVote/TotalResults REST adapter (`ar.py`); GUID + legacy numeric paths; `totalvote_election_id` in `source_metadata` |
 | **CT** | Connecticut | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete — PCC EMS static JSON adapter (`ct.py`); `ct_election_id` in `source_metadata`; TotalVote migration path documented |
+| **AZ** | Arizona | ✅ Complete — AZ SOS (`sync_az_elections`); HTTPS XML feed | ✅ Complete — AZ SOS (`sync_az_candidate_details`); stable AZ candidate ID dedup, fingerprint gate | ✅ Complete — HTTPS XML results feed (`az.py`); `az_election_name` auto-derived from election type |
+| **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | (20 states — Clarity sweep) | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete — Tier A Clarity adapters (one per state); `results_url` must be set in admin per election |
 | All others | — | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter |
 
-**Full Coverage** (all three stages ✅): **WV**, **CO**, **SC**, **MA**  
-**Results adapter only** (Stage 2 ✅, Stage 1 via Civic API): **AR**, **CT**  
-**Adapter built, needs `results_url`**: **IA** (Clarity adapter exists; `results_url` auto-populated once SC ENR-style linking is added)  
+**Full Coverage** (all three stages ✅): **WV**, **CO**, **SC**, **MA**, **VA**, **AZ**  
+**Results adapter only** (Stage 2 ✅, Stage 1 via Civic API): **AR**, **CT**, plus 20 Clarity Tier A states — `results_url` must be set per election in admin  
+**Adapter built, needs `results_url`**: **IA** (Clarity adapter; Stage 1 complete via ia_sos; `results_url` requires manual admin entry or SC ENR-style auto-linking)  
 **Blocked adapters**: PA (data publication ~2-4 weeks), MI (API 503)
 
 ---

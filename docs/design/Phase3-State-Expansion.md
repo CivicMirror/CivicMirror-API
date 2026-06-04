@@ -64,7 +64,7 @@ class XXAdapter(ClarityAdapter):
 | VT | ✅ Clarity confirmed | A |
 | WI | ✅ Clarity confirmed | A |
 
-**19 Tier A adapters to build** (2-line each). **KY** needs a separate research pass to find its results system. **AR** resolved — TotalVote/TotalResults Tier B adapter shipped (PR #10).
+**All 20 Tier A Clarity adapters complete** (commit a938bd2). **KY** still needs a separate research pass — does not use Clarity. **AR** resolved — TotalVote/TotalResults Tier B adapter shipped (PR #10).
 
 After confirming per state:
 1. Create `backend/results/adapters/XX.py`
@@ -92,11 +92,12 @@ Ordered by primary date.
 - Verify Clarity first; if not, build Tier B using Socrata SODA pattern
 - Research doc: `docs/state-research/NY/NY-Election_Research.md`
 
-### AZ — Arizona (July 28 primary)
+### AZ — Arizona (July 28 primary) ✅ Complete
 
-- **Tier 1 source:** FTP XML feed at `ftp://ftp.azsos.gov/ElectionResults/` — real-time (<2 min on election night)
-- Not on Clarity — requires custom results adapter
-- Build Tier B: FTP XML client + parser + mapper + Stage 1/2 tasks
+- **Implemented:** HTTPS XML feed at `https://apps.azsos.gov/ftp/ElectionResults/{year}/State/{election_name}/Results.Summary.xml` (HTTP 200 confirmed; original FTP plan superseded)
+- Stage 1 (`sync_az_elections`): seeds Election records, fingerprints candidate list HTML, upserts Race + Candidate records for FEDERAL + STATE branches; deduplicates by `az_candidate_id`
+- Stage 2 (`az.py`): polls XML feed; `az_election_name` auto-derived from election type; `fileId` change detection avoids redundant ingestion
+- Scheduler: `sync-az-sos` daily at 05:00 Phoenix time (`0 5 * * *`, `America/Phoenix`)
 - Research doc: `docs/state-research/AZ/AZ-Election_Research.md`
 
 ### WA — Washington (August 4 primary)
