@@ -223,7 +223,8 @@ def map_race(election_obj: Election, ballot_item: dict) -> dict:
 def map_candidate(ballot_option: dict) -> dict:
     """Map a ballotOptions[] entry to Candidate model field values."""
     party_abbr = (ballot_option.get("party") or {}).get("abbreviation", "")
-    party_name = (ballot_option.get("party") or {}).get("name", "")
+    _party_name_raw = (ballot_option.get("party") or {}).get("name", "")
+    party_name = (_party_name_raw[0] if isinstance(_party_name_raw, list) else _party_name_raw) or ""
 
     return {
         "party": party_name or party_abbr,
