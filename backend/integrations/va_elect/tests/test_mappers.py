@@ -231,6 +231,23 @@ def test_map_candidate_with_party():
     assert result["source_metadata"]["is_write_in"] is False
 
 
+def test_map_candidate_party_name_as_list():
+    """Party name returned as [{languageId, text}] list (live API format)."""
+    opt = {
+        "name": [{"languageId": "en", "text": "Jane Smith"}],
+        "nativeId": "cs2",
+        "isWinner": False,
+        "isWriteIn": False,
+        "party": {
+            "abbreviation": "D",
+            "name": [{"languageId": "en", "text": "Democratic"}],
+        },
+    }
+    result = map_candidate(opt)
+    assert result["party"] == "Democratic"
+    assert result["source_metadata"]["party_abbreviation"] == "D"
+
+
 def test_map_candidate_write_in():
     opt = {
         "name": [{"languageId": "en", "text": "Write-In"}],
