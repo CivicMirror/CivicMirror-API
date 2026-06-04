@@ -211,3 +211,139 @@ def test_parse_detail_sparse_photo_zero():
 def test_parse_detail_missing_article():
     d = parse_candidate_detail(b"<html><body></body></html>")
     assert d.name == "" and d.bio == ""
+
+
+# ---------------------------------------------------------------------------
+# mappers
+# ---------------------------------------------------------------------------
+
+from integrations.az_sos.mappers import AZ_ELECTIONS, normalize_contest_name, party_abbrev
+
+
+def test_az_elections_primary_date():
+    primary = next(e for e in AZ_ELECTIONS if e["election_type"] == "primary")
+    assert primary["election_date"].isoformat() == "2026-07-21"
+
+
+def test_az_elections_general_date():
+    general = next(e for e in AZ_ELECTIONS if e["election_type"] == "general")
+    assert general["election_date"].isoformat() == "2026-11-03"
+
+
+# normalize_contest_name — party suffix stripping
+def test_normalize_strips_dem_suffix():
+    assert normalize_contest_name("Governor (DEM)") == "Governor"
+
+def test_normalize_strips_rep_suffix():
+    assert normalize_contest_name("Governor (REP)") == "Governor"
+
+def test_normalize_strips_nol_suffix():
+    assert normalize_contest_name("NOL Partisan Notice (NOL)") == "NOL Partisan Notice"
+
+def test_normalize_no_suffix_unchanged():
+    assert normalize_contest_name("Governor") == "Governor"
+
+# normalize_contest_name — US House join (real strings from both sources)
+def test_normalize_xml_us_house():
+    result = normalize_contest_name("U.S. Representative in Congress - District No. 1 (DEM)")
+    assert result == "U.S. House - District 1"
+
+def test_normalize_list_us_house():
+    result = normalize_contest_name("U.S. House of Rep. - District 1")
+    assert result == "U.S. House - District 1"
+
+def test_normalize_us_house_joins():
+    xml = normalize_contest_name("U.S. Representative in Congress - District No. 7 (REP)")
+    lst = normalize_contest_name("U.S. House of Rep. - District 7")
+    assert xml == lst
+
+# normalize_contest_name — state senator (double space in XML)
+def test_normalize_xml_state_senator_double_space():
+    result = normalize_contest_name("State Senator - District No.  1 (DEM)")
+    assert result == "State Senator - District 1"
+
+def test_normalize_list_state_senator():
+    result = normalize_contest_name("State Senator - District 1")
+    assert result == "State Senator - District 1"
+
+def test_normalize_state_senator_joins():
+    xml = normalize_contest_name("State Senator - District No.  5 (REP)")
+    lst = normalize_contest_name("State Senator - District 5")
+    assert xml == lst
+
+# normalize_contest_name — state representative (double space in XML)
+def test_normalize_xml_state_rep_double_space():
+    result = normalize_contest_name("State Representative - District No.  1 (DEM)")
+    assert result == "State Representative - District 1"
+
+def test_normalize_state_rep_joins():
+    xml = normalize_contest_name("State Representative - District No.  12 (GRN)")
+    lst = normalize_contest_name("State Representative - District 12")
+    assert xml == lst
+
+# normalize_contest_name — statewide races
+def test_normalize_corporation_commissioner():
+    assert normalize_contest_name("Corporation Commissioner (DEM)") == "Corporation Commissioner"
+
+# party_abbrev
+def test_party_abbrev_democratic():
+    assert party_abbrev("Democratic") == "DEM"
+
+def test_party_abbrev_republican():
+    assert party_abbrev("Republican") == "REP"
+
+def test_party_abbrev_libertarian():
+    assert party_abbrev("Libertarian") == "LIB"
+
+def test_party_abbrev_no_labels():
+    assert party_abbrev("No Labels") == "NOL"
+
+def test_party_abbrev_nonpartisan():
+    assert party_abbrev("Non-partisan") == "NPA"
+
+def test_party_abbrev_green():
+    assert party_abbrev("Green") == "GRN"
+
+# geography_scope
+from integrations.az_sos.mappers import geography_scope
+
+def test_geography_scope_federal():
+    assert geography_scope("FEDERAL - LEGISLATIVE") == "congressional_district"
+
+def test_geography_scope_state_executive():
+    assert geography_scope("STATE - EXECUTIVE") == "statewide"
+
+def test_geography_scope_state_legislative():
+    assert geography_scope("STATE - LEGISLATIVE") == "state_legislative_district"
+
+# normalize_candidate_name
+from integrations.az_sos.mappers import normalize_candidate_name
+
+def test_normalize_candidate_regular():
+    name, is_wi = normalize_candidate_name("Gallego, Ruben")
+    assert name == "Ruben Gallego"
+    assert is_wi is False
+
+def test_normalize_candidate_diacritic():
+    name, is_wi = normalize_candidate_name("Galán-Woods, Marlene")
+    assert name == "Marlene Galán-Woods"
+    assert is_wi is False
+
+def test_normalize_candidate_no_comma_unchanged():
+    name, is_wi = normalize_candidate_name("Governor")
+    assert name == "Governor"
+    assert is_wi is False
+
+def test_normalize_candidate_generic_write_in():
+    name, is_wi = normalize_candidate_name("Write-In")
+    assert name is None
+    assert is_wi is True
+
+def test_normalize_candidate_named_write_in():
+    name, is_wi = normalize_candidate_name("Flores, Alex (Write-In)")
+    assert name == "Alex Flores"
+    assert is_wi is True
+
+def test_normalize_candidate_named_write_in_suffix_stripped():
+    name, _ = normalize_candidate_name("Flores, Alex (Write-In)")
+    assert "(Write-In)" not in name
