@@ -154,6 +154,7 @@ INSTALLED_APPS += [
     'integrations.ma_sos',
     'integrations.ca_sos',
     'integrations.az_sos',
+    'integrations.nc_sbe',
     'internal',
     'api',
     'accounts',
