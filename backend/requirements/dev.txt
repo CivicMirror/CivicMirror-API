@@ -6,3 +6,4 @@ factory-boy
 faker
 ipython
 ruff==0.15.14
+pre-commit
