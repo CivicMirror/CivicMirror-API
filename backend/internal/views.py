@@ -6,6 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from integrations.az_sos.tasks import sync_az_elections
+from integrations.election_calendar.tasks import seed_2026_elections
 from integrations.nc_sbe.tasks import sync_nc_elections
 from integrations.ca_sos.tasks import sync_ca_elections
 from integrations.civic.tasks import sync_elections
@@ -153,6 +154,13 @@ def sync_sc_enr_results_trigger(request):
 @require_internal_task_token
 def sync_ca_sos_trigger(request):
     return _trigger("sync_ca_sos", sync_ca_elections, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def seed_election_calendar_trigger(request):
+    return _trigger("seed_2026_elections", seed_2026_elections, request)
 
 
 @csrf_exempt

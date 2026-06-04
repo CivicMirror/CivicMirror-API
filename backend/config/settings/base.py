@@ -155,6 +155,7 @@ INSTALLED_APPS += [
     'integrations.ca_sos',
     'integrations.az_sos',
     'integrations.nc_sbe',
+    'integrations.election_calendar',
     'internal',
     'api',
     'accounts',
