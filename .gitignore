@@ -13,3 +13,6 @@ backend/staticfiles/
 
 # Env files
 .env
+
+# HAR captures (may contain session cookies / tokens)
+*.har
