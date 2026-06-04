@@ -73,7 +73,7 @@ A version string confirms Clarity. Only create the adapter after confirmation. N
 
 A Tier A results adapter has immediate value even without a full SOS adapter — `poll_pending_results` fires nightly and will pick up results for any election already in the DB (from Civic API). Ship Tier A adapters before waiting for Tier B work.
 
-## Outcomes (updated 2026-06-01)
+## Outcomes (updated 2026-06-04)
 
 ### Completed adapters
 
@@ -81,10 +81,19 @@ A Tier A results adapter has immediate value even without a full SOS adapter —
 |---|---|---|---|---|
 | **AR** | B | `results/adapters/ar.py` | 2026-06-01 (PR #10) | TotalVote/TotalResults REST API; GUID + legacy numeric paths; `totalvote_election_id` in `source_metadata` |
 | **CT** | B (custom) | `results/adapters/ct.py` | 2026-06-01 (PR #11) | PCC EMS static JSON; `ct_election_id` in `source_metadata`; TotalVote migration path documented; monitor pre-Nov 2026 |
+| **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | A (Clarity) | `results/adapters/{ak,de,hi,...}.py` | 2026-06-02 (commit a938bd2) | 20 two-line Clarity thin wrappers; `results_url` must be set per election in Django admin |
+| **VA** | B (custom) | `results/adapters/va.py` + `integrations/va_elect/` | 2026-06-02 (commit f04882a) | Enhanced Voting ENR API; `enr_slug` auto-populated by `sync_va_elections`; version-cached via `asOf` timestamp |
+| **AZ** | B | `results/adapters/az.py` + `integrations/az_sos/` | 2026-06-04 (commits 88537bc–f30dfda) | AZ SOS HTTPS XML feed (`Results.Summary.xml`); `az_election_name` auto-derived; `fileId` change detection; Stage 1 (`sync_az_elections`) does race + candidate upsert |
 
 **AR** validated the "Tier B without a full SOS adapter" pattern — the TotalVote REST API is richer than Clarity and eliminates the need for election-by-election `results_url` config. AR elections/races still come from Civic API (Stage 1 only).
 
 **CT** was originally slated for Group 3 (November 2026 general). Moved up because the PCC EMS JSON schema was fully mapped from the HAR research and the adapter could be built cleanly without waiting for November.
+
+**Clarity sweep (20 states)** validated the Tier A model at scale. All 20 adapters built in a single commit; each is 7 lines. `results_url` must be set per election in Django admin before `poll-pending-results` can ingest results.
+
+**VA** used the Tier B-without-SOS-adapter pattern (results adapter + dedicated SOS integration). Enhanced Voting ENR is fetched programmatically using the `enr_slug` stored on the Election record by `sync_va_elections` — no manual `results_url` required.
+
+**AZ** implemented as HTTPS XML (not the original FTP plan). `apps.azsos.gov` serves `Results.Summary.xml` over HTTPS with confirmed 200 responses. Stage 1 (`sync_az_elections`) upserts Election + Race + Candidate records; Stage 2 (`az.py`) polls the same XML feed for vote totals.
 
 ## Consequences
 
