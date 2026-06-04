@@ -94,6 +94,7 @@ def test_registry_covers_every_triggered_task():
     expected = {
         "sync_elections", "poll_sc_enr", "sync_sc_enr_results", "sync_fec",
         "sync_openstates", "sync_sc_vrems", "sync_ia_sos", "sync_co_sos",
-        "sync_va_elect", "sync_ma_sos", "sync_ca_sos", "poll_pending_results",
+        "sync_va_elect", "sync_ma_sos", "sync_ca_sos", "sync_az_sos",
+        "sync_nc_sbe", "poll_pending_results",
     }
     assert set(TASK_LOCKS) == expected
