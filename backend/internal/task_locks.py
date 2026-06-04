@@ -40,6 +40,7 @@ TASK_LOCKS: dict[str, tuple[str, int]] = {
     "sync_va_elect":        (WINDOW_DAILY,      23 * _HOUR),
     "sync_ma_sos":          (WINDOW_DAILY,      23 * _HOUR),
     "sync_ca_sos":          (WINDOW_DAILY,      23 * _HOUR),
+    "sync_az_sos":          (WINDOW_DAILY,      23 * _HOUR),
     "poll_pending_results": (WINDOW_DAILY,      23 * _HOUR),
 }
 
