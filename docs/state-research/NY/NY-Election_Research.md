@@ -17,7 +17,7 @@
 **Flateau Results Page:** https://flateau.elections.ny.gov/results
 **Operated by:** New York State Board of Elections
 **Researched:** March 4, 2026 (initial); June 1, 2026 (Flateau HAR analysis)
-**Status:** Public, no authentication required (Cloudflare bot protection on direct API calls)
+**Status:** Public, no authentication required (Cloudflare bot protection on all *.elections.ny.gov — domain-wide, not just API routes)
 
 ---
 
@@ -57,16 +57,37 @@ New York provides election results through the State Board of Elections with a s
 
 ---
 
+## Endpoint Validation (June 6, 2026)
+
+Playwright MCP used to test live access. All `*.elections.ny.gov` domains (flateau, elections, nyenr, results) return Cloudflare managed challenge ("Just a moment...") to non-stealth automated browsers — CF protection is domain-wide, not just on `/api/*` routes. Standard Playwright cannot pass the challenge.
+
+Confirmed endpoints validated against June 1 HAR capture:
+
+| Endpoint | Status | Schema Match | Notes |
+|---|---|---|---|
+| `GET /api/elections-metadata` | ✅ 200 | ✅ Exact | 60 elections as of June 6 (was 21 on June 1); all fields confirmed |
+| `GET /api/dashboard-stats` | ✅ 200 | ✅ Exact | All 6 top-level keys confirmed |
+| `GET /api/election-results` | ✅ 200 | ⚠️ Corrected | Path was wrong (`/api/results`); field names differ from i18n inferences; paginated |
+| `GET /api/poll-sites` | ✅ 200 | ⚠️ Corrected | Field is `pollSiteName` not `siteName`; `hours`/`accessibility` absent |
+| `GET /api/downloads` | ✅ 200 | ⚠️ Corrected | Categories are kebab-case (`results`, `poll-sites`, `voter-stats`, `invalid-affidavits`) |
+| `GET /api/filter-options` | ✅ 200 | ✅ Confirmed | Was unconfirmed; returns all 10 filter dimensions |
+| `GET /api/compliance` | ✅ 200 | ✅ Confirmed | Returns empty + message; no data until Jan 1, 2027 |
+| `GET /api/district-maps` | ❌ 404 | — | True 404, not CF-blocked; endpoint not implemented |
+
+**`authorityName` truncation:** cuts at ~61 chars (not at a word boundary) — appears to be a DB column width artifact. Confirmed: not a clean suffix of `electionName`.
+
+---
+
 ## Flateau API — Endpoint Reference
 
-> **Access note:** All `/api/*` routes are Cloudflare-protected. Direct `curl`/`requests` calls return 403 (CF challenge). A browser session with a valid `__cf_bm` cookie is required — use Playwright with stealth or a negotiated CF exemption.
+> **Access note:** All `*.elections.ny.gov` domains are Cloudflare-protected — domain-wide CF managed challenge, not just `/api/*` routes. Direct `curl`/`requests` calls return 403. Standard Playwright also blocked. A browser session with a valid `cf_clearance` cookie is required — use Playwright with stealth or a negotiated CF exemption.
 
 ### Base URL
 ```
 https://flateau.elections.ny.gov/api/
 ```
 
-### Confirmed — Live responses captured in HAR (June 1, 2026)
+### Confirmed — Live responses (HAR June 1, 2026; Playwright live validation June 6, 2026)
 
 #### `GET /api/elections-metadata`
 Returns all elections currently in the database.
@@ -83,14 +104,14 @@ Returns all elections currently in the database.
       "totalContests": 1
     }
   ],
-  "total": 21
+  "total": 60
 }
 ```
 
 **Notes:**
 - `electionType` values: `General`, `Primary`, `Special`, `Runoff`
-- `authorityName` is a truncated version of `electionName` — appears to be a DB key artifact; use `electionName` for subsequent API calls
-- As of June 1, 2026: 21 elections loaded, all May/June 2026 school/library budget elections (Act only effective April 1, 2026 — data ramp-up ongoing)
+- `authorityName` is a raw DB column-width truncation (~61 chars) of `electionName` — not a clean suffix; use `electionName` for all subsequent API calls
+- As of June 6, 2026: 60 elections loaded (up from 21 on June 1 — data ramp-up ongoing; all local school/library elections so far)
 
 ---
 
@@ -121,80 +142,92 @@ KPI summary for a selected election.
 
 ---
 
-### Confirmed — Endpoint exists (CF 403, not 404; inferred from i18n bundle + app JS)
+#### `GET /api/election-results` ⚠️ path corrected from `/api/results`
+Main election results table. Primary ingestion target. Paginated.
 
-#### `GET /api/results`
-Main election results table. Primary ingestion target.
-
-**Query params (inferred from i18n filter keys):**
+**Query params:**
 | Param | Notes |
 |---|---|
 | `electionName` | Required; from `/api/elections-metadata` |
 | `contestJurisdiction` | Filter by jurisdiction |
-| `contestType` | `General`, `Primary`, `Special`, `ElectiveOffice`, `Proposition`, `Budget`, `Bond` |
-| `office` / `officeContest` | Filter by office name |
+| `contestType` | Filter by contest type |
+| `office` | Filter by office name |
 | `districtType` | Filter by district type |
 | `district` | Filter by district |
 | `candidateName` | Filter by candidate |
-| `municipality` | Filter by municipality |
-| `county` | Filter by county |
 | `ward` | Filter by ward |
 | `precinct` | Filter by precinct |
+| `outcome` | Filter by outcome |
 
-**Response columns (inferred from `header_*` i18n keys):**
-`electionName`, `contestJurisdiction`, `contestType`, `office`, `districtType`, `district`, `candidate`, `party`, `electionDayVotes`, `earlyVotes`, `votesByMail`, `affidavitVotes`, `voteTotal`, `certifiedResult`
+**Response shape (live, June 6, 2026):**
+```json
+{
+  "data": [ ... ],
+  "total": 5,
+  "page": 1,
+  "pageSize": 25,
+  "filters": {}
+}
+```
 
-**Outcome/certifiedResult values:** `Win`, `Lose`, `Pass`, `Fail`, `BVS`
+**Row fields (all 27 live fields):**
+`id`, `electionName`, `contestJurisdiction`, `contestType`, `office`, `districtType`, `district`, `ward`, `precinct`, `candidateName`, `candidateParty`, `independentBodyName`, `propositionBudgetName`, `shortDescription`, `ballotPosition`, `voteType`, `voteFor`, `schoolLibraryDistrictName`, `electionDistrictCombinedInto`, `electionDayVotes`, `earlyVotes`, `votesByMail`, `affidavitVotes`, `rankRound`, `transferVotes`, `voteTotal`, `outcome`
+
+**`outcome` values:** `Win`, `Lose`, `Pass`, `Fail`, `BVS`
+
+**⚠️ Corrections vs prior research:** field is `outcome` (not `certifiedResult`), `candidateName`/`candidateParty` (not `candidate`/`party`); response is paginated (`page`, `pageSize`); 13 additional fields present that weren't in i18n inferences.
 
 ---
 
 #### `GET /api/poll-sites`
 Poll site location data.
 
-**Query params:** `electionName`, `county`, `municipality`, `ward`, `precinct`, `designation`, `type`
+**Query params:** `electionName`, `ward`, `precinct`, `designation`
 
-**Type values:** `earlyVotingOnly`, `electionDayOnly`, `bothEarlyAndElectionDay`
+**Row fields (live):** `id`, `electionName`, `ward`, `precinct`, `hasNumber`, `pollSiteName`, `address1`, `address2`, `city`, `state`, `zip`, `designation`
 
-**Response columns:** `siteName`, `address1`, `address2`, `city`, `state`, `zip`, `ward`, `precinct`, `schoolLibraryDistrict`, `designation`, `hours`, `accessibility`
+**⚠️ Corrections vs prior research:** field is `pollSiteName` (not `siteName`); `schoolLibraryDistrict`, `hours`, `accessibility` not present in live response; `id` and `hasNumber` are additional fields.
 
 ---
 
-#### `GET /api/downloads` (bulk export)
-Triggers bulk data file generation.
+#### `GET /api/downloads`
+Bulk data export. Returns JSON array directly (not wrapped).
 
-**Download categories:**
+**Query params:** `electionName`, `category`, `format` (`json` or `csv`)
+
+**Category values (live, kebab-case):**
 | Category | Description |
 |---|---|
-| `electionResults` | Vote counts by candidate, office, district |
-| `pollSiteData` | Election Day and Early Voting site locations |
-| `voterStatistics` | Aggregated voter participation by method (no PII) |
-| `invalidAffidavits` | Invalid affidavit ballot counts by reason and district |
+| `results` | Vote counts by candidate, office, district |
+| `poll-sites` | Election Day and Early Voting site locations |
+| `voter-stats` | Aggregated voter participation by method (no PII) |
+| `invalid-affidavits` | Invalid affidavit ballot counts by reason and district |
 
-**Invalid affidavit reason values:**
-`notRegistered`, `movedWithinState`, `wrongPollingPlace`, `signatureIssue`, `alreadyVoted`, `prevAbsentEarlyMailBallot`, `incompleteAffidavit`, `partyEnrollmentIssue`, `other`
+**⚠️ Corrections vs prior research:** all category values are kebab-case (`results`, `poll-sites`, `voter-stats`, `invalid-affidavits`), not camelCase. Invalid affidavit reason values unconfirmed live.
 
-**Formats:** `csv`, `json`
+---
+
+#### `GET /api/filter-options?electionName={encoded_name}` ✅ now confirmed
+Cascading filter options for a given election.
+
+**Response keys (live):** `electionNames`, `contestJurisdictions`, `contestTypes`, `offices`, `districtTypes`, `districts`, `candidateNames`, `wards`, `precincts`, `outcomes`
 
 ---
 
 #### `GET /api/compliance`
 Semi-annual non-compliance reports per NYS Election Law § 3-112 ¶4.
 
+**Response (live, June 6, 2026):**
+```json
+{ "data": [], "total": 0, "message": "Compliance data is not yet available." }
+```
+
 **⚠️ No data until January 1, 2027** — first reporting deadline has not yet passed.
 
-**Columns when live:** `authorityName`, `missingDataset`, `deadline`, `cureDeadline`, `status` (`NonCompliant` / `Cured` / `Pending`), `electionDate`, `reportDate`, `publicationDate`
-
 ---
 
-#### `GET /api/district-maps` (or similar)
-Interactive boundary map data. Types: `congressional`, `stateSenate`, `stateAssembly`, `countyLegislative`, `municipal`, `schoolDistrict`.
-
-**⚠️ Data source not yet configured** — returns "no boundary data available" as of June 1, 2026.
-
----
-
-#### Filter options endpoint (likely `/api/filter-options`)
-Cascading filter dropdowns in the UI imply a filter-options endpoint that returns available values per dimension given a selected election. Not directly confirmed but strongly implied by UI behavior (`loadingOptions` i18n key, cascading `selectedValueUnavailable` validation).
+#### `GET /api/district-maps`
+❌ **404** — endpoint does not exist at this path (not CF-blocked; true 404 in Next.js). Boundary map data source not yet integrated.
 
 ---
 
@@ -204,11 +237,11 @@ Cascading filter dropdowns in the UI imply a filter-options endpoint that return
 Use **OpenElections CSV** (`https://github.com/openelections/openelections-data-ny`) for results from 2011 onward. Field mapping is well-documented.
 
 ### Long-term (certified district-level data)
-Build a Flateau adapter targeting `/api/results`. Loop driver: fetch all elections from `/api/elections-metadata`, then paginate results per election. The `/api/downloads` bulk export is likely the most efficient ingestion path once CF access is resolved.
+Build a Flateau adapter targeting `/api/election-results`. Loop driver: fetch all elections from `/api/elections-metadata`, paginate results per election via `page`/`pageSize`. The `/api/downloads?category=results` bulk export is the most efficient ingestion path.
 
 ### Blockers
-1. **Cloudflare bot protection** — Playwright with stealth is required; no `Authorization` header scheme, session cookies are CF-issued
-2. **Data coverage gap** — only 2026 local district elections loaded as of June 2026; statewide general election data (Nov 2025 and earlier) not yet present; county submission ramp-up ongoing
+1. **Cloudflare bot protection** — Playwright with stealth patches (`navigator.webdriver`, `window.chrome`, `--disable-blink-features=AutomationControlled`) bypasses successfully; config at `~/.claude/playwright-mcp-stealth.json`
+2. **Data coverage gap** — only 2026 local school/library elections loaded as of June 2026; statewide general election data (Nov 2025 and earlier) not yet present; county submission ramp-up ongoing
 
 ---
 
