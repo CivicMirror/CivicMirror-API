@@ -6,6 +6,7 @@ to extract candidate listing JSON from the hidden input #dataJson.
 from __future__ import annotations
 
 import logging
+
 from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 

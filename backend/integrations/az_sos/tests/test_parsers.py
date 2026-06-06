@@ -218,7 +218,7 @@ def test_parse_detail_missing_article():
 # mappers
 # ---------------------------------------------------------------------------
 
-from integrations.az_sos.mappers import AZ_ELECTIONS, normalize_contest_name, party_abbrev
+from integrations.az_sos.mappers import AZ_ELECTIONS, normalize_contest_name, party_abbrev  # noqa: E402
 
 
 def test_az_elections_primary_date():
@@ -306,7 +306,7 @@ def test_party_abbrev_green():
     assert party_abbrev("Green") == "GRN"
 
 # geography_scope
-from integrations.az_sos.mappers import geography_scope
+from integrations.az_sos.mappers import geography_scope  # noqa: E402
 
 
 def test_geography_scope_federal():
@@ -319,7 +319,7 @@ def test_geography_scope_state_legislative():
     assert geography_scope("STATE - LEGISLATIVE") == "state_legislative_district"
 
 # normalize_candidate_name
-from integrations.az_sos.mappers import normalize_candidate_name
+from integrations.az_sos.mappers import normalize_candidate_name  # noqa: E402
 
 
 def test_normalize_candidate_regular():
