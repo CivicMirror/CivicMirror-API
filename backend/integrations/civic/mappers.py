@@ -113,7 +113,12 @@ def map_contest_to_race_defaults(election: Election, contest: dict) -> dict:
     race_type = infer_race_type(contest)
     office_title = extract_contest_title(contest)
     normalized_title = normalize_office_title(office_title)
-    ocd_id = contest.get("district", {}).get("id") or contest.get("officeDivisionId") or election.state or ""
+    # Only accept a real OCD division id. Falling back to election.state produced
+    # bare codes like "CA" that never key-matched sources emitting no OCD,
+    # spawning duplicate races. `or {}` guards a present-but-null "district".
+    district = contest.get("district") or {}
+    raw_ocd = district.get("id") or contest.get("officeDivisionId") or ""
+    ocd_id = raw_ocd if raw_ocd.startswith("ocd-division/") else ""
     opens, closes = default_voting_window(election.election_date)
     vote_method = Race.VoteMethod.YES_NO if race_type == Race.RaceType.MEASURE else Race.VoteMethod.SINGLE_CHOICE
     return {
