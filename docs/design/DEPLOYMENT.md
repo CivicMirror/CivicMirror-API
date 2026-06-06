@@ -221,8 +221,8 @@ gcloud run deploy $WORKER_SERVICE \
   --service-account=$SA_EMAIL \
   --min-instances=1 \
   --max-instances=5 \
-  --memory=512Mi \
-  --cpu=1 \
+  --memory=2Gi \
+  --cpu=2 \
   --command=docker-entrypoint.sh \
   --args=worker \
   --set-cloudsql-instances=civicmirror-2026:us-central1:civicmirror-db \

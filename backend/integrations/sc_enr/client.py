@@ -16,6 +16,7 @@ import time
 import requests
 
 from core.http import ProxyAuthError, ProxyDomainNotAllowedError, proxy_get
+
 from .exceptions import SCEnrError, SCEnrRetryableError
 
 logger = logging.getLogger(__name__)

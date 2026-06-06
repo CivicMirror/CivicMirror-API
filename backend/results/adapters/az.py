@@ -44,6 +44,7 @@ import requests
 from django.core.cache import cache
 
 from integrations.az_sos.mappers import normalize_candidate_name, normalize_contest_name
+
 from .base import AdapterResult, ResultRow, StateResultsAdapter
 from .registry import register
 

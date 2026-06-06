@@ -1,5 +1,6 @@
 """Unit tests for az_sos HTML parsers. No network access."""
 import textwrap
+
 import pytest
 
 from integrations.az_sos.parsers import (
@@ -307,6 +308,7 @@ def test_party_abbrev_green():
 # geography_scope
 from integrations.az_sos.mappers import geography_scope
 
+
 def test_geography_scope_federal():
     assert geography_scope("FEDERAL - LEGISLATIVE") == "congressional_district"
 
@@ -318,6 +320,7 @@ def test_geography_scope_state_legislative():
 
 # normalize_candidate_name
 from integrations.az_sos.mappers import normalize_candidate_name
+
 
 def test_normalize_candidate_regular():
     name, is_wi = normalize_candidate_name("Gallego, Ruben")

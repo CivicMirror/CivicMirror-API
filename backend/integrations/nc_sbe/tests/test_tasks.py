@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -44,7 +43,7 @@ def test_sync_nc_elections_sets_results_pending_for_past():
         sync_nc_elections.apply()
 
     election = Election.objects.get(state="NC", election_date=datetime.date(2024, 11, 5))
-    assert election.status == "RESULTS_PENDING"
+    assert election.status == Election.Status.RESULTS_PENDING
 
 
 @pytest.mark.django_db
@@ -94,23 +93,25 @@ def test_sync_nc_elections_is_idempotent():
 
 @pytest.mark.django_db
 def test_sync_nc_elections_retries_on_retryable_error():
+    from celery.exceptions import Retry
+
     from integrations.nc_sbe.exceptions import NcSbeRetryableError
     from integrations.nc_sbe.tasks import sync_nc_elections
 
-    with patch("integrations.nc_sbe.tasks.NcSbeClient") as MockClient:
-        MockClient.return_value.list_election_date_strs.side_effect = NcSbeRetryableError("timeout")
-        result = sync_nc_elections.apply()
-
-    assert result.failed()
+    with pytest.raises(Retry):
+        with patch("integrations.nc_sbe.tasks.NcSbeClient") as MockClient:
+            MockClient.return_value.list_election_date_strs.side_effect = NcSbeRetryableError("timeout")
+            sync_nc_elections.apply()
 
 
 @pytest.mark.django_db
 def test_sync_nc_elections_retries_on_requests_timeout():
     """Network timeouts during S3 listing should be wrapped as NcSbeRetryableError and retried."""
     import requests as req
+    from celery.exceptions import Retry
+
     from integrations.nc_sbe.tasks import sync_nc_elections
 
-    with patch("integrations.nc_sbe.client.requests.Session.get", side_effect=req.Timeout("timed out")):
-        result = sync_nc_elections.apply()
-
-    assert result.failed()
+    with pytest.raises(Retry):
+        with patch("integrations.nc_sbe.client.requests.Session.get", side_effect=req.Timeout("timed out")):
+            sync_nc_elections.apply()
