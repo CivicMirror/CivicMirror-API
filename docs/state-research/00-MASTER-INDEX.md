@@ -119,7 +119,7 @@ Tracks Stage 1 (Election + Race Creation) and Stage 2 (Results Ingestion) implem
 | **SC** | South Carolina | ✅ Complete — VREMS (`sync_sc_elections`) | ✅ Complete — VREMS (`sync_sc_races`); 122 elections/2026 incl. Local | ✅ Complete — Clarity (`sc.py`); `results_url` auto-set by SC ENR via ingest |
 | **IA** | Iowa | ✅ Complete | ✅ Complete — `sync_ia_candidates` (PDF candidate list, auto-synced) | ✅ Adapter built — Clarity (`ia.py`) |
 | **CA** | California | ✅ Complete — CA SOS (`sync_ca_elections`) | ✅ Complete — CA SOS (`sync_ca_races`); REST API endpoint catalog | ❌ No adapter (results filter bug pending — see Future-Features.md) |
-| **PA** | Pennsylvania | ✅ Available | ⚠️ Blocked (2026 data not yet published) | ❌ Pending Socrata adapter |
+| **PA** | Pennsylvania | ✅ Available | ⚠️ Blocked (no free PA state API for candidates) | ❌ No adapter — Socrata has mail ballot data only; results on electionreturns.pa.gov (Incapsula-protected, no public API) |
 | **MI** | Michigan | ✅ Available | ⚠️ Blocked (`michiganelections.io` 503) | ❌ Pending API recovery |
 | **VA** | Virginia | ✅ Complete — VA Elect (`sync_va_elections`) | ✅ Complete — VA Elect (`sync_va_races`); Enhanced Voting API | ✅ Complete — Enhanced Voting ENR (`va.py`); `enr_slug` auto-populated; version-cached per election |
 | **MA** | Massachusetts | ✅ Complete — MA SOS (`sync_ma_elections`) | ✅ Complete — MA SOS (`sync_ma_races` + `sync_ma_ballot_question`) | ✅ Complete — electionstats CSV (`sync_ma_races` vote totals) |
@@ -132,7 +132,7 @@ Tracks Stage 1 (Election + Race Creation) and Stage 2 (Results Ingestion) implem
 **Full Coverage** (all three stages ✅): **WV**, **CO**, **SC**, **MA**, **VA**, **AZ**  
 **Results adapter only** (Stage 2 ✅, Stage 1 via Civic API): **AR**, **CT**, plus 20 Clarity Tier A states — `results_url` must be set per election in admin  
 **Adapter built, needs `results_url`**: **IA** (Clarity adapter; Stage 1 complete via ia_sos; `results_url` requires manual admin entry or SC ENR-style auto-linking)  
-**Blocked adapters**: PA (data publication ~2-4 weeks), MI (API 503)
+**Blocked adapters**: PA (no free state API for candidates/results — Socrata has mail ballot data only), MI (API 503)
 
 ---
 
