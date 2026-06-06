@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
+from integrations.pa_sos.mappers import geography_scope, normalize_contest_name, party_abbrev
 from integrations.pa_sos.parsers import parse_candidate_detail, parse_candidate_list
-from integrations.pa_sos.mappers import normalize_contest_name, party_abbrev, geography_scope
 
 _MOCK_JSON_LIST = """[
   {

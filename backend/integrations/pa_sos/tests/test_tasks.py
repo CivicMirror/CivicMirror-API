@@ -4,6 +4,7 @@ Integration tests for pa_sos Celery tasks. All network and browser operations ar
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from integrations.pa_sos.parsers import PaCandidateDetailData, PaCandidateListEntry

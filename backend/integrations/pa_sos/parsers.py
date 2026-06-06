@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+
 from bs4 import BeautifulSoup
 
 

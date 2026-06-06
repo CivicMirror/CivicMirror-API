@@ -28,7 +28,7 @@ from ops.models import SyncLog
 
 from .client import PaSosClient
 from .exceptions import PaSosRetryableError
-from .mappers import PA_ELECTIONS, geography_scope, party_abbrev, normalize_contest_name
+from .mappers import PA_ELECTIONS, geography_scope, normalize_contest_name, party_abbrev
 from .parsers import parse_candidate_detail, parse_candidate_list
 
 logger = logging.getLogger(__name__)
@@ -89,11 +89,11 @@ def sync_pa_elections(self):
 
                 logger.info("Fetching candidate list for PA %s election (value %d)", etype, dropdown_val)
                 json_str = client.fetch_candidate_list(dropdown_val)
-                
+
                 # Deduplicate/fingerprint check
                 fingerprint = hashlib.md5(json_str.encode("utf-8")).hexdigest()
                 cache_key = f"{_FINGERPRINT_CACHE_KEY_PREFIX}{etype}"
-                
+
                 if cache.get(cache_key) == fingerprint:
                     logger.info("pa_sos.sync_elections.skipped etype=%s fingerprint=%s", etype, fingerprint)
                     continue
