@@ -1,40 +1,40 @@
 {
   "source": "cert.pdf",
   "contest_count": 433,
-  "candidate_count": 1239,
+  "candidate_count": 1285,
   "version_history": [
     {
       "date": "04.29.2026",
       "changes": [
-        "Originalversion"
+        "Original version"
       ]
     },
     {
       "date": "04.30.2026",
       "changes": [
-        "Comptroller:Removed“LitigationPending”ontheDemocraticline.",
-        "2ndCD:Added“LitigationPending”ontheDemocraticline."
+        "Comptroller: Removed “Litigation Pending” on the Democratic line.",
+        "2nd CD: Added “Litigation Pending” on the Democratic line."
       ]
     },
     {
       "date": "05.4.2026",
       "changes": [
-        "18thCD:Removed“LitigationPending”ontheRepublicanandConservativelines."
+        "18th CD: Removed “Litigation Pending” on the Republican and Conservative lines."
       ]
     },
     {
       "date": "05.5.2026",
       "changes": [
-        "104thAD:Removed“LitigationPending”ontheDemocraticline.",
-        "113thAD:Removed“LitigationPending”ontheWorkingFamiliesline.",
-        "124thAD:Removed“LitigationPending”ontheDemocraticline."
+        "104th AD: Removed “Litigation Pending” on the Democratic line.",
+        "113th AD: Removed “Litigation Pending” on the Working Families line.",
+        "124th AD: Removed “Litigation Pending” on the Democratic line."
       ]
     },
     {
       "date": "05.13.2026",
       "changes": [
-        "2ndCD:Removed“LitigationPending”ontheDemocraticline.",
-        "18thCD:Candidatenamechange–JacquelineMaryTheresaAuringerwillnowbelistedasJackieMaryAuringer"
+        "2nd CD: Removed “Litigation Pending” on the Democratic line.",
+        "18th CD: Candidate name change – Jacqueline Mary Theresa Auringer will now be listed as Jackie Mary Auringer"
       ]
     }
   ],
@@ -528,7 +528,16 @@
       "counties": "Broome, Chenango, Columbia, Delaware, Greene, Otsego, Sullivan, Tompkins, Part of",
       "party": "Republican",
       "vote_for": "1",
-      "candidates": [],
+      "candidates": [
+        {
+          "ballot_order": "1",
+          "name": "Peter K. Oberacker"
+        },
+        {
+          "ballot_order": "2",
+          "name": "Alexander M. Portelli"
+        }
+      ],
       "key": "Representative in Congress|19||Republican"
     },
     {
@@ -628,7 +637,16 @@
       "counties": "Clinton, Essex, Franklin, Fulton, Hamilton, Herkimer, Lewis, St. Lawrence, Schoharie,",
       "party": "Democratic",
       "vote_for": "1",
-      "candidates": [],
+      "candidates": [
+        {
+          "ballot_order": "1",
+          "name": "Stuart J. Amoriell"
+        },
+        {
+          "ballot_order": "2",
+          "name": "Blake Gendebien"
+        }
+      ],
       "key": "Representative in Congress|21||Democratic"
     },
     {
@@ -638,7 +656,16 @@
       "counties": "Clinton, Essex, Franklin, Fulton, Hamilton, Herkimer, Lewis, St. Lawrence, Schoharie,",
       "party": "Republican",
       "vote_for": "1",
-      "candidates": [],
+      "candidates": [
+        {
+          "ballot_order": "1",
+          "name": "Robert J. Smullen"
+        },
+        {
+          "ballot_order": "2",
+          "name": "Anthony Constantino"
+        }
+      ],
       "key": "Representative in Congress|21||Republican"
     },
     {
@@ -723,7 +750,16 @@
       "counties": "Allegany, Cattaraugus, Chautauqua, Chemung, Tioga, Part of Erie, Part of Niagara, Part",
       "party": "Democratic",
       "vote_for": "1",
-      "candidates": [],
+      "candidates": [
+        {
+          "ballot_order": "1",
+          "name": "Aaron Gies"
+        },
+        {
+          "ballot_order": "2",
+          "name": "Kevin T. Stocker"
+        }
+      ],
       "key": "Representative in Congress|23||Democratic"
     },
     {
@@ -778,7 +814,16 @@
       "counties": "Genesee, Livingston, Orleans, Oswego, Seneca, Wayne, Wyoming, Yates, Part of",
       "party": "Democratic",
       "vote_for": "1",
-      "candidates": [],
+      "candidates": [
+        {
+          "ballot_order": "1",
+          "name": "Alissa J. Ellman"
+        },
+        {
+          "ballot_order": "2",
+          "name": "Diana K. Kastenbaum"
+        }
+      ],
       "key": "Representative in Congress|24||Democratic"
     },
     {
@@ -833,7 +878,20 @@
       "counties": "Monroe & Part of Ontario",
       "party": "Democratic",
       "vote_for": "1",
-      "candidates": [],
+      "candidates": [
+        {
+          "ballot_order": "1",
+          "name": "Robin Wilt"
+        },
+        {
+          "ballot_order": "2",
+          "name": "Joseph D. Morelle"
+        },
+        {
+          "ballot_order": "3",
+          "name": "Sherita S. Traywick"
+        }
+      ],
       "key": "Representative in Congress|25||Democratic"
     },
     {
@@ -1053,7 +1111,20 @@
       "counties": "Part of Dutchess, Part of Orange & Part of Putnam",
       "party": "Democratic",
       "vote_for": "1",
-      "candidates": [],
+      "candidates": [
+        {
+          "ballot_order": "1",
+          "name": "Gay Lee"
+        },
+        {
+          "ballot_order": "2",
+          "name": "Lisa Kaul"
+        },
+        {
+          "ballot_order": "3",
+          "name": "Evan R. Menist"
+        }
+      ],
       "key": "State Senator|39||Democratic"
     },
     {
@@ -1667,7 +1738,16 @@
       "counties": "Delaware, Otsego, Schoharie, Sullivan, Part of Broome, Part of Chenango & Part of",
       "party": "Republican",
       "vote_for": "1",
-      "candidates": [],
+      "candidates": [
+        {
+          "ballot_order": "1",
+          "name": "Terry Bernardo"
+        },
+        {
+          "ballot_order": "2",
+          "name": "Christopher W. Tague"
+        }
+      ],
       "key": "State Senator|51||Republican"
     },
     {
@@ -3107,7 +3187,20 @@
       "counties": "Hamilton, Part of Fulton, Part of Herkimer, Part of Montgomery, Part of Oneida & Part",
       "party": "Republican",
       "vote_for": "1",
-      "candidates": [],
+      "candidates": [
+        {
+          "ballot_order": "1",
+          "name": "Heather A. Scribner"
+        },
+        {
+          "ballot_order": "2",
+          "name": "Charles Potter"
+        },
+        {
+          "ballot_order": "3",
+          "name": "Chanda King"
+        }
+      ],
       "key": "Member of Assembly|118||Republican"
     },
     {
@@ -6119,7 +6212,60 @@
       "counties": "Oswego & Part of Jefferson",
       "party": "Democratic",
       "vote_for": "7",
-      "candidates": [],
+      "candidates": [
+        {
+          "ballot_order": "1",
+          "name": "Elizabeth R. Passer"
+        },
+        {
+          "ballot_order": "2",
+          "name": "Bailey Lovenguth"
+        },
+        {
+          "ballot_order": "3",
+          "name": "Stephanie McHugh Edwards"
+        },
+        {
+          "ballot_order": "4",
+          "name": "Juniper Mae Dunlap"
+        },
+        {
+          "ballot_order": "5",
+          "name": "Mona Heck"
+        },
+        {
+          "ballot_order": "6",
+          "name": "Patrick Dunlap"
+        },
+        {
+          "ballot_order": "7",
+          "name": "Christine Weisenburger"
+        },
+        {
+          "ballot_order": "8",
+          "name": "Julienne Dean"
+        },
+        {
+          "ballot_order": "9",
+          "name": "Michelle Newvine"
+        },
+        {
+          "ballot_order": "10",
+          "name": "Michael Dineen"
+        },
+        {
+          "ballot_order": "11",
+          "name": "Mary Regan Benson"
+        },
+        {
+          "ballot_order": "12",
+          "name": "James Cannon"
+        },
+        {
+          "ballot_order": "13",
+          "name": "Joseph Hart"
+        }
+      ],
       "key": "Judicial Delegate|5|120|Democratic"
     },
     {
@@ -8409,7 +8555,56 @@
       "counties": "Oswego & Part of Jefferson",
       "party": "Democratic",
       "vote_for": "7",
-      "candidates": [],
+      "candidates": [
+        {
+          "ballot_order": "1",
+          "name": "Ryan Taylor"
+        },
+        {
+          "ballot_order": "2",
+          "name": "Thomas Rinefierd"
+        },
+        {
+          "ballot_order": "3",
+          "name": "Deborah Chambers"
+        },
+        {
+          "ballot_order": "4",
+          "name": "Kathleen Mantaro"
+        },
+        {
+          "ballot_order": "5",
+          "name": "Barbara Kickbush"
+        },
+        {
+          "ballot_order": "6",
+          "name": "Amy Venskus"
+        },
+        {
+          "ballot_order": "7",
+          "name": "Marianne Hart"
+        },
+        {
+          "ballot_order": "8",
+          "name": "Amy Connolly"
+        },
+        {
+          "ballot_order": "9",
+          "name": "Jace E. Dunlap"
+        },
+        {
+          "ballot_order": "10",
+          "name": "Diane Zeller"
+        },
+        {
+          "ballot_order": "11",
+          "name": "David Passer"
+        },
+        {
+          "ballot_order": "12",
+          "name": "Randy Anthony Ladd"
+        }
+      ],
       "key": "Alt Judicial Del.|5|120|Democratic"
     },
     {
