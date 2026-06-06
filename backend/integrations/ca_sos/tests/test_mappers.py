@@ -18,7 +18,7 @@ class TestElectionDates:
     def test_primary_2026(self):
         d = ca_primary_date(2026)
         assert d.year == 2026
-        assert d.month == 3
+        assert d.month == 6
         assert d.weekday() == 1  # Tuesday
 
     def test_general_2026(self):
@@ -33,12 +33,12 @@ class TestElectionDates:
 
     def test_primary_2024(self):
         d = ca_primary_date(2024)
-        # CA 2024 primary was March 5, 2024
-        assert d == date(2024, 3, 5)
+        # CA 2024 primary statutory fallback is June 4, 2024
+        assert d == date(2024, 6, 4)
 
     def test_ca_election_date_primary(self):
         d = ca_election_date(2026, "primary")
-        assert d.month == 3
+        assert d.month == 6
 
     def test_ca_election_date_general(self):
         d = ca_election_date(2026, "general")
@@ -55,7 +55,7 @@ class TestMapElection:
         assert result["source_id"] == "ca_sos_2026_primary"
         assert result["state"] == "CA"
         assert result["name"] == "2026 California Primary Election"
-        assert result["election_date"].month == 3
+        assert result["election_date"].month == 6
 
     def test_map_election_general(self):
         result = map_election(2026, "general")
@@ -97,5 +97,5 @@ class TestMapElectionIdentity:
 
     def test_map_election_identity_falls_back_to_statutory_date(self):
         identity, _ = map_election_identity(2026, "primary", catalog_date=None)
-        # statutory fallback (first Tuesday after first Monday in March 2026)
-        assert identity["election_date"] == date(2026, 3, 3)
+        # statutory fallback (first Tuesday after first Monday in June 2026)
+        assert identity["election_date"] == date(2026, 6, 2)

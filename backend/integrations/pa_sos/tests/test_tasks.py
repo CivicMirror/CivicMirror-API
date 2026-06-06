@@ -149,7 +149,7 @@ def test_sync_pa_candidate_details_enrichment(mock_entries):
         mock_client.fetch_candidate_detail.return_value = "<html>mock</html>"
         sync_pa_candidate_details.apply(args=[primary_election.pk])
 
-    doe = Candidate.objects.get(name="John Doe")
+    doe = Candidate.objects.get(name="John Doe", race__election=primary_election)
     assert doe.source_metadata.get("pa_approved_date") == "02/10/2026 13:16:00"
     assert doe.source_metadata.get("pa_ballot_lottery") == "28"
     assert doe.source_metadata.get("pa_ballot_position") == "2"
