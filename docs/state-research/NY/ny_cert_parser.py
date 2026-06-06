@@ -91,6 +91,9 @@ def parse_contests(pdf):
                 continue
             if t in ("Governor Lt. Governor", "Governor", "Lt. Governor"):
                 continue
+            # Skip page footer rows ("Certification for the June 23, 2026 ...")
+            if t.startswith("Certification for the"):
+                continue
             pending_words.extend(row["words"])
     flush()
     return contests
@@ -100,14 +103,17 @@ def build_candidates(words, name_cols):
     """Pair ballot-order tokens with wrapped name fragments via vertical bands."""
     if not words:
         return []
-    order_x = min(w["x0"] for w in words)
-    orders, names = [], []
-    for w in words:
-        txt = w["text"]
-        if ORDER_TOKENS.match(txt) and w["x0"] <= order_x + 30:
-            orders.append(w)
-        else:
-            names.append(w)
+    # Derive order_x from ORDER_TOKENS words only.  Using min(all words) is wrong
+    # when page footer text (e.g. "Certification for the June 23...") starts to
+    # the left of the ballot-order column — it drags order_x down so that real
+    # order numbers just barely fail the x <= order_x+30 guard.
+    token_candidates = [w for w in words if ORDER_TOKENS.match(w["text"])]
+    if not token_candidates:
+        return []
+    order_x = min(w["x0"] for w in token_candidates)
+    orders = [w for w in token_candidates if w["x0"] <= order_x + 30]
+    order_ids = {id(w) for w in orders}
+    names = [w for w in words if id(w) not in order_ids]
     if not name_cols:                     # single name column
         name_cols = [min((n["x0"] for n in names), default=order_x + 60)]
     cands = []
