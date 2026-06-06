@@ -17,7 +17,6 @@ from results.adapters.nc import (
     _date_str_from_url,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -124,7 +123,6 @@ def test_date_str_from_url_unknown():
 
 @pytest.mark.django_db
 def test_adapter_returns_unchanged_when_etag_matches():
-    from results.adapters.nc import NorthCarolinaAdapter
     from elections.models import Election
 
     election = Election.objects.create(
@@ -154,7 +152,6 @@ def test_adapter_returns_unchanged_when_etag_matches():
 
 @pytest.mark.django_db
 def test_adapter_fetches_and_parses_when_etag_differs():
-    from results.adapters.nc import NorthCarolinaAdapter
     from elections.models import Election
 
     election = Election.objects.create(
@@ -185,7 +182,6 @@ def test_adapter_fetches_and_parses_when_etag_differs():
 
 @pytest.mark.django_db
 def test_adapter_handles_missing_election():
-    from results.adapters.nc import NorthCarolinaAdapter
 
     adapter = NorthCarolinaAdapter()
     result = adapter.fetch_results(date(2024, 11, 5), 999999)

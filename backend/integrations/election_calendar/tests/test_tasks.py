@@ -16,7 +16,6 @@ from integrations.election_calendar.mappers import (
     build_2026_election_specs,
 )
 
-
 # ---------------------------------------------------------------------------
 # mappers — no DB required
 # ---------------------------------------------------------------------------
@@ -129,11 +128,10 @@ def test_seed_2026_elections_is_idempotent():
 @pytest.mark.django_db
 def test_seed_2026_elections_does_not_overwrite_existing_election():
     """Calendar source has lowest precedence — should not clobber a dedicated SOS election."""
-    from elections.models import Election
-    from integrations.election_calendar.tasks import seed_2026_elections
-
     # Simulate an existing election seeded by a dedicated integration
     from aggregation import ingest
+    from elections.models import Election
+    from integrations.election_calendar.tasks import seed_2026_elections
     ingest.ingest_election(
         source="co_sos",
         source_id="co_sos_2026_primary",

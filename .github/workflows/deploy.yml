@@ -230,8 +230,8 @@ jobs:
             --service-account="cloudrun-runtime@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
             --min-instances=1 \
             --max-instances=3 \
-            --cpu=1 \
-            --memory=512Mi \
+            --cpu=2 \
+            --memory=2Gi \
             --no-allow-unauthenticated \
             --ingress=internal \
             --add-cloudsql-instances="${{ secrets.GCP_PROJECT_ID }}:${{ env.REGION }}:civicmirror-db" \

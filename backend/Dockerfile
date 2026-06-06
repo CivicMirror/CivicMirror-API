@@ -15,6 +15,16 @@ WORKDIR /app
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
+# Configure Playwright
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Install system dependencies for Playwright Chromium, then clean up
+RUN apt-get update && \
+    /usr/local/bin/playwright install-deps chromium && \
+    /usr/local/bin/playwright install chromium && \
+    chmod -R o+rx /ms-playwright && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Copy application source
 COPY . .
 

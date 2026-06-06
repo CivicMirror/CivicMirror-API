@@ -6,14 +6,14 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from integrations.az_sos.tasks import sync_az_elections
-from integrations.election_calendar.tasks import seed_2026_elections
-from integrations.nc_sbe.tasks import sync_nc_elections
 from integrations.ca_sos.tasks import sync_ca_elections
 from integrations.civic.tasks import sync_elections
 from integrations.co_sos.tasks import sync_co_elections
+from integrations.election_calendar.tasks import seed_2026_elections
 from integrations.fec.tasks import sync_fec_candidates
 from integrations.ia_sos.tasks import sync_ia_elections
 from integrations.ma_sos.tasks import sync_ma_elections
+from integrations.nc_sbe.tasks import sync_nc_elections
 from integrations.openstates.tasks import sync_openstates_all_states
 from integrations.sc_enr.tasks import poll_sc_enr_elections, sync_sc_enr_results
 from integrations.sc_vrems.tasks import sync_sc_elections
