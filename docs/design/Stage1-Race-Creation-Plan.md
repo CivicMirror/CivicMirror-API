@@ -1,7 +1,7 @@
 # Stage 1 Race Creation — Research & Build Plan
 
 **Created:** 2026-05-23  
-**Status:** P1 ✅ P2 ✅ P4-IA ✅ — P3 (PA) blocked on data, P4-MI blocked on 503  
+**Status:** P1 ✅ P2 ✅ P4-IA ✅ — P3 (PA) blocked: no free state API for candidates/results (Socrata=mail ballot only), P4-MI blocked on 503  
 **Problem:** Many elections in the DB have 0 associated races because the Google Civic API has no data for most state primaries.
 
 ---
@@ -67,7 +67,7 @@ Current Stage 1 sources:        Current Stage 2 sources:
 | **FEC API** | ✅ Federal only | Creates federal races for November general election only |
 | **OpenStates v3** | ❌ No | Only `/people` endpoint — current legislators, no elections |
 | **michiganelections.io** | ✅ Potentially | `/positions`, `/proposals` endpoints; **offline for maintenance as of 2026-05-23** |
-| **PA Socrata (data.pa.gov)** | ⚠️ Post-election | Results data — can retroactively bootstrap races |
+| **PA Socrata (data.pa.gov)** | ❌ No | Mail ballot data only — no results, candidates, or races |
 | **Clarity Elections** | ✅ Self-bootstrapping | bootstrap added to `ingest_official_results` (P2 ✅) |
 | **SC Clarity** | ✅ Confirmed | HTTP 200 on ENR infrastructure; adapter built |
 | **IA Clarity** | ✅ Confirmed | HTTP 200, live 2025/2026 data; adapter built (P4-IA ✅) |
@@ -114,11 +114,13 @@ This makes the Clarity adapter self-bootstrapping — it can populate an empty e
 - Benefits WV, CO, SC, IA immediately (retroactive fill when `results_url` is set)
 - 11 new tests added to `backend/results/tests/test_tasks.py`
 
-### 🟡 Priority 3 — PA Socrata adapter
-- Source: `https://data.pa.gov/` Socrata SODA API
-- **BLOCKED**: 2026 primary data (May 19) not yet published; historical dataset IDs (`9ej9-wkqp`, etc.) return 404 via SODA API
-- Dataset ID for election results changes per cycle — must look up on data.pa.gov when 2026 data drops
-- Build `backend/integrations/pa/` as combined Stage 1+2 adapter when data is available (~2-4 weeks post-election)
+### 🟡 Priority 3 — PA adapter
+- **CORRECTED (June 2026):** data.pa.gov Socrata has **mail ballot data only** — NOT election results or candidate lists
+- Results live at `electionreturns.pa.gov` — custom platform behind Incapsula WAF with undocumented internal API (`/api/ElectionReturn/GetData`, `/api/ElectionReturn/GetCountyBreak`)
+- `pavoterservices.pa.gov/ElectionInfo/ElectionInfo.aspx` — richest state-operated candidate source, but browser-only ASP.NET WebForms (no API)
+- **Stage 1 path:** Google Civic API (unreliable for PA) + OpenFEC (17 US House races, free) + potential pavoterservices.pa.gov scraping via Playwright
+- **Stage 2 path:** Requires browser automation to access electionreturns.pa.gov internal API (Incapsula bypass)
+- See updated `docs/state-research/PA/PA-Election_Research.md` for full analysis
 
 ### 🟢 Priority 4 — Michigan adapter
 - Wait for `michiganelections.io` to come back online (503 as of 2026-05-24)
