@@ -90,12 +90,13 @@ Vote For:  <N>   (>1 for multi-seat offices: State Committee, Judicial Delegate)
 followed by a candidate table. The **Ballot Order** cell holds a number, `Uncontested`, or the status flag `Litigation Pending`. Joint offices (Governor and Lt. Governor) use paired candidate columns (candidate + running mate). Row order = ballot position (legally significant — the document's purpose is to fix ballot order).
 
 **Parser results (June 23 2026 amended cert):**
-- **433 contests / 1,239 candidates** parsed
+- **433 contests / 1,285 candidates** parsed — **433/433 fully clean** (0 empty candidate lists)
 - Parties: Democratic 142, Conservative 139, Working Families 80, Republican 72
 - Office types (9): Governor and Lt. Governor, Comptroller, Attorney General, Representative in Congress, State Senator, Member of Assembly, Judicial Delegate, Alt Judicial Del., State Committee
-- **422/433 fully clean**; **11 contests** hit a table-layout variant (contest metadata captured, candidate list empty) — spread Congress (6), State Senator (2), Assembly (1), Judicial Delegate (1), Alt Judicial Del. (1). Likely contested races with numeric ballot order or tables spanning a page break — flagged for parser follow-up.
 - Parser: `ny_cert_parser.py` (pdfplumber, word-position clustering — required because candidate names wrap across two visual lines with the ballot-order token vertically centered between them; naive line parsing scrambles names). Emits contest key `office|district|district2|party` + ordered candidates.
 - Output: `ny_cert_2026.json`
+
+**Parser bug fixed (June 6, 2026):** Page footer text ("Certification for the June 23...") at `x≈54` was left of the ballot-order column (`x≈87`). `order_x = min(x0 for all words)` pulled `order_x` to 54, so the `x ≤ order_x+30` guard rejected ballot-order numbers at `x≈87` by 3pt. Fixed by anchoring `order_x` on ORDER_TOKENS words only; also added a footer-row skip in `parse_contests`. Affected 11 contested races (Congress ×6, State Senator ×2, Assembly ×1, Judicial Delegate ×1, Alt Judicial Del. ×1); all now parse correctly.
 
 ### Amendment detection: Version History block
 
@@ -338,7 +339,6 @@ Build a Flateau adapter targeting `/api/election-results`. Loop driver: fetch al
 ### Blockers
 1. **Cloudflare bot protection** — domain-wide on `*.elections.ny.gov` incl. static PDF assets; `nyenr` is the soft-CF exception. Playwright with stealth patches (`navigator.webdriver`, `window.chrome`, `--disable-blink-features=AutomationControlled`) bypasses successfully; config at `~/.claude/playwright-mcp-stealth.json`. **One stealth session covers Stage 1 (cert PDF/HTML), the historical results DB, and Stage 2 (Flateau).**
 2. **Data coverage gap** — only 2026 local school/library elections loaded in Flateau as of June 2026; statewide general election data (Nov 2025 and earlier) not yet present; county submission ramp-up ongoing
-3. **Cert parser edge cases** — 11/433 contests (contested numeric-order or page-spanning tables) need a parser tweak to populate candidate lists
 
 ---
 
