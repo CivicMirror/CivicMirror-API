@@ -102,13 +102,13 @@ def test_seed_2026_elections_sets_correct_status():
 
     seed_2026_elections.apply()
 
-    # TX primary (Mar 3) is in the past → RESULTS_PENDING
+    # TX primary (Mar 3) is in the past → results_pending
     tx_primary = Election.objects.get(state="TX", election_type="primary", election_date=date(2026, 3, 3))
-    assert tx_primary.status == "RESULTS_PENDING"
+    assert tx_primary.status == "results_pending"
 
-    # Nov 3 general is future → UPCOMING
+    # Nov 3 general is future → upcoming
     tx_general = Election.objects.get(state="TX", election_type="general", election_date=date(2026, 11, 3))
-    assert tx_general.status == "UPCOMING"
+    assert tx_general.status == "upcoming"
 
 
 @pytest.mark.django_db
@@ -139,9 +139,9 @@ def test_seed_2026_elections_does_not_overwrite_existing_election():
             "state": "CO",
             "election_type": "primary",
             "election_date": date(2026, 6, 30),
-            "jurisdiction_level": "STATE",
+            "jurisdiction_level": "state",
         },
-        fields={"name": "2026 Colorado Primary from co_sos", "status": "UPCOMING"},
+        fields={"name": "2026 Colorado Primary from co_sos", "status": "upcoming"},
     )
 
     seed_2026_elections.apply()

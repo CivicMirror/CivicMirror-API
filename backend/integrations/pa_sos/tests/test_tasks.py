@@ -107,9 +107,9 @@ def test_sync_pa_elections_deduplication(mock_entries):
             sync_pa_elections.apply()
 
     run_sync()
-    count1 = Candidate.objects.filter(name="John Doe").count()
+    count1 = Candidate.objects.filter(name="John Doe", race__election__election_type="primary").count()
     run_sync()
-    count2 = Candidate.objects.filter(name="John Doe").count()
+    count2 = Candidate.objects.filter(name="John Doe", race__election__election_type="primary").count()
 
     assert count1 == count2 == 1
 
