@@ -88,6 +88,13 @@ def test_normalize_party_strips_ca_party_preference_prefix():
     assert normalize_party("Party Preference: Whig") == "WHIG"
 
 
+def test_normalize_party_aligns_civic_and_ca_sos_vocab():
+    # No-party-preference: civic "NPP" vs CA "Party Preference: None".
+    assert normalize_party("NPP") == normalize_party("Party Preference: None") == "NP"
+    # Peace & Freedom: civic "P&F" vs CA "Party Preference: Peace and Freedom".
+    assert normalize_party("P&F") == normalize_party("Party Preference: Peace and Freedom") == "PF"
+
+
 def test_race_canonical_key_combines_election_key_office_ocd_type():
     ek = "CA:primary:2026-06-02:state"
     key = race_canonical_key(ek, "Governor", "ocd-division/country:us/state:ca", "candidate")
