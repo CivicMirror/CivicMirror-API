@@ -98,11 +98,12 @@ class RaceViewSet(ReadOnlyModelViewSet):
 
     @action(detail=True, url_path='results', url_name='results')
     def results(self, request, pk=None):
+        # Return the full result set as a plain array (no pagination). A race's
+        # results are bounded by its candidate/option count, and the frontend
+        # consumes this endpoint as an array — paginating it returned
+        # {count,next,previous,results} which the client could not read.
         race = self.get_object()
         qs = race.official_results.all()
-        page = self.paginate_queryset(qs)
-        if page is not None:
-            return self.get_paginated_response(OfficialResultSerializer(page, many=True).data)
         return Response(OfficialResultSerializer(qs, many=True).data)
 
 
