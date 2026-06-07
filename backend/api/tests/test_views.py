@@ -146,7 +146,9 @@ def test_race_results_action(client, candidate_race, candidate):
     )
     response = client.get(f'/api/v1/races/{candidate_race.id}/results/')
     assert response.status_code == 200
-    results = response.json().get('results', response.json())
+    results = response.json()
+    # Returned as a plain array (not paginated) so the frontend can consume it.
+    assert isinstance(results, list)
     assert results[0]['vote_count'] == 1500
     assert 'raw_payload' not in results[0]
 
