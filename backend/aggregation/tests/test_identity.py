@@ -78,6 +78,16 @@ def test_normalize_party_maps_variants_to_codes():
     assert normalize_party("Some Unknown Party") == "SOME UNKNOWN PARTY"
 
 
+def test_normalize_party_strips_ca_party_preference_prefix():
+    # CA SOS sends "Party Preference: Democratic"; it must collapse to the same
+    # code as another source's terse "Dem" so candidates match, not duplicate.
+    assert normalize_party("Party Preference: Democratic") == "DEM"
+    assert normalize_party("Party Preference: Republican") == "REP"
+    assert normalize_party("Party Preference: Democratic") == normalize_party("Dem")
+    # Unknown party after stripping keeps the cleaned label, not the prefix.
+    assert normalize_party("Party Preference: Whig") == "WHIG"
+
+
 def test_race_canonical_key_combines_election_key_office_ocd_type():
     ek = "CA:primary:2026-06-02:state"
     key = race_canonical_key(ek, "Governor", "ocd-division/country:us/state:ca", "candidate")

@@ -34,8 +34,7 @@ group whose members are distinct local measures before applying.
 import json
 import logging
 from collections import defaultdict
-from datetime import datetime
-from datetime import timezone as _utc
+from datetime import UTC, datetime
 from math import inf
 
 from django.core.management.base import BaseCommand
@@ -125,6 +124,70 @@ def _find_matching_candidate(winner_race, loser_cand):
         ):
             return cand
     return None
+
+
+def _cand_identity_rank(cand, state):
+    """Best (lowest) identity-precedence rank across a candidate's contributing
+    sources; +inf when none recorded."""
+    srcs = cand.contributing_sources or []
+    if not srcs:
+        return inf
+    return min(_identity_rank(s, state) for s in srcs)
+
+
+def _dedupe_race_candidates(race, state, stats, audit, apply_changes):
+    """Collapse candidates within one race that share (name_match_key,
+    normalized_party) into one survivor, moving OfficialResults onto it.
+
+    Survivor = highest identity precedence (e.g. civic's proper-case name),
+    which absorbs the lower-precedence row's votes. This is ingest_candidate's
+    match rule applied one level up: when a race merge co-locates a civic
+    candidate and its ca_sos twin, this folds them together. Without it the two
+    rows persist because their party labels differ pre-normalization."""
+    buckets = defaultdict(list)
+    for cand in race.candidates.all():
+        buckets[(name_match_key(cand.name), normalize_party(cand.party))].append(cand)
+
+    for cands in buckets.values():
+        if len(cands) < 2:
+            continue
+        survivor = min(cands, key=lambda c: (_cand_identity_rank(c, state), c.pk))
+        losers = [c for c in cands if c.pk != survivor.pk]
+
+        rec = {
+            "dedupe_candidates_in_race": race.pk,
+            "survivor_candidate_id": survivor.pk,
+            "survivor_name": survivor.name,
+            "merged_candidate_ids": [c.pk for c in losers],
+        }
+        if not apply_changes:
+            audit(rec)
+            stats["candidates_deduped"] += len(losers)
+            continue
+
+        for loser in losers:
+            # Move results before deleting the loser. Civic survivors normally
+            # hold no results, so this is conflict-free; if the survivor already
+            # has a result for the same slot, flag it (do NOT auto-sum votes).
+            for res in list(OfficialResult.objects.filter(candidate=loser)):
+                clash = OfficialResult.objects.filter(
+                    race=race, candidate=survivor,
+                    round_number=res.round_number,
+                    jurisdiction_fragment=res.jurisdiction_fragment,
+                ).exists()
+                if clash:
+                    stats["potential_duplicate_results"] += 1
+                res.candidate = survivor
+                res.save(update_fields=["candidate"])
+                stats["results_moved"] += 1
+            _merge_fields(survivor, loser, state)
+            _merge_sources(survivor, loser)
+
+        survivor.normalized_party = normalize_party(survivor.party)
+        survivor.save()
+        Candidate.objects.filter(pk__in=[c.pk for c in losers]).delete()
+        stats["candidates_deduped"] += len(losers)
+        audit(rec)
 
 
 # --------------------------------------------------------------------------- #
@@ -284,6 +347,11 @@ def _process_collision_group(new_key, race_pks, stats, audit, apply_changes):
             winner.canonical_key = new_key
             winner.save()
 
+            # Fold together candidates the merge just co-located (a civic
+            # candidate and its ca_sos twin), so the winner isn't left with
+            # duplicate rows. Self-heals future merges.
+            _dedupe_race_candidates(winner, state, stats, audit, apply_changes)
+
         except IntegrityError as exc:
             # Most likely: new_key already held by an out-of-scope race.
             # Roll back the whole group and flag the winner for manual review.
@@ -371,10 +439,19 @@ class Command(BaseCommand):
             "--audit-file", type=str, default=None,
             help="Path for the JSONL audit log (default: timestamped in cwd).",
         )
+        parser.add_argument(
+            "--dedupe-candidates", action="store_true",
+            help=(
+                "Skip race merging; instead collapse duplicate candidates within "
+                "each in-scope race (same normalized name + party). Run after a "
+                "race merge to clean up candidates it co-located."
+            ),
+        )
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         apply_changes = not dry_run
+        dedupe_only = options["dedupe_candidates"]
 
         races = Race.objects.select_related("election").all()
         if options["election_id"] is not None:
@@ -382,23 +459,10 @@ class Command(BaseCommand):
         if options["state"]:
             races = races.filter(election__state=options["state"].upper())
 
-        # Group every in-scope race by its recomputed key.
-        groups = defaultdict(list)  # new_key -> [(pk, current_key)]
-        for race in races.iterator():
-            try:
-                nk = _new_key(race)
-            except Exception as exc:  # noqa: BLE001 - never let one bad row abort the run
-                logger.error(
-                    "merge_duplicate_races: failed to recompute key for race %s: %s",
-                    race.pk, exc,
-                )
-                continue
-            groups[nk].append((race.pk, race.canonical_key))
-
         stats = defaultdict(int)
         suffix = ".dryrun.jsonl" if dry_run else ".jsonl"
         audit_path = options["audit_file"] or (
-            f"merge_duplicate_races_{datetime.now(_utc):%Y%m%dT%H%M%SZ}{suffix}"
+            f"merge_duplicate_races_{datetime.now(UTC):%Y%m%dT%H%M%SZ}{suffix}"
         )
 
         # Write the audit in BOTH modes so collision-group members can be
@@ -411,21 +475,51 @@ class Command(BaseCommand):
             logger.info("merge_duplicate_races.audit %s", line)
 
         mode = "DRY RUN" if dry_run else "APPLY"
-        self.stdout.write(f"[{mode}] scanning {races.count()} race(s)...")
+        op = "dedupe-candidates" if dedupe_only else "merge-races"
+        self.stdout.write(f"[{mode}] {op}: scanning {races.count()} race(s)...")
 
         try:
-            for new_key, members in groups.items():
-                if len(members) > 1:
-                    self.stdout.write(
-                        f"  collision: {len(members)} races -> {new_key}"
-                    )
-                    _process_collision_group(
-                        new_key, [pk for pk, _ in members], stats, audit, apply_changes
-                    )
-                else:
-                    (pk, current_key), = members
-                    if current_key != new_key:
-                        _process_solo(pk, new_key, stats, audit, apply_changes)
+            if dedupe_only:
+                for race in races.iterator():
+                    state = _identity_state(race)
+                    if apply_changes:
+                        with transaction.atomic():
+                            locked = (
+                                Race.objects.select_for_update()
+                                .select_related("election")
+                                .get(pk=race.pk)
+                            )
+                            _dedupe_race_candidates(
+                                locked, state, stats, audit, apply_changes
+                            )
+                    else:
+                        _dedupe_race_candidates(race, state, stats, audit, apply_changes)
+            else:
+                # Group every in-scope race by its recomputed key.
+                groups = defaultdict(list)  # new_key -> [(pk, current_key)]
+                for race in races.iterator():
+                    try:
+                        nk = _new_key(race)
+                    except Exception as exc:  # noqa: BLE001 - never abort on one bad row
+                        logger.error(
+                            "merge_duplicate_races: failed to recompute key for race %s: %s",
+                            race.pk, exc,
+                        )
+                        continue
+                    groups[nk].append((race.pk, race.canonical_key))
+
+                for new_key, members in groups.items():
+                    if len(members) > 1:
+                        self.stdout.write(
+                            f"  collision: {len(members)} races -> {new_key}"
+                        )
+                        _process_collision_group(
+                            new_key, [pk for pk, _ in members], stats, audit, apply_changes
+                        )
+                    else:
+                        (pk, current_key), = members
+                        if current_key != new_key:
+                            _process_solo(pk, new_key, stats, audit, apply_changes)
         finally:
             audit_fh.close()
 
@@ -438,14 +532,15 @@ class Command(BaseCommand):
             "  candidates merged        : {candidates_merged}\n"
             "  measure options moved    : {options_moved}\n"
             "  measure options merged   : {options_merged}\n"
+            "  candidates deduped       : {candidates_deduped}\n"
             "  official results moved   : {results_moved}\n"
             "  potential dup results    : {potential_duplicate_results}\n"
             "  conflicts (flagged)      : {conflicts}".format(
                 **{k: stats[k] for k in (
                     "groups_merged", "races_deleted", "solo_updated",
                     "candidates_moved", "candidates_merged",
-                    "options_moved", "options_merged", "results_moved",
-                    "potential_duplicate_results", "conflicts",
+                    "options_moved", "options_merged", "candidates_deduped",
+                    "results_moved", "potential_duplicate_results", "conflicts",
                 )}
             )
         )
