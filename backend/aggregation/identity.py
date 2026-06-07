@@ -42,9 +42,12 @@ _PARTY_CODES = {
     "rep": "REP", "republican": "REP", "republican party": "REP", "gop": "REP",
     "grn": "GRN", "green": "GRN", "green party": "GRN",
     "lib": "LIB", "libertarian": "LIB", "libertarian party": "LIB",
-    "pf": "PF", "peace and freedom": "PF",
+    "pf": "PF", "p&f": "PF", "peace and freedom": "PF", "peace & freedom": "PF",
     "ai": "AI", "american independent": "AI",
     "np": "NP", "nonpartisan": "NP", "no party preference": "NP", "npp": "NP",
+    # CA SOS writes "Party Preference: None" for No-Party-Preference candidates;
+    # after the prefix is stripped only "none" remains.
+    "none": "NP", "no party": "NP",
     "ind": "IND", "independent": "IND",
 }
 
