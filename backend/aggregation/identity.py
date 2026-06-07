@@ -5,6 +5,10 @@ from datetime import date
 _PUNCT_RE = re.compile(r"[^\w\s]")
 _WS_RE = re.compile(r"\s+")
 
+# CA SOS labels party as "Party Preference: Democratic"; strip the prefix so it
+# maps to the same code as a terser source label ("Dem").
+_PARTY_PREFIX_RE = re.compile(r"^\s*party\s+preference\s*:\s*", re.IGNORECASE)
+
 # Trailing geographic qualifiers that sources append to office titles, e.g.
 # CA SOS' "Governor - Statewide Results". "Statewide"/"nationwide" denote a
 # single contest per election, so stripping them is safe for every race type.
@@ -86,13 +90,19 @@ def name_match_key(name: str) -> str:
 
 
 def normalize_party(party: str) -> str:
-    """Map a source party label to a canonical code; unknown labels upper-cased."""
-    key = _squash(party).lower()
+    """Map a source party label to a canonical code; unknown labels upper-cased.
+
+    Strips a leading "Party Preference:" qualifier first — CA SOS expresses party
+    as e.g. "Party Preference: Democratic", which must collapse to the same code
+    as another source's "Dem" so the two candidates match instead of duplicating.
+    """
+    cleaned = _PARTY_PREFIX_RE.sub("", _squash(party)).strip()
+    key = cleaned.lower()
     if not key:
         return ""
     if key in _PARTY_CODES:
         return _PARTY_CODES[key]
-    return _squash(party).upper()
+    return cleaned.upper()
 
 
 def election_canonical_key(

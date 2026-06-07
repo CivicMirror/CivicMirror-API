@@ -194,3 +194,73 @@ def test_measure_options_move_to_winner(ca_election, tmp_path):
     assert labels == {"Yes", "No"}  # "No" moved off the deleted loser race
     ca_opt.refresh_from_db()
     assert ca_opt.race_id == survivor.pk
+
+
+@pytest.mark.django_db
+def test_merge_dedupes_co_located_candidates_across_sources(ca_election, tmp_path):
+    """The CA party-format case: civic 'Dem' and ca_sos 'Party Preference:
+    Democratic' have the same normalized name but differently-spelled party. The
+    race merge must fold them into one candidate, not leave two side by side."""
+    civic = _civic_governor(ca_election)
+    civic_cand = Candidate.objects.create(
+        race=civic, name="Akinyemi Agbede", party="Dem", normalized_party="DEM",
+        contributing_sources=["civic_api"], field_provenance={"name": "civic_api"},
+    )
+    ca_sos = _ca_sos_governor(ca_election)
+    ca_cand = Candidate.objects.create(
+        race=ca_sos, name="AKINYEMI AGBEDE", party="Party Preference: Democratic",
+        normalized_party="PARTY PREFERENCE: DEMOCRATIC",
+        contributing_sources=["ca_sos"], field_provenance={"name": "ca_sos"},
+    )
+    OfficialResult.objects.create(
+        race=ca_sos, candidate=ca_cand, vote_count=89380, result_type="unofficial",
+    )
+
+    call_command("merge_duplicate_races", audit_file=str(tmp_path / "c.jsonl"))
+
+    survivor = Race.objects.get(election=ca_election)
+    # One candidate, not two — survivor is the civic row (proper-case name).
+    assert survivor.candidates.count() == 1
+    cand = survivor.candidates.get()
+    assert cand.pk == civic_cand.pk
+    assert cand.name == "Akinyemi Agbede"
+    assert cand.normalized_party == "DEM"
+    # The vote result followed onto the surviving candidate.
+    assert OfficialResult.objects.filter(race=survivor, candidate=cand).count() == 1
+    assert OfficialResult.objects.get(race=survivor).vote_count == 89380
+
+
+@pytest.mark.django_db
+def test_dedupe_candidates_mode_cleans_already_merged_race(ca_election, tmp_path):
+    """Standalone --dedupe-candidates pass: a single race already holding the
+    duplicate pair (e.g. from a prior merge before the party fix) is cleaned."""
+    ek = ca_election.canonical_key
+    race = _make_race(
+        ca_election, office_title="Governor", ocd="", source="civic_api",
+        canonical_key=f"{ek}|governor|NO_OCD|candidate",
+    )
+    civic_cand = Candidate.objects.create(
+        race=race, name="Akinyemi Agbede", party="Dem", normalized_party="DEM",
+        contributing_sources=["civic_api"],
+    )
+    ca_cand = Candidate.objects.create(
+        race=race, name="AKINYEMI AGBEDE", party="Party Preference: Democratic",
+        normalized_party="PARTY PREFERENCE: DEMOCRATIC",
+        contributing_sources=["ca_sos"],
+    )
+    OfficialResult.objects.create(
+        race=race, candidate=ca_cand, vote_count=89380, result_type="unofficial",
+    )
+    assert race.candidates.count() == 2
+
+    call_command(
+        "merge_duplicate_races", dedupe_candidates=True,
+        audit_file=str(tmp_path / "d.jsonl"),
+    )
+
+    race.refresh_from_db()
+    assert race.candidates.count() == 1
+    cand = race.candidates.get()
+    assert cand.pk == civic_cand.pk          # civic survivor (identity rank 0)
+    assert set(cand.contributing_sources) == {"civic_api", "ca_sos"}
+    assert OfficialResult.objects.get(race=race).candidate_id == civic_cand.pk
