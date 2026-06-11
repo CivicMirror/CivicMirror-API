@@ -1,6 +1,7 @@
 import django
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q, Value
+from django.db.models.functions import Coalesce
 
 
 def _check_constraint(*, condition, name):
@@ -49,7 +50,18 @@ class OfficialResult(models.Model):
                     | (Q(candidate__isnull=True) & Q(measure_option__isnull=False))
                 ),
                 name='result_target_valid',
-            )
+            ),
+            # Mirrors the update_or_create natural key in results.tasks; COALESCE
+            # treats NULL candidate/measure_option/round_number as equal so
+            # concurrent retries can't insert duplicate rows.
+            models.UniqueConstraint(
+                F('race'),
+                Coalesce('candidate', Value(0)),
+                Coalesce('measure_option', Value(0)),
+                Coalesce('round_number', Value(-1)),
+                F('jurisdiction_fragment'),
+                name='official_result_natural_key',
+            ),
         ]
         ordering = ['round_number', '-vote_count', 'id']
 
