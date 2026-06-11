@@ -569,3 +569,36 @@ def test_ingest_version_cache_not_written_when_bootstrap_finds_no_rows():
 
     # No races created, so version cache must NOT be written
     mock_cache.set.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# OfficialResult natural-key uniqueness
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_duplicate_official_result_insert_rejected():
+    """Concurrent retries must not be able to insert duplicate result rows
+    for the same (race, candidate, measure_option, round, fragment) key."""
+    from django.db import IntegrityError
+
+    election = make_election()
+    race = make_race(election)
+    candidate = Candidate.objects.create(race=race, name="Alice Smith")
+
+    OfficialResult.objects.create(race=race, candidate=candidate, vote_count=100)
+    with pytest.raises(IntegrityError):
+        OfficialResult.objects.create(race=race, candidate=candidate, vote_count=100)
+
+
+@pytest.mark.django_db
+def test_distinct_rounds_and_fragments_still_allowed():
+    election = make_election()
+    race = make_race(election)
+    candidate = Candidate.objects.create(race=race, name="Alice Smith")
+
+    OfficialResult.objects.create(race=race, candidate=candidate, vote_count=100)
+    OfficialResult.objects.create(race=race, candidate=candidate, vote_count=90, round_number=2)
+    OfficialResult.objects.create(
+        race=race, candidate=candidate, vote_count=40, jurisdiction_fragment="Kanawha"
+    )
+    assert OfficialResult.objects.filter(race=race).count() == 3
