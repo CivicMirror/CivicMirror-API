@@ -235,8 +235,8 @@ def test_fetch_results_version_unchanged():
     meta_payload = {"asOf": "2025-12-01T18:15:08Z", "isOfficialResults": True}
 
     with patch("elections.models.Election.objects") as mock_mgr, \
-         patch("results.adapters.va.requests.get") as mock_get, \
-         patch("results.adapters.va.cache") as mock_cache:
+         patch("results.adapters.enhanced_voting.requests.get") as mock_get, \
+         patch("results.adapters.enhanced_voting.cache") as mock_cache:
 
         mock_mgr.get.return_value = mock_election
         mock_cache.get.return_value = "2025-12-01T18:15:08Z"  # same as asOf → unchanged
@@ -264,8 +264,8 @@ def test_fetch_results_candidate_data():
     data_payload = {"ballotItems": [_CANDIDATE_BALLOT_ITEM]}
 
     with patch("elections.models.Election.objects") as mock_mgr, \
-         patch("results.adapters.va.requests.get") as mock_get, \
-         patch("results.adapters.va.cache") as mock_cache:
+         patch("results.adapters.enhanced_voting.requests.get") as mock_get, \
+         patch("results.adapters.enhanced_voting.cache") as mock_cache:
 
         mock_mgr.get.return_value = mock_election
         mock_cache.get.return_value = None  # version changed
