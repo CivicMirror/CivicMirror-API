@@ -85,10 +85,13 @@ Recommended ingestion priority:
 
 - **URL:** https://www.pdc.wa.gov/political-disclosure-reporting-data/browse-search-data/candidates
 - **Structured endpoint:** `https://data.wa.gov/api/v3/views/3h9x-7bvm/query.json`
+- **Direct CSV export:** `https://www.pdc.wa.gov/political-disclosure-reporting-data/browse-search-data/download?dsid=3h9x-7bvm&fname=candidates-table...`
 - **Dataset ID:** `3h9x-7bvm`
 - **Fixed filter used by public table:** `filer_type = "CA"`
 - **Key fields:** `filer_name`, `election_year`, `jurisdiction`, `office`, `position`, `party`, `jurisdiction_type`, `candidacy_id`, `jurisdiction_code`.
 - **Coverage:** state and local candidates, including cities, school districts, fire districts, mayoral offices, council seats, and other local offices.
+- **Local snapshot reviewed:** `candidates-table.csv` contains 36,790 rows with elections ranging primarily from 2009 through 2026, plus a small number of future-cycle records through 2029.
+- **Coverage mix in snapshot:** 30,957 local candidacies, 3,223 legislative, 2,207 judicial, and 338 statewide records.
 
 Sample query shape:
 
@@ -101,6 +104,8 @@ LIMIT 100
 ```
 
 Do not commit exported candidate rows or public app tokens. Use this endpoint as a discoverable public data source for implementation research and future adapter design.
+
+The CSV export is highly useful for statewide candidate and local-office discovery, but it is not a complete election-results feed. It does not replace SOS election-specific results downloads or VoteWA results data. Treat PDC as candidate/campaign-finance enrichment keyed by `candidacy_id`, `jurisdiction_code`, `office`, `position`, and `election_year`.
 
 ---
 
@@ -195,7 +200,7 @@ This source is not a results feed, but it is useful for audit metadata, county c
 | SOS archive pages | HTML links to results, data pages, PDFs, ZIPs, XLSX | Election source discovery |
 | SOS election data pages | Direct XLSX, ZIP, PDF links | Results ingestion, reconciliation, district/precinct mapping |
 | VoteWA results | JavaScript app, likely backend JSON endpoints | Future live/certified results adapter after network capture |
-| PDC candidates | Socrata `api/v3/views/3h9x-7bvm/query.json` | Candidate and local-office discovery |
+| PDC candidates | Socrata `api/v3/views/3h9x-7bvm/query.json` plus CSV export | Candidate and local-office discovery |
 | Precinct shapefiles | Direct ZIP downloads | Geography and precinct reconciliation |
 | Voter registration extract | Approval-based request | Out of scope unless approved and privacy-reviewed |
 
@@ -217,7 +222,7 @@ Washington should be considered a high-value future adapter candidate. The best 
 
 1. Build a WA source inventory scraper for SOS archive pages that records election date, election type, results URL, data page URL, voters' guide URL, candidate-list URL, and offices-open URL.
 2. Add parsers for election-specific XLSX/ZIP files, starting with 2024 General Election district and precinct result downloads.
-3. Add a PDC candidate discovery adapter using the Socrata endpoint and `filer_type = "CA"` filter.
+3. Add a PDC candidate discovery adapter using either the Socrata endpoint or direct CSV export with the `filer_type = "CA"` filter.
 4. Normalize local jurisdiction names and codes using PDC `jurisdiction_code`, SOS district-precinct association files, and precinct shapefiles.
 5. Reverse-engineer VoteWA network calls only after downloadable historical data is parsed successfully.
 6. Supplement ballot-measure metadata with SOS initiatives/referenda pages and Ballotpedia where SOS data is insufficient.
