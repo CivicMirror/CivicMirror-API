@@ -158,6 +158,7 @@ INSTALLED_APPS += [
     'integrations.nc_sbe',
     'integrations.election_calendar',
     'integrations.wa_pdc',
+    'integrations.wa_votewa',
     'internal',
     'api',
     'accounts',
