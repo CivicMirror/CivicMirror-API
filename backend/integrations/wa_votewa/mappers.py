@@ -34,7 +34,7 @@ def parse_election_date_from_slug(slug: str) -> date | None:
     """Parse a yyyymmdd slug into a date."""
     try:
         return datetime.strptime(slug, "%Y%m%d").date()
-    except ValueError:
+    except (ValueError, TypeError):
         return None
 
 
