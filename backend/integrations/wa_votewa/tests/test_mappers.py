@@ -93,6 +93,7 @@ def test_map_election_basic():
     assert result["jurisdiction_level"] == "state"
     assert result["source_metadata"]["enr_slug"] == "20260428"
     assert result["source_metadata"]["votewa_jurisdiction_slug"] == "washington"
+    assert result["source_metadata"]["is_official_results"] is True
 
 
 def test_map_election_uses_api_name():
