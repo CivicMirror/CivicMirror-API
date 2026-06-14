@@ -134,7 +134,7 @@ def test_sync_wa_races_measure_item():
          patch("integrations.wa_votewa.tasks.SyncLog") as MockLog, \
          patch("integrations.wa_votewa.tasks.MeasureOption") as MockMO, \
          patch("aggregation.ingest.ingest_race", return_value=(mock_race, True)) as mock_ir, \
-         patch("integrations.wa_votewa.tasks.sync_wa_pdc_candidates", create=True):
+         patch("integrations.wa_votewa.tasks._sync_pdc"):
 
         MockElection.objects.get.return_value = mock_election
         MockElection.DoesNotExist = Exception
@@ -192,7 +192,7 @@ def test_sync_wa_races_candidate_item():
          patch("integrations.wa_votewa.tasks.SyncLog") as MockLog, \
          patch("aggregation.ingest.ingest_race", return_value=(mock_race, True)), \
          patch("aggregation.ingest.ingest_candidate", return_value=(mock_cand, True)) as mock_ic, \
-         patch("integrations.wa_votewa.tasks.sync_wa_pdc_candidates", create=True):
+         patch("integrations.wa_votewa.tasks._sync_pdc"):
 
         MockElection.objects.get.return_value = mock_election
         MockElection.DoesNotExist = Exception

@@ -28,6 +28,11 @@ from .mappers import _get_text, map_candidate, map_election, map_race
 logger = logging.getLogger(__name__)
 _SOURCE = "wa_votewa"
 
+try:
+    from integrations.wa_pdc.tasks import sync_wa_pdc_candidates as _sync_pdc
+except ImportError:
+    _sync_pdc = None
+
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_wa_elections(self):
@@ -113,6 +118,11 @@ def sync_wa_elections(self):
             "queued": queued_count,
         }
 
+    except WaVoteWaRetryableError as exc:
+        sync_log.status = SyncLog.Status.COMPLETED_WITH_WARNINGS
+        sync_log.save(update_fields=["status"])
+        raise self.retry(exc=exc)
+
     except Exception as exc:
         logger.exception("wa_votewa.sync_elections.failed")
         sync_log.error_count = 1
@@ -187,14 +197,17 @@ def sync_wa_races(self, election_pk: int, slug: str):
             ballot_options = (ballot_item.get("summaryResults") or {}).get("ballotOptions") or []
 
             if race_identity["race_type"] == "candidate":
-                seen_names: set[str] = set()
+                seen: set[tuple[str, str]] = set()
                 for opt in ballot_options:
                     name = _get_text(opt.get("name") or [])
-                    if not name or name in seen_names:
+                    if not name:
                         continue
-                    seen_names.add(name)
                     cand_fields = map_candidate(opt)
                     party = cand_fields.pop("party", "")
+                    key = (name, party)
+                    if key in seen:
+                        continue
+                    seen.add(key)
                     _, cand_was_new = ingest.ingest_candidate(
                         race=race_obj,
                         source=_SOURCE,
@@ -223,14 +236,14 @@ def sync_wa_races(self, election_pk: int, slug: str):
         sync_log.completed_at = timezone.now()
         sync_log.save(update_fields=["records_created", "records_updated", "status", "completed_at"])
 
-        try:
-            from integrations.wa_pdc.tasks import sync_wa_pdc_candidates
-            sync_wa_pdc_candidates.apply_async(args=[election_pk], countdown=10)
-        except Exception:
-            logger.warning(
-                "wa_votewa.sync_races: could not schedule PDC enrichment for election %d",
-                election_pk,
-            )
+        if _sync_pdc is not None:
+            try:
+                _sync_pdc.apply_async(args=[election_pk], countdown=10)
+            except Exception:
+                logger.warning(
+                    "wa_votewa.sync_races: could not schedule PDC enrichment for election %s",
+                    election_pk,
+                )
 
         return {
             "races": {"created": race_created, "updated": race_updated},
