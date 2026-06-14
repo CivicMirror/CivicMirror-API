@@ -22,8 +22,6 @@ from .registry import register
 logger = logging.getLogger(__name__)
 
 _WA_API_BASE = "https://results.votewa.gov/results/public/api"
-_FETCH_TIMEOUT_META = 15
-_FETCH_TIMEOUT_DATA = 60
 
 
 @register
@@ -54,7 +52,7 @@ class WashingtonAdapter(EnhancedVotingAdapter):
 
         meta_url = f"{_WA_API_BASE}/elections/washington/{slug}"
         try:
-            meta_resp = requests.get(meta_url, timeout=_FETCH_TIMEOUT_META)
+            meta_resp = requests.get(meta_url, timeout=self.FETCH_TIMEOUT_META)
             meta_resp.raise_for_status()
             meta = meta_resp.json()
         except requests.RequestException as exc:
@@ -76,7 +74,7 @@ class WashingtonAdapter(EnhancedVotingAdapter):
 
         data_url = f"{_WA_API_BASE}/elections/washington/{slug}/data"
         try:
-            data_resp = requests.get(data_url, timeout=_FETCH_TIMEOUT_DATA)
+            data_resp = requests.get(data_url, timeout=self.FETCH_TIMEOUT_DATA)
             data_resp.raise_for_status()
             data = data_resp.json()
         except requests.RequestException as exc:
@@ -103,7 +101,7 @@ class WashingtonAdapter(EnhancedVotingAdapter):
                 continue
             county_url = f"{_WA_API_BASE}/elections/{county_slug}/{slug}/data"
             try:
-                county_resp = requests.get(county_url, timeout=_FETCH_TIMEOUT_DATA)
+                county_resp = requests.get(county_url, timeout=self.FETCH_TIMEOUT_DATA)
                 county_resp.raise_for_status()
                 county_data = county_resp.json()
             except requests.RequestException as exc:
