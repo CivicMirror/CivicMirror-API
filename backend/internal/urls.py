@@ -19,4 +19,5 @@ urlpatterns = [
     path("tasks/sync-az-sos/", views.sync_az_sos_trigger, name="internal-sync-az-sos"),
     path("tasks/poll-sc-enr/", views.poll_sc_enr_trigger, name="internal-poll-sc-enr"),
     path("tasks/sync-sc-enr-results/", views.sync_sc_enr_results_trigger, name="internal-sync-sc-enr-results"),
+    path("tasks/sync-wa-votewa/", views.sync_wa_votewa_trigger, name="internal-sync-wa-votewa"),
 ]
