@@ -20,3 +20,11 @@ backend/staticfiles/
 
 # Ad-hoc DB inspection scripts
 backend/sqlcheck.py
+
+# Node / npm
+node_modules/
+package.json
+package-lock.json
+
+# Playwright MCP session artifacts
+.playwright-mcp/
