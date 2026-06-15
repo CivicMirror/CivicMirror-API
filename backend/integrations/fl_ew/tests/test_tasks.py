@@ -39,8 +39,6 @@ def _make_election_obj(pk=1, status="upcoming", election_type="primary"):
 
 def test_sync_fl_elections_skips_404_slugs():
     """When file returns 404, no elections are created."""
-    from integrations.fl_ew.exceptions import FlEwError
-
     mock_log = _mock_sync_log()
     with patch("integrations.fl_ew.tasks.FlEwClient") as MockClient, \
          patch("integrations.fl_ew.tasks.SyncLog") as MockSyncLog:
@@ -126,7 +124,7 @@ def test_sync_fl_races_no_rows_returns_zero():
 
 def test_sync_fl_races_general_election_creates_one_race_two_candidates():
     """General election: REP + DEM for same office → one race, two candidates."""
-    mock_election = _make_election_obj(election_type="special")
+    mock_election = _make_election_obj(election_type="general")
     mock_race = MagicMock()
     mock_race.pk = 10
     mock_cand = MagicMock()

@@ -76,35 +76,40 @@ def sync_fl_elections(self):
                 skipped_count += 1
                 continue
 
-            mapped = map_election(slug, election_date)
-            source_id = mapped.pop("source_id")
-            identity = {
-                "state":              mapped["state"],
-                "election_type":      mapped["election_type"],
-                "election_date":      mapped["election_date"],
-                "jurisdiction_level": mapped["jurisdiction_level"],
-            }
-            fields = {k: v for k, v in mapped.items() if k not in identity}
+            try:
+                mapped = map_election(slug, election_date)
+                source_id = mapped.pop("source_id")
+                identity = {
+                    "state":              mapped["state"],
+                    "election_type":      mapped["election_type"],
+                    "election_date":      mapped["election_date"],
+                    "jurisdiction_level": mapped["jurisdiction_level"],
+                }
+                fields = {k: v for k, v in mapped.items() if k not in identity}
 
-            election_obj, was_created = ingest.ingest_election(
-                source=_SOURCE,
-                source_id=source_id,
-                identity=identity,
-                fields=fields,
-            )
+                election_obj, was_created = ingest.ingest_election(
+                    source=_SOURCE,
+                    source_id=source_id,
+                    identity=identity,
+                    fields=fields,
+                )
 
-            current_meta = dict(election_obj.source_metadata or {})
-            if not current_meta.get("fl_ew_slug"):
-                current_meta["fl_ew_slug"] = slug
-                election_obj.source_metadata = current_meta
-                election_obj.save(update_fields=["source_metadata"])
+                current_meta = dict(election_obj.source_metadata or {})
+                if not current_meta.get("fl_ew_slug"):
+                    current_meta["fl_ew_slug"] = slug
+                    election_obj.source_metadata = current_meta
+                    election_obj.save(update_fields=["source_metadata"])
 
-            if was_created:
-                created_count += 1
-            else:
-                updated_count += 1
+                if was_created:
+                    created_count += 1
+                else:
+                    updated_count += 1
 
-            election_queue.append((slug, election_obj))
+                election_queue.append((slug, election_obj))
+            except Exception as slug_exc:
+                logger.warning("fl_ew.sync_elections.slug_failed slug=%s: %s", slug, slug_exc)
+                skipped_count += 1
+                continue
 
         for idx, (slug, election_obj) in enumerate(election_queue):
             sync_fl_races.apply_async(
@@ -129,6 +134,14 @@ def sync_fl_elections(self):
             "skipped": skipped_count,
             "queued": queued_count,
         }
+
+    except FlEwRetryableError as exc:
+        sync_log.error_count = 1
+        sync_log.last_error = str(exc)
+        sync_log.status = SyncLog.Status.COMPLETED_WITH_WARNINGS
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+        raise self.retry(exc=exc)
 
     except Exception as exc:
         logger.exception("fl_ew.sync_elections.failed")
@@ -202,12 +215,13 @@ def sync_fl_races(self, election_pk: int, slug: str):
             else:
                 race_updated += 1
 
-            seen_names: set[str] = set()
+            seen_keys: set[tuple] = set()
             for row in group["rows"]:
                 name, party, fields = map_candidate(row)
-                if not name or name in seen_names:
+                dedup_key = (name, party)
+                if not name or dedup_key in seen_keys:
                     continue
-                seen_names.add(name)
+                seen_keys.add(dedup_key)
                 _, cand_was_new = ingest.ingest_candidate(
                     race=race_obj,
                     source=_SOURCE,
