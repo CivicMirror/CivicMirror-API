@@ -96,5 +96,6 @@ def test_registry_covers_every_triggered_task():
         "sync_openstates", "sync_sc_vrems", "sync_ia_sos", "sync_co_sos",
         "sync_va_elect", "sync_ma_sos", "sync_ca_sos", "sync_az_sos",
         "sync_nc_sbe", "seed_2026_elections", "poll_pending_results",
+        "sync_fl_ew", "sync_wa_votewa",
     }
     assert set(TASK_LOCKS) == expected
