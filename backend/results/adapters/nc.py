@@ -137,7 +137,7 @@ def _fetch_zip(url: str) -> bytes:
         url,
         timeout=120,
         headers={
-            "User-Agent": "Mozilla/5.0 (compatible; CivicMirror/1.0; +https://civicmirror.welshrd.com)"
+            "User-Agent": "Mozilla/5.0 (compatible; CivicMirror/1.0; +https://civicmirror.app)"
         },
     )
     resp.raise_for_status()

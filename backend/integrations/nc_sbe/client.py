@@ -37,7 +37,7 @@ class NcSbeClient:
     def __init__(self):
         self._session = requests.Session()
         self._session.headers["User-Agent"] = (
-            "Mozilla/5.0 (compatible; CivicMirror/1.0; +https://civicmirror.welshrd.com)"
+            "Mozilla/5.0 (compatible; CivicMirror/1.0; +https://civicmirror.app)"
         )
 
     def _get(self, url: str, params: dict | None = None, timeout: int = _TIMEOUT_LIST) -> requests.Response:

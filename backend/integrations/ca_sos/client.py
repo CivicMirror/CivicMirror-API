@@ -29,7 +29,7 @@ _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (compatible; CivicMirror/1.0; "
-        "+https://civicmirror.welshrd.com)"
+        "+https://civicmirror.app)"
     ),
     "Accept": "application/json, text/csv, text/plain, */*",
 }

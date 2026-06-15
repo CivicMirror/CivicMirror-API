@@ -11,5 +11,6 @@ CSRF_TRUSTED_ORIGINS = env.list(
     default=[
         'https://*.run.app',
         'https://api.civicmirror.welshrd.com',
+        'https://api.civicmirror.app',
     ],
 )
