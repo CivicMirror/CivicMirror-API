@@ -100,6 +100,7 @@ class Race(models.Model):
         MA_SOS = 'ma_sos', 'Massachusetts SOS'
         CA_SOS = 'ca_sos', 'California SOS'
         WA_VOTEWA = 'wa_votewa', 'Washington VoteWA'
+        FL_EW = 'fl_ew', 'Florida Election Watch'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'
