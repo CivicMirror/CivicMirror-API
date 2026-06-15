@@ -111,7 +111,7 @@ def map_race(election_obj: Election, group: dict) -> dict:
         "office_title": office_title,
         "normalized_office_title": normalize(office_title),
         "jurisdiction": "Florida",
-        "geography_scope": "statewide" if not group["juris1_num"] else "district",
+        "geography_scope": "statewide" if not group["juris1_num"] or group["juris1_num"] == "000" else "district",
         "certification_status": certification_status,
         "source": Race.Source.FL_EW,
         "race_status": Race.RaceStatus.ACTIVE,
