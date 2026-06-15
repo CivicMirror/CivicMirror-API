@@ -27,7 +27,7 @@ class AzSosClient:
         self.detail_req_interval = detail_req_interval
         self._session = requests.Session()
         self._session.headers["User-Agent"] = (
-            "Mozilla/5.0 (compatible; CivicMirror/1.0; +https://civicmirror.welshrd.com)"
+            "Mozilla/5.0 (compatible; CivicMirror/1.0; +https://civicmirror.app)"
         )
         self._last_detail_at: float | None = None
 
