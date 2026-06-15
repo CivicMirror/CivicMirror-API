@@ -33,8 +33,9 @@ _VERSION_CACHE_TTL = 86400 * 30  # 30 days
 @register
 class FloridaAdapter(StateResultsAdapter):
     state = "FL"
+    VERSION_CACHE_TIMEOUT = _VERSION_CACHE_TTL
 
-    def _version_cache_key(self, election_id: int) -> str:
+    def version_cache_key(self, election_id: int) -> str:
         return f"fl_ew:ver:{election_id}"
 
     def fetch_results(self, election_date, election_id: int) -> AdapterResult:
@@ -61,7 +62,7 @@ class FloridaAdapter(StateResultsAdapter):
         source_url = client.file_url(slug)
 
         last_modified = client.get_last_modified(slug)
-        cache_key = self._version_cache_key(election_id)
+        cache_key = self.version_cache_key(election_id)
         if last_modified and cache.get(cache_key) == last_modified:
             logger.debug("FLAdapter: version unchanged slug=%s", slug)
             return AdapterResult(
@@ -116,8 +117,6 @@ class FloridaAdapter(StateResultsAdapter):
         logger.info(
             "FLAdapter: slug=%s rows=%d", slug, len(result_rows),
         )
-
-        cache.set(cache_key, last_modified, _VERSION_CACHE_TTL)
 
         return AdapterResult(
             rows=result_rows,
