@@ -78,5 +78,3 @@ class FlEwClient:
             resp.raise_for_status()
             logger.info("fl_ew.client.fetched slug=%s bytes=%d", slug, len(resp.content))
             return resp.text
-
-        raise FlEwRetryableError(f"GET {url} retries exhausted")
