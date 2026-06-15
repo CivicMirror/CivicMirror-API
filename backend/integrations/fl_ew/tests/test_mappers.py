@@ -235,6 +235,21 @@ def test_map_race_certification_upcoming():
     assert result["certification_status"] == "upcoming"
 
 
+def test_map_race_certification_active():
+    election = _make_election_obj(status="active")
+    group = {
+        "race_name": "Governor",
+        "race_code": "GOV",
+        "juris1_num": "000",
+        "juris2_num": "",
+        "party_code": "REP",
+        "party_name": "Republican Party",
+        "rows": [],
+    }
+    result = map_race(election, group)
+    assert result["certification_status"] == "upcoming"
+
+
 def test_map_race_certification_results_pending():
     election = _make_election_obj(status="results_pending")
     group = {
