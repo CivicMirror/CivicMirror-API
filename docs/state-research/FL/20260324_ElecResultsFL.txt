@@ -1,0 +1,7 @@
+ElectionDate	PartyCode	PartyName	RaceCode	RaceName	CountyCode	CountyName	Juris1num	Juris2num	Precincts	PrecinctsReporting	CanNameLast	CanNameFirst	CanNameMiddle	CanVotes
+03/24/2026	REP	Republican Party	STS	State Senator, District 14	HIL	Hillsborough	014	 	152	152	Tomkow	Josie		39836
+03/24/2026	DEM	Democratic Party	STS	State Senator, District 14	HIL	Hillsborough	014	 	152	152	Nathan	Brian		40245
+03/24/2026	REP	Republican Party	STR	State Representative, District 51	POL	Polk	051	 	37	37	Holley	Hilary		8411
+03/24/2026	DEM	Democratic Party	STR	State Representative, District 51	POL	Polk	051	 	37	37	Perez	Edwin	S.	7114
+03/24/2026	REP	Republican Party	STR	State Representative, District 87	PAL	Palm Beach	087	 	152	152	Maples	Jon		16323
+03/24/2026	DEM	Democratic Party	STR	State Representative, District 87	PAL	Palm Beach	087	 	152	152	Gregory	Emily		17124
