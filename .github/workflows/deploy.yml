@@ -221,6 +221,14 @@ jobs:
             --region="${{ env.REGION }}" \
             --quiet
 
+      - name: Update clear-idempotency-locks job image
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.sha }}"
+          gcloud run jobs update clear-idempotency-locks \
+            --image="$IMAGE" \
+            --region="${{ env.REGION }}" \
+            --quiet
+
   # ── Deploy Worker service ───────────────────────────────────────────────────
   deploy-worker:
     name: Deploy Worker
