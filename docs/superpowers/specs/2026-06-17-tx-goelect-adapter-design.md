@@ -122,15 +122,29 @@ class TxGoElectClient:
 
 ### Sequential ID Probe (within `sync_tx_elections`)
 
-Detects the November 2026 General before it appears in `electionConstants`:
+Detects new elections — including the November 2026 General — before they appear in `electionConstants`:
 
 - Watermark key: `tx_goelect:probe_watermark` in cache (initialized to 58315, the highest known ID)
 - Each run: scan sequentially from `watermark + 1`
-- **Stop after 50 consecutive misses** — general not yet registered; try tomorrow
-- **On hit: validate before ingesting** — check that `Home["ElecDate"]` parses to `2026-11-03` and election type code is `GE`. Hits that fail validation are logged and skipped (could be specials or locals); the scan continues.
-- When a validated General Election hit is found: ingest it, reset miss counter, continue scanning
+- **Stop after 50 consecutive misses** — nothing new registered; try tomorrow
+- **On hit: ingest all valid elections** — do not discard specials, locals, or county elections. Classify and tag each with normalized metadata (see below), then queue `sync_tx_races` for it
 - Update watermark to highest ID probed each run regardless of hit/miss
-- Typical cost: ≤50 HTTP calls/day when no new elections; ≤100 on the day a new election appears
+- Typical cost: ≤50 HTTP calls/day when no new elections; ≤100 on the day new elections appear
+
+**Election classification metadata** (stored in `Election.source_metadata` for every discovered election):
+
+```python
+{
+    "tx_election_id": 59001,
+    "enr_slug": None,                       # TX uses integer IDs, not date slugs
+    "election_scope": "statewide",          # statewide | federal | county | local | unknown
+    "election_type_code": "GE",             # raw CivixApps code: GE, P, RU, S, SR, GR
+    "source_date": "2026-11-03",            # parsed from Home["ElecDate"] MMDDYYYY
+    "is_target_general_2026": True,         # True only if type==GE and date==2026-11-03
+}
+```
+
+`is_target_general_2026` is the only field the results adapter and race seeding tasks use to prioritize full processing. All other discovered elections are ingested and tagged but downstream jobs can choose whether to seed full races/results immediately or defer them for future local-election support.
 
 ### `sync_tx_races(election_pk, tx_election_id)` — Stage 2 (queued by Stage 1)
 
@@ -249,6 +263,6 @@ ResultRow(
 
 - **`county_mid` vs FIPS:** `MID` values observed are 48xxx (Texas FIPS range). Store as `county_mid` in `raw`; validate against a Texas county FIPS table during implementation before promoting to `county_fips`. If confirmed, rename in a follow-up.
 - **Cloudflare tightening:** Standard `requests` has worked so far. If active challenges appear, may need a rotating proxy (same pattern as `IA_SOS_PROXY_URL`).
-- **November General timing:** Expected September–October 2026. The probe watermark + GE/date validation gate ensures it's caught within 24 hours of registration without ingesting stray specials. No manual intervention needed.
+- **November General timing:** Expected September–October 2026. The probe watermark catches it within 24 hours of registration. All discovered elections (specials, locals, county) are ingested and tagged; `is_target_general_2026=True` gates full race/results processing for the November General specifically.
 - **`is_winner` field:** ENR does not expose a winner flag. Leave `is_winner=None` on all rows; winner determination handled downstream.
 - **`official` result_type:** Currently no certification flag observed in ENR. Use `complete_unofficial` when all precincts report. Revisit when the General is live — if GoElect adds a certified flag, promote to `official` at that point.
