@@ -23,7 +23,9 @@ class Election(models.Model):
     class ElectionType(models.TextChoices):
         GENERAL = 'general', 'General'
         PRIMARY = 'primary', 'Primary'
+        PRIMARY_RUNOFF = 'primary_runoff', 'Primary Runoff'
         SPECIAL = 'special', 'Special'
+        GENERAL_RUNOFF = 'general_runoff', 'General Runoff'
         MUNICIPAL = 'municipal', 'Municipal'
         PARTY = 'party', 'Party'
         OTHER = 'other', 'Other'
@@ -101,6 +103,7 @@ class Race(models.Model):
         CA_SOS = 'ca_sos', 'California SOS'
         WA_VOTEWA = 'wa_votewa', 'Washington VoteWA'
         FL_EW = 'fl_ew', 'Florida Election Watch'
+        TX_GOELECT = 'tx_goelect', 'Texas GoElect'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'
