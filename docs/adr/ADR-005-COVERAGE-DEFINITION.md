@@ -8,23 +8,6 @@ Accepted
 
 The term "Full Coverage" has been used inconsistently throughout CivicMirror documentation.
 
-In some places it referred to:
-
-- Election discovery
-- Race creation
-- Results ingestion
-
-In other places it implied:
-
-- Local election support
-- Historical backfill
-- Precinct-level reporting
-- Candidate biographies
-- GIS boundaries
-- Ballot measure enrichment
-
-This created confusion when evaluating state completion.
-
 ## Decision
 
 CivicMirror state completion shall be measured using Full Core Coverage.
@@ -44,24 +27,46 @@ A state has Full Core Coverage when CivicMirror can:
 
 ### Coverage Priorities
 
-Priority 1:
+Priority 1
 - President
 - Vice President
 - U.S. Senate
 - U.S. House
 
-Priority 2:
+Priority 2
 - Governor
 - Statewide executive offices
 - State Senate
 - State House / Assembly
 
-Priority 3:
+Priority 3
 - Local elections
 - Municipal offices
 - County offices
 - School boards
 - Special districts
+
+### Federal Coverage Strategy
+
+Federal coverage across all 50 states is considered achievable.
+
+No single source currently provides complete nationwide Federal election coverage.
+
+State election authorities remain the authoritative source for:
+
+- Election discovery
+- Candidate discovery
+- Official results
+
+Supplemental sources include:
+
+- Google Civic API
+- Federal Election Commission (FEC)
+- OpenElections
+- MEDSL
+- MIT Election Data resources
+
+Google Civic API should be treated as a supplemental source rather than the sole authoritative source.
 
 ### Enhanced Coverage
 
@@ -80,6 +85,6 @@ The following capabilities are enhancements and are not required for Full Core C
 
 States may be considered complete even when enhanced features remain incomplete.
 
-Massachusetts, Arizona, Colorado, South Carolina, Virginia, and West Virginia currently meet the intended definition of Full Core Coverage.
+Federal coverage across all 50 states remains the primary CivicMirror objective.
 
 Future state reviews should evaluate Federal and State office support first before considering enhancement areas.
