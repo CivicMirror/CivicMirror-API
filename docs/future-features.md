@@ -62,6 +62,43 @@ after a sync.
 
 ---
 
+### 2026-06-16 — CT + NE: migrate to TotalVote adapter when switchover happens
+
+**Where:** `backend/results/adapters/` — add a thin adapter class per state (CT, NE),
+each delegating to the existing TotalVote logic in `ar.py` with a different default `cId`.
+
+**Why:** Both states are in-progress KNOWiNK TotalVote migrations that will eventually
+point at the same `enr-results-api.totalresults.com` REST API already used by Arkansas.
+The AR adapter already supports arbitrary `cId` values via `Election.source_metadata["totalvote_cid"]`,
+so the per-state migration is low-effort (~5 lines + metadata update) once the endpoints go live.
+
+**CT timeline:** Purchased TotalVote from KNOWiNK June 2024 ($1M+). PCC EMS
+(`ctemspublic.tgstg.net`) confirmed active through at least Nov 2026. TotalVote
+go-live date unannounced. Monitor `ct.totalvote.com` / `enr-results-api.totalresults.com?cId=connecticut`
+before the Nov 2026 general. When live, retire `ct.py` (PCC adapter) and switch elections
+to the new TotalVote adapter.
+
+**NE timeline:** TotalVote infrastructure provisioned (subdomain + TLS cert exists) but
+not yet serving data. Currently on the Clarity adapter (`ne.py`). Monitor
+`enr-results-api.totalresults.com?cId=nebraska` (or equivalent slug).
+
+**Migration steps (per state):**
+1. Confirm `enr-results-api.totalresults.com/Contest/CheckCurrentVersion?cId=<slug>` returns data.
+2. Add a 5-line adapter class (`CTTotalVoteAdapter` / `NETotalVoteAdapter`) mirroring the AR
+   adapter with the correct state code and default cId.
+3. Update `Election.source_metadata` records to set `totalvote_election_id` (and optionally `totalvote_cid`).
+4. For CT: also remove or disable the PCC adapter and scheduler job.
+
+**Notes:**
+- The AR adapter (`ar.py`) is the reference implementation — no changes needed there.
+- MI has a `michigan.totalvote.com` tenant but it runs a **different legacy backend**
+  (`phillyresws.azurewebsites.us`) and is county-level only (Wayne County / Detroit).
+  It is NOT compatible with the `enr-results-api.totalresults.com` adapter pattern.
+- Future states: St. Louis MO is also a provisioned TotalVote tenant. Same migration
+  path applies if/when it goes live.
+
+---
+
 ## Done
 
 ### 2026-05-28 — Decision: keep non-migrated schedulers paused through Phase 2

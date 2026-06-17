@@ -1,0 +1,24 @@
+{
+  "target": "https://www.boe.ohio.gov/adams/election-info/election-night-results/",
+  "vendor_hits": {},
+  "iframes": [],
+  "json_feeds": [
+    {
+      "url": "https://www.boe.ohio.gov/adams/election-info/election-night-results/",
+      "status": 404,
+      "ct": "text/html"
+    }
+  ],
+  "hosts": [
+    "static.cloudflareinsights.com",
+    "www.boe.ohio.gov"
+  ],
+  "all_response_urls": [
+    "https://www.boe.ohio.gov/adams/election-info/election-night-results/",
+    "https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447",
+    "https://www.boe.ohio.gov/cdn-cgi/rum?",
+    "https://www.boe.ohio.gov/cdn-cgi/challenge-platform/h/b/scripts/jsd/7c8a194018aa/main.js?",
+    "https://www.boe.ohio.gov/favicon.ico",
+    "https://www.boe.ohio.gov/cdn-cgi/challenge-platform/h/b/jsd/oneshot/7c8a194018aa/0.22136284649444127:1781694025:atmJD8dRS7oVoR1r2Lc-psiPMnTkcb1AtaLUdWYF8L4/a0d1e3111e03e61f"
+  ]
+}
