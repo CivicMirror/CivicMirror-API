@@ -38,8 +38,8 @@ Obtained from `/api-ivis-system/api/s3/enr/electionConstants`.
 |----|---------------|------|-------|--------|
 | 53813 | 2026 REPUBLICAN PRIMARY ELECTION | P | SW | Certified (135 result versions) |
 | 53814 | 2026 DEMOCRATIC PRIMARY ELECTION | P | SW | Certified |
-| **58315** | **2026 REPUBLICAN PRIMARY RUNOFF ELECTION** | **RU** | **SW** | **New since March HAR** |
-| **58314** | **2026 DEMOCRATIC PRIMARY RUNOFF ELECTION** | **RU** | **SW** | **New since March HAR** |
+| 58315 | 2026 REPUBLICAN PRIMARY RUNOFF ELECTION | RU | SW | Certified (May 26, 2026; 70 versions; 254/254 counties) |
+| 58314 | 2026 DEMOCRATIC PRIMARY RUNOFF ELECTION | RU | SW | Certified (May 26, 2026; 74 versions; 254/254 counties) |
 | 56181 | 2026 SPECIAL ELECTION SENATE DISTRICT 4 | S | PS | Final (May 2, 2026) |
 | 54613 | 2026 SPECIAL RUNOFF ELECTION SENATE DISTRICT 9 | SR | PS | Final |
 | 54612 | 2026 SPECIAL RUNOFF ELECTION CONGRESSIONAL DISTRICT 18 | SR | PS | Final |
@@ -56,6 +56,8 @@ Obtained from `/api-ivis-system/api/s3/enr/electionConstants`.
 **Scope codes:** `SW` = Statewide, `PS` = Partial/District
 
 The `O` field in the constants payload indicates whether results are online (`"Y"`) or offline (`"N"`).
+
+**November 2026 General Election:** Not yet present in `electionConstants` as of June 17, 2026. Based on the runoff version counts (70–74 at certification), elections appear to be loaded into the ENR system approximately 30–60 days before election day. Expect the General to appear around September–October 2026. See [Monitoring for New Elections](#monitoring-for-new-elections) below.
 
 ---
 
@@ -285,6 +287,79 @@ Returns per-county breakdowns for all races in the election. Keyed by CivixApps 
 
 ---
 
+## Pre-Election Seeding — Candidate & Race Data
+
+**The `Lookups` field is populated as soon as an election is registered**, not just on election night. This was confirmed by live-querying the two May 26 Primary Runoff elections: both returned complete `Lookups`, `Race`, and `OfficeSummary` data (with zero vote totals) prior to their election date. The data is fully usable for Stage 1 seeding.
+
+Fields available pre-election from `/enr/election/{id}`:
+
+| Field | Pre-Election Content |
+|-------|---------------------|
+| `Lookups.Candidates` | Full roster — ID, full name, first/last split |
+| `Lookups.Office` | All offices — ID, name, type, district number |
+| `Lookups.OfficeType` | Federal, Statewide, District, County Wide, County Race, Propositions |
+| `Lookups.County` | All counties with internal ID + FIPS via `MID` |
+| `Race.OfficeTypes[]` | Race IDs grouped by office type |
+| `OfficeSummary.OS[]` | Per-race candidate list (vote totals zero until election night) |
+| `Home.ElecDate` | Election date in `MMDDYYYY` format |
+
+**EVR has no candidate data.** Confirmed: the EVR `EVR_ELECTION` response only contains `id`, `election_date`, `election_name`, `certified`, `early_voting_dates`, and `counties`. Races and candidates are exclusively in the ENR system.
+
+**SOS Candidate Guide** (`/elections/candidates/index.shtml`, `/elections/candidates/guide/2026/`) is static HTML only — no machine-readable filings data. All machine-readable candidate data flows through the ENR `Lookups` field.
+
+---
+
+## Monitoring for New Elections
+
+Unknown election IDs return `{"Version": ""}` with HTTP 200 — not a 404. This makes sequential probing viable for catching new elections the moment they're registered, without waiting for `electionConstants` polling to catch them.
+
+**Strategy:** Poll `electionConstants` daily. When a `GE` key appears under `2026`, immediately pull its `Lookups` to seed races and candidates. Expected window: September–October 2026 for the November 4 General.
+
+**ID range to probe:** Current known IDs top out at 58315. November General IDs are likely in the 59000–63000 range based on spacing. An unknown ID returns `{"Version": ""}` (empty string); a live election returns `{"Version": "enr/{id}/{n}/"}` with `n > 0`. Detection logic:
+
+```python
+def probe_election(election_id):
+    """Returns True if this election ID is live in the ENR system."""
+    r = requests.get(f"{BASE}/election/{election_id}", headers=HEADERS)
+    return bool(r.json().get("Version", ""))
+```
+
+---
+
+## May 26, 2026 Primary Runoff Results
+
+Both runoffs certified with 254/254 counties reporting. Notable statewide and federal races:
+
+### Republican Runoff (ID 58315) — 157 races, 314 candidates
+
+| Race | Winner | % | Runner-up | % |
+|------|--------|---|-----------|---|
+| U.S. Senator | Ken Paxton | 63.8% | John Cornyn (I) | 36.2% |
+| Attorney General | Mayes Middleton | 55.2% | Chip Roy | 44.8% |
+| Railroad Commissioner | Bo French | 50.5% | Jim Wright (I) | 49.5% |
+| Ct. of Criminal Appeals Pl. 3 | Thomas Smith | 58.1% | Alison Fox | 41.9% |
+| U.S. Rep. District 19 | Tom Sell | 64.3% | Abraham Enriquez | 35.7% |
+
+*Last updated in ENR: Jun 12, 2026 19:23:34*
+
+### Democratic Runoff (ID 58314) — 80 races, 160 candidates
+
+| Race | Winner | % | Runner-up | % |
+|------|--------|---|-----------|---|
+| Lieutenant Governor | Vikki Goodwin | 67.8% | Marcos Isaias Velez | 32.2% |
+| Attorney General | Nathan Johnson | 60.5% | Joe Jaworski | 39.5% |
+| U.S. Rep. District 18 | Christian D. Menefee | 69.3% | Al Green | 30.7% |
+| U.S. Rep. District 33 | Colin Allred | 54.0% | Julie Johnson | 46.0% |
+| U.S. Rep. District 14 | Thurman Bill Bartie | 51.0% | Richard H. Davis | 49.0% |
+| U.S. Rep. District 5 | Chelsey Hockett | 53.0% | Ruth "Truth" Torres | 47.0% |
+| U.S. Rep. District 35 | Johnny C. Garcia | 63.8% | Maureen Galindo | 36.2% |
+
+*Last updated in ENR: Jun 17, 2026 00:57:03*
+
+Early votes (`EV` field) consistently accounted for roughly 60–65% of total votes in both runoffs.
+
+---
+
 ## Cognito Identity Pool (Frontend Only — Not Required for API)
 
 The ENR Angular app calls AWS Cognito to obtain temporary S3 SDK credentials for frontend S3 access:
@@ -312,6 +387,7 @@ The response contains `AccessKeyId`, `SecretKey`, and `SessionToken`. These are 
 | Query style | Query params (`?type=&electionId=&electionDate=`) | Path-based (`/enr/election/{id}`) |
 | Response wrapper | `{"upload": "<base64>"}` for most | Mixed: direct JSON with b64 sub-fields, or `upload` wrapper |
 | Data scope | Turnout by date + individual voter lists | Race results: candidates, vote totals, county breakdown |
+| **Candidate/race data** | **None** | **Yes — via `Lookups` field, available pre-election** |
 | Data cadence | New file per EV date | Live updates during election night (RefreshTime: 5s) |
 | Statewide voter list | Yes (EVR_STATEWIDE CSV, ~7 MB) | No |
 | Election-day voter list | Yes (EVR_STATEWIDE_ELECTIONDAY ZIP) | No |
@@ -329,7 +405,30 @@ Pull `/enr/electionConstants` to discover new election IDs and metadata. For eac
 - County list with internal IDs and FIPS codes via `MID`
 - Race list from `Race.OfficeTypes[]`
 
-Seed `Race`, `Candidate`, and `Office` records before election night.
+Seed `Race`, `Candidate`, and `Office` records before election night. The `Lookups` field is fully populated the moment the election appears in the system — no need to wait for results to start flowing.
+
+```python
+def discover_and_seed(db):
+    constants = get_elections()
+    for year, types in constants["electionInfo"].items():
+        for etype, elections in types.items():
+            for eid, meta in elections.items():
+                if meta["O"] == "N":      # offline / not yet published
+                    continue
+                if db.election_known(eid):
+                    continue              # already seeded
+                
+                result = get_election_results(int(eid))
+                lookups = result["lookups"]
+                
+                db.upsert_election(eid, meta, result["home"])
+                db.upsert_candidates(lookups["Candidates"])    # ID, BN (full name)
+                db.upsert_offices(lookups["Office"])           # ID, ON, OT, SSO (district)
+                db.upsert_races(result["race"]["OfficeTypes"]) # race ID → office type
+                # Counties: lookups["County"] has ID + MID (FIPS) — likely already in DB
+```
+
+**Timing gap:** The November 2026 General Election is not in the system as of June 17. Monitor `electionConstants` daily starting in August; also probe the ID range 59000–63000 with `probe_election()` (see Monitoring section). Once detected, `discover_and_seed()` runs and the full candidate roster drops in immediately.
 
 ### Stage 2 — Results ingestion (on/after election night)
 
@@ -370,11 +469,12 @@ The SOS site itself is not the data source — it links out to `goelect.txelecti
 | 54612 | 2026 Special Runoff — CD18 | 01/31/2026 | Harris Co. only; Menefee 68.9% |
 | 54613 | 2026 Special Runoff — SD9 | 01/31/2026 | District-only |
 | 56181 | 2026 Special Election — SD4 | 05/02/2026 | 5 counties; Ligon 73% in Harris |
-| 58314 | 2026 Democratic Primary Runoff | TBD | New — no results yet |
-| 58315 | 2026 Republican Primary Runoff | TBD | New — no results yet |
+| 58314 | 2026 Democratic Primary Runoff | 05/26/2026 | 80 races, 160 candidates; Johnson won AG 60.5% |
+| 58315 | 2026 Republican Primary Runoff | 05/26/2026 | 157 races, 314 candidates; Paxton won Senate 63.8% |
 | 51031 | 2025 November Constitutional Amendment | 11/04/2025 | Statewide |
 | 51830 | 2025 Special Election — SD9 | 11/04/2025 | District-only |
 | 51742 | 2025 Special Election — CD18 | 11/04/2025 | District-only |
+| TBD | 2026 General Election | 11/03/2026 | Not yet in system; probe ID range 59000–63000 starting ~Aug 2026 |
 
 ---
 
@@ -414,8 +514,31 @@ def get_county_results(election_id):
     return b64d(r.json()["upload"])
 
 def get_version_number(election_id):
-    """Returns the integer update counter from the Version string."""
+    """Returns the integer update counter, or None if election not yet live."""
     r = requests.get(f"{BASE}/election/{election_id}", headers=HEADERS)
-    version_str = r.json()["Version"]          # e.g. "enr/53813/135/"
-    return int(version_str.split("/")[2])
+    version_str = r.json().get("Version", "")   # unknown IDs return {"Version": ""}
+    if not version_str:
+        return None
+    return int(version_str.split("/")[2])        # e.g. "enr/53813/135/" → 135
+
+def probe_election(election_id):
+    """Returns True if this election ID is live in the ENR system."""
+    return get_version_number(election_id) is not None
+
+def discover_and_seed(db):
+    """Pull electionConstants, seed any new elections with candidate/race data."""
+    constants = get_elections()
+    for year, types in constants["electionInfo"].items():
+        for etype, elections in types.items():
+            for eid, meta in elections.items():
+                if meta["O"] == "N":      # offline / not yet published
+                    continue
+                if db.election_known(eid):
+                    continue              # already seeded
+                result = get_election_results(int(eid))
+                lookups = result["lookups"]
+                db.upsert_election(eid, meta, result["home"])
+                db.upsert_candidates(lookups["Candidates"])
+                db.upsert_offices(lookups["Office"])
+                db.upsert_races(result["race"]["OfficeTypes"])
 ```
