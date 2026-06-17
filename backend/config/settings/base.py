@@ -159,6 +159,7 @@ INSTALLED_APPS += [
     'integrations.election_calendar',
     'integrations.wa_pdc',
     'integrations.wa_votewa',
+    'integrations.tx_goelect',
     'integrations.fl_ew',
     'internal',
     'api',
