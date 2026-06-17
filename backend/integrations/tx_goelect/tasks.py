@@ -177,8 +177,11 @@ def sync_tx_elections(self):
         }
 
     except TxGoElectRetryableError as exc:
-        sync_log.status = SyncLog.Status.COMPLETED_WITH_WARNINGS
-        sync_log.save(update_fields=["status"])
+        sync_log.error_count = 1
+        sync_log.last_error = str(exc)
+        sync_log.status = SyncLog.Status.FAILED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
         raise self.retry(exc=exc)
 
     except Exception as exc:
@@ -219,24 +222,24 @@ def sync_tx_races(self, election_pk: int, tx_election_id: int):
         offices = lookups.get("Office") or []
         office_type_map = {ot["ID"]: ot["OT"] for ot in (lookups.get("OfficeType") or [])}
 
-        # Build candidate-by-ID map from OfficeSummary for vote total context.
+        # Build per-office candidate lookup from OfficeSummary.
         # OfficeSummary.OS is a list of {OID, C: list|dict of candidates}.
-        os_candidates: dict[int, dict] = {}
-        for os_entry in (office_summary.get("OS") or []):
-            candidates_raw = os_entry.get("C") or {}
-            if isinstance(candidates_raw, dict):
-                for cand in candidates_raw.values():
-                    os_candidates[cand.get("ID") or cand.get("id", 0)] = cand
-            elif isinstance(candidates_raw, list):
-                for cand in candidates_raw:
-                    os_candidates[cand.get("ID") or cand.get("id", 0)] = cand
+        # Keyed by office ID so candidates are scoped to their own office.
+        os_by_office_id: dict[int, list] = {
+            entry["OID"]: (
+                list(entry["C"].values())
+                if isinstance(entry.get("C"), dict)
+                else (entry.get("C") or [])
+            )
+            for entry in (office_summary.get("OS") or [])
+        }
 
         for office in offices:
             office_type_id = office.get("OT")
             office_type_name = office_type_map.get(office_type_id, "")
 
             race_fields = map_race(election_obj, office, office_type_name, tx_election_id)
-            race_source_id = race_fields.pop("source_id")
+            race_fields.pop("source_id", None)
             race_identity = {
                 "office_title": race_fields.pop("office_title"),
                 "ocd_division_id": race_fields.pop("ocd_division_id", "") or "",
@@ -266,9 +269,9 @@ def sync_tx_races(self, election_pk: int, tx_election_id: int):
                 MeasureOption.objects.get_or_create(race=race_obj, option_label="No")
                 continue
 
-            # Seed candidates from OfficeSummary entries for this office
+            # Seed candidates from OfficeSummary entries for this office only
             office_id = office["ID"]
-            for cand_id, cand_data in os_candidates.items():
+            for cand_data in os_by_office_id.get(office_id) or []:
                 cand_fields = map_candidate(tx_election_id, office_id, cand_data)
                 name = cand_fields.pop("name", "")
                 party = cand_fields.pop("party", "")
@@ -303,7 +306,7 @@ def sync_tx_races(self, election_pk: int, tx_election_id: int):
     except TxGoElectRetryableError as exc:
         sync_log.error_count = 1
         sync_log.last_error = str(exc)
-        sync_log.status = SyncLog.Status.COMPLETED_WITH_WARNINGS
+        sync_log.status = SyncLog.Status.FAILED
         sync_log.completed_at = timezone.now()
         sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
         raise self.retry(exc=exc)
