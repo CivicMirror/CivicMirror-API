@@ -18,7 +18,6 @@ import logging
 from django.core.cache import cache
 
 from integrations.tx_goelect.client import TxGoElectClient
-from integrations.tx_goelect.mappers import map_county_fragment
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
 from .registry import register
