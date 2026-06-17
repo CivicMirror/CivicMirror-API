@@ -1,0 +1,321 @@
+"""
+Texas GoElect Celery tasks.
+
+Stage 1 — sync_tx_elections:
+  Poll electionConstants for online elections; upsert Election records.
+  Run sequential ID probe for undiscovered elections (e.g. November General).
+  Queue sync_tx_races for each election.
+
+Stage 2 — sync_tx_races:
+  Fetch Lookups + OfficeSummary for one election.
+  Upsert Race + Candidate records.
+"""
+from __future__ import annotations
+
+import logging
+
+from celery import shared_task
+from django.core.cache import cache
+from django.utils import timezone
+
+from elections.models import Election, MeasureOption, Race
+from ops.models import SyncLog
+
+from .client import TxGoElectClient
+from .exceptions import TxGoElectError, TxGoElectRetryableError
+from .mappers import map_candidate, map_election, map_race
+
+logger = logging.getLogger(__name__)
+
+_SOURCE = "tx_goelect"
+_PROBE_WATERMARK_KEY = "tx_goelect:probe_watermark"
+_PROBE_WATERMARK_INIT = 58315  # highest confirmed election ID as of 2026-06-17
+_PROBE_MAX_MISSES = 50
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def sync_tx_elections(self):
+    """Stage 1: Discover TX elections and queue race syncs."""
+    sync_log = SyncLog.objects.create(
+        source=_SOURCE,
+        task_name="sync_tx_elections",
+        status=SyncLog.Status.STARTED,
+    )
+    client = TxGoElectClient()
+    created_count = updated_count = queued_count = skipped_count = 0
+
+    try:
+        from aggregation import ingest
+
+        # ── Poll electionConstants ──────────────────────────────────────────
+        constants = client.get_election_constants()
+        election_info = constants.get("electionInfo", {})
+
+        for year, type_map in election_info.items():
+            for type_code, elections in type_map.items():
+                for election_id_str, meta in elections.items():
+                    if meta.get("O") != "Y":
+                        skipped_count += 1
+                        continue
+
+                    election_id = int(election_id_str)
+                    election_name = meta.get("N", "")
+
+                    try:
+                        data = client.get_election_data(election_id)
+                    except TxGoElectError as exc:
+                        logger.warning(
+                            "tx_goelect.sync_elections: data fetch failed id=%d: %s",
+                            election_id, exc,
+                        )
+                        skipped_count += 1
+                        continue
+
+                    home = data.get("home") or {}
+                    fields = map_election(election_id, type_code, home, election_name)
+                    source_id = fields.pop("source_id")
+                    identity = {
+                        "state": fields["state"],
+                        "election_type": fields["election_type"],
+                        "election_date": fields["election_date"],
+                        "jurisdiction_level": fields["jurisdiction_level"],
+                    }
+
+                    election_obj, was_created = ingest.ingest_election(
+                        source=_SOURCE,
+                        source_id=source_id,
+                        identity=identity,
+                        fields=fields,
+                    )
+                    if was_created:
+                        created_count += 1
+                    else:
+                        updated_count += 1
+
+                    sync_tx_races.apply_async(
+                        args=[election_obj.pk, election_id],
+                        countdown=queued_count * 5,
+                    )
+                    queued_count += 1
+
+        # ── Sequential ID probe ─────────────────────────────────────────────
+        watermark = cache.get(_PROBE_WATERMARK_KEY, _PROBE_WATERMARK_INIT)
+        misses = 0
+        probe_id = watermark + 1
+
+        while misses < _PROBE_MAX_MISSES:
+            if not client.probe_election(probe_id):
+                misses += 1
+                probe_id += 1
+                continue
+
+            # Hit — reset miss counter; fetch full data and ingest
+            misses = 0
+            try:
+                data = client.get_election_data(probe_id)
+            except TxGoElectError as exc:
+                logger.warning(
+                    "tx_goelect.probe: data fetch failed id=%d: %s", probe_id, exc,
+                )
+                probe_id += 1
+                continue
+
+            home = data.get("home") or {}
+            # Type code is unknown from probe path — use "S" (special) as default.
+            # classify_election will set is_target_general_2026=True only when it
+            # sees type_code=="GE" AND date==2026-11-03, so probed elections won't
+            # produce false-positives; the real GE will show up in electionConstants
+            # once it goes online.
+            type_code = "S"
+            election_name = f"Texas Election {probe_id}"
+
+            fields = map_election(probe_id, type_code, home, election_name)
+            source_id = fields.pop("source_id")
+            identity = {
+                "state": fields["state"],
+                "election_type": fields["election_type"],
+                "election_date": fields["election_date"],
+                "jurisdiction_level": fields["jurisdiction_level"],
+            }
+
+            election_obj, was_created = ingest.ingest_election(
+                source=_SOURCE,
+                source_id=source_id,
+                identity=identity,
+                fields=fields,
+            )
+            if was_created:
+                created_count += 1
+            else:
+                updated_count += 1
+
+            sync_tx_races.apply_async(
+                args=[election_obj.pk, probe_id],
+                countdown=queued_count * 5,
+            )
+            queued_count += 1
+            probe_id += 1
+
+        cache.set(_PROBE_WATERMARK_KEY, probe_id - 1, timeout=None)
+
+        sync_log.records_created = created_count
+        sync_log.records_updated = updated_count
+        sync_log.records_skipped = skipped_count
+        sync_log.notes = f"Queued {queued_count} race syncs; probe watermark now {probe_id - 1}"
+        sync_log.status = SyncLog.Status.COMPLETED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=[
+            "records_created", "records_updated", "records_skipped",
+            "notes", "status", "completed_at",
+        ])
+
+        return {
+            "created": created_count,
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "queued": queued_count,
+        }
+
+    except TxGoElectRetryableError as exc:
+        sync_log.status = SyncLog.Status.COMPLETED_WITH_WARNINGS
+        sync_log.save(update_fields=["status"])
+        raise self.retry(exc=exc)
+
+    except Exception as exc:
+        logger.exception("tx_goelect.sync_elections.failed")
+        sync_log.error_count = 1
+        sync_log.last_error = str(exc)
+        sync_log.status = SyncLog.Status.FAILED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+        raise
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def sync_tx_races(self, election_pk: int, tx_election_id: int):
+    """Stage 2: Fetch Lookups + OfficeSummary; upsert Race + Candidate records."""
+    try:
+        election_obj = Election.objects.get(pk=election_pk)
+    except Election.DoesNotExist:
+        logger.error("tx_goelect.sync_races: election pk=%d not found", election_pk)
+        return None
+
+    sync_log = SyncLog.objects.create(
+        election=election_obj,
+        source=_SOURCE,
+        task_name="sync_tx_races",
+        status=SyncLog.Status.STARTED,
+    )
+    client = TxGoElectClient()
+    race_created = race_updated = cand_created = cand_updated = 0
+
+    try:
+        from aggregation import ingest
+
+        data = client.get_election_data(tx_election_id)
+        lookups = data.get("lookups") or {}
+        office_summary = data.get("office_summary") or {}
+
+        offices = lookups.get("Office") or []
+        office_type_map = {ot["ID"]: ot["OT"] for ot in (lookups.get("OfficeType") or [])}
+
+        # Build candidate-by-ID map from OfficeSummary for vote total context.
+        # OfficeSummary.OS is a list of {OID, C: list|dict of candidates}.
+        os_candidates: dict[int, dict] = {}
+        for os_entry in (office_summary.get("OS") or []):
+            candidates_raw = os_entry.get("C") or {}
+            if isinstance(candidates_raw, dict):
+                for cand in candidates_raw.values():
+                    os_candidates[cand.get("ID") or cand.get("id", 0)] = cand
+            elif isinstance(candidates_raw, list):
+                for cand in candidates_raw:
+                    os_candidates[cand.get("ID") or cand.get("id", 0)] = cand
+
+        for office in offices:
+            office_type_id = office.get("OT")
+            office_type_name = office_type_map.get(office_type_id, "")
+
+            race_fields = map_race(election_obj, office, office_type_name, tx_election_id)
+            race_source_id = race_fields.pop("source_id")
+            race_identity = {
+                "office_title": race_fields.pop("office_title"),
+                "ocd_division_id": race_fields.pop("ocd_division_id", "") or "",
+                "race_type": race_fields.pop("race_type"),
+            }
+
+            if not race_identity["office_title"]:
+                logger.warning(
+                    "tx_goelect.sync_races: null office title, skipping office_id=%s",
+                    office.get("ID"),
+                )
+                continue
+
+            race_obj, race_was_new = ingest.ingest_race(
+                election=election_obj,
+                source=_SOURCE,
+                identity=race_identity,
+                fields=race_fields,
+            )
+            if race_was_new:
+                race_created += 1
+            else:
+                race_updated += 1
+
+            if race_identity["race_type"] == Race.RaceType.MEASURE:
+                MeasureOption.objects.get_or_create(race=race_obj, option_label="Yes")
+                MeasureOption.objects.get_or_create(race=race_obj, option_label="No")
+                continue
+
+            # Seed candidates from OfficeSummary entries for this office
+            office_id = office["ID"]
+            for cand_id, cand_data in os_candidates.items():
+                cand_fields = map_candidate(tx_election_id, office_id, cand_data)
+                name = cand_fields.pop("name", "")
+                party = cand_fields.pop("party", "")
+                if not name:
+                    continue
+                _, cand_was_new = ingest.ingest_candidate(
+                    race=race_obj,
+                    source=_SOURCE,
+                    name=name,
+                    party=party,
+                    fields=cand_fields,
+                )
+                if cand_was_new:
+                    cand_created += 1
+                else:
+                    cand_updated += 1
+
+        election_obj.last_synced_at = timezone.now()
+        election_obj.save(update_fields=["last_synced_at"])
+
+        sync_log.records_created = race_created + cand_created
+        sync_log.records_updated = race_updated + cand_updated
+        sync_log.status = SyncLog.Status.COMPLETED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=["records_created", "records_updated", "status", "completed_at"])
+
+        return {
+            "races": {"created": race_created, "updated": race_updated},
+            "candidates": {"created": cand_created, "updated": cand_updated},
+        }
+
+    except TxGoElectRetryableError as exc:
+        sync_log.error_count = 1
+        sync_log.last_error = str(exc)
+        sync_log.status = SyncLog.Status.COMPLETED_WITH_WARNINGS
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+        raise self.retry(exc=exc)
+
+    except Exception as exc:
+        logger.exception(
+            "tx_goelect.sync_races.failed election_pk=%d tx_id=%d",
+            election_pk, tx_election_id,
+        )
+        sync_log.error_count = 1
+        sync_log.last_error = str(exc)
+        sync_log.status = SyncLog.Status.FAILED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+        raise
