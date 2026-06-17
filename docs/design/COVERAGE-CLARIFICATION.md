@@ -8,41 +8,51 @@ Historically, some discussions interpreted "Full Coverage" as complete support f
 
 That is not the intended project goal.
 
----
+## Primary Objective
 
-# Primary Objective
+Provide normalized election and ballot data for Federal and State offices across all 50 states.
 
-The primary objective of CivicMirror is:
+## Federal Coverage Feasibility
 
-> Provide normalized election and ballot data for Federal and State offices across all 50 states.
+Federal coverage across all 50 states is considered achievable.
 
-Local election coverage is valuable and should be pursued when practical, but it is not required for a state to be considered fully covered.
+However, no single source currently provides complete nationwide Federal election coverage.
 
----
+Google Civic API is a useful supplemental source but should not be treated as the sole authoritative source for Federal election discovery.
 
-# Coverage Priorities
+### Recommended Federal Coverage Strategy
 
-## Priority 1 — Federal Offices
+1. State election authority sources (authoritative)
+   - Election discovery
+   - Candidate discovery
+   - Official results
 
-Federal coverage is the highest priority.
+2. Google Civic API (supplemental)
+   - Address-based contest lookup
+   - Candidate enrichment
+   - District validation
 
-Required offices:
+3. Federal Election Commission (FEC)
+   - Candidate metadata
+   - Committee data
+   - Campaign finance data
 
+4. Historical and validation sources
+   - OpenElections
+   - MEDSL
+   - MIT Election Data sources
+
+The long-term CivicMirror goal is to normalize these fragmented sources into a single nationwide election data platform.
+
+## Coverage Priorities
+
+### Priority 1 — Federal Offices
 - President
 - Vice President
 - U.S. Senate
 - U.S. House of Representatives
 
-A state cannot be considered fully covered if federal contests cannot be reliably discovered and ingested.
-
----
-
-## Priority 2 — State Offices
-
-Required state-level coverage:
-
-### Statewide Offices
-
+### Priority 2 — State Offices
 - Governor
 - Lieutenant Governor
 - Attorney General
@@ -50,25 +60,10 @@ Required state-level coverage:
 - Treasurer
 - Auditor
 - Other statewide elected offices
-
-### Legislative Offices
-
 - State Senate
 - State House / Assembly
 
-Coverage includes:
-
-- Election discovery
-- Race creation
-- Candidate creation
-- Results ingestion
-
----
-
-## Priority 3 — Local Offices (Enhanced Coverage)
-
-Examples:
-
+### Priority 3 — Local Offices (Enhanced Coverage)
 - Mayor
 - City Council
 - Town Council
@@ -76,59 +71,11 @@ Examples:
 - County offices
 - Special districts
 
-Because local elections are frequently decentralized across thousands of jurisdictions, local coverage is considered an enhancement rather than a requirement.
+Local coverage is desirable but not required for Full Core Coverage.
 
----
+## Coverage Definitions
 
-# Historical Data
-
-Historical data is useful for research and analytics.
-
-However:
-
-- Historical backfill is not required for Full Coverage.
-- Elections should be preserved once ingested.
-- Historical imports may be completed as separate projects.
-
-A state should not lose Full Coverage status simply because historical records have not been backfilled.
-
----
-
-# Ballot Measures
-
-Ballot measures should be tracked independently from office coverage.
-
-Examples:
-
-- Constitutional amendments
-- Referendums
-- Initiatives
-- Resolutions
-
-Ballot measure support should improve a state's coverage rating, but lack of ballot measures alone should not prevent Full Coverage status when Federal and State offices are fully supported.
-
----
-
-# Precinct-Level Reporting
-
-Precinct-level reporting is an advanced feature.
-
-Benefits:
-
-- Detailed analysis
-- Geographic reporting
-- Local election support
-
-Not required for Full Coverage.
-
----
-
-# Coverage Definitions
-
-## Full Core Coverage
-
-Requirements:
-
+### Full Core Coverage
 - Federal elections discovered
 - Federal races created
 - Federal results ingested
@@ -138,38 +85,15 @@ Requirements:
 - State legislative races created
 - State legislative results ingested
 
-This is the primary target for all 50 states.
-
----
-
-## Partial Core Coverage
-
-Requirements:
-
+### Partial Core Coverage
 - Federal coverage working
 - State coverage incomplete
 
-Examples:
-
-- Missing legislative races
-- Missing statewide offices
-- Missing results ingestion
-
----
-
-## Federal Coverage Only
-
-Requirements:
-
+### Federal Coverage Only
 - Federal contests supported
 - State contests incomplete or unavailable
 
----
-
-## Enhanced Coverage
-
-Additional capabilities beyond Core Coverage:
-
+### Enhanced Coverage
 - Local elections
 - Ballot measures
 - Precinct reporting
@@ -179,15 +103,10 @@ Additional capabilities beyond Core Coverage:
 - Historical backfill
 - Live election-night reporting
 
----
-
-# Summary
+## Summary
 
 The CivicMirror coverage goal is:
-
 1. Federal coverage in all 50 states.
 2. State-level coverage in all 50 states.
 3. Local coverage where practical.
 4. Historical and advanced analytics as enhancements.
-
-A state should be considered Fully Covered when Federal and State election information can be reliably discovered, normalized, and ingested into CivicMirror.
