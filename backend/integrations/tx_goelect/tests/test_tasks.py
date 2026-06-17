@@ -232,6 +232,81 @@ def test_sync_tx_races_upserts_candidate_race():
     assert result["candidates"]["created"] == 1
 
 
+def test_sync_tx_races_candidates_scoped_to_office():
+    """Candidates from office B must not appear on office A's race (fan-out regression)."""
+    mock_election = MagicMock()
+    mock_election.pk = 1
+    mock_election.status = "results_pending"
+    mock_election.source_metadata = {"tx_election_id": 56181}
+
+    mock_race_a = MagicMock()
+    mock_race_a.pk = 10
+    mock_race_b = MagicMock()
+    mock_race_b.pk = 20
+    mock_cand = MagicMock()
+
+    # Two offices; each has one unique candidate.
+    data = {
+        "lookups": {
+            "Office": [
+                {"ID": 1001, "ON": "GOVERNOR", "SSO": 1, "OT": 100},
+                {"ID": 1002, "ON": "LIEUTENANT GOVERNOR", "SSO": 2, "OT": 100},
+            ],
+            "OfficeType": [{"ID": 100, "OT": "STATEWIDE OFFICES"}],
+        },
+        "office_summary": {
+            "OS": [
+                {
+                    "OID": 1001,
+                    "C": [{"ID": 11, "BN": "ALICE FOR GOV", "P": "DEM", "V": 100, "PE": 60.0}],
+                },
+                {
+                    "OID": 1002,
+                    "C": [{"ID": 22, "BN": "BOB FOR LT GOV", "P": "REP", "V": 80, "PE": 55.0}],
+                },
+            ]
+        },
+    }
+
+    race_call_order = []
+
+    def fake_ingest_race(**kwargs):
+        title = kwargs["identity"]["office_title"]
+        if title == "GOVERNOR":
+            race_call_order.append("gov")
+            return (mock_race_a, True)
+        race_call_order.append("ltgov")
+        return (mock_race_b, True)
+
+    candidate_calls_by_race: dict[int, list[str]] = {}
+
+    def fake_ingest_candidate(*, race, source, name, party, fields):
+        candidate_calls_by_race.setdefault(race.pk, []).append(name)
+        return (mock_cand, True)
+
+    with patch("integrations.tx_goelect.tasks.Election") as MockElection, \
+         patch("integrations.tx_goelect.tasks.TxGoElectClient") as MockClient, \
+         patch("integrations.tx_goelect.tasks.SyncLog") as MockLog, \
+         patch("aggregation.ingest.ingest_race", side_effect=fake_ingest_race), \
+         patch("aggregation.ingest.ingest_candidate", side_effect=fake_ingest_candidate):
+
+        MockElection.objects.get.return_value = mock_election
+        MockElection.DoesNotExist = Exception
+        MockClient.return_value.get_election_data.return_value = data
+        MockLog.objects.create.return_value = _mock_log()
+
+        result = sync_tx_races(1, 56181)
+
+    # Each race gets exactly one candidate — its own.
+    assert candidate_calls_by_race.get(mock_race_a.pk) == ["ALICE FOR GOV"], (
+        f"Governor race got unexpected candidates: {candidate_calls_by_race.get(mock_race_a.pk)}"
+    )
+    assert candidate_calls_by_race.get(mock_race_b.pk) == ["BOB FOR LT GOV"], (
+        f"Lt. Gov race got unexpected candidates: {candidate_calls_by_race.get(mock_race_b.pk)}"
+    )
+    assert result["candidates"]["created"] == 2
+
+
 def test_sync_tx_races_missing_election_returns_early():
     with patch("integrations.tx_goelect.tasks.Election") as MockElection:
         MockElection.objects.get.side_effect = Exception("DoesNotExist")
