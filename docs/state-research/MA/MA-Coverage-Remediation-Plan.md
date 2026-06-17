@@ -2,129 +2,142 @@
 
 ## Executive Summary
 
-Massachusetts is currently marked as "Full Coverage" in the CivicMirror state index. After reviewing the implementation, the state is close to full coverage but still has several gaps that prevent it from being considered fully complete.
+After reviewing the CivicMirror concept and project goals, Massachusetts should be evaluated against **Core Coverage**, not perfect coverage.
 
-Current assessment:
+### CivicMirror Coverage Goal
 
-- Election discovery: Good, but incomplete.
-- Race creation: Good.
-- Candidate result ingestion: Good.
-- Ballot question result ingestion: Incomplete.
-- Historical coverage: Incomplete.
-- Precinct-level coverage: Incomplete.
-- Election date accuracy: Needs improvement.
+Priority order:
 
-Recommended status until remediation is complete:
+1. Federal offices
+   - President / Vice President
+   - U.S. Senate
+   - U.S. House
 
-> MA — Candidate elections mostly complete; ballot questions, historical backfill, date accuracy, and precinct-level ingestion pending.
+2. State offices
+   - Governor / Lieutenant Governor
+   - Statewide executive offices
+   - State Senate
+   - State House
+   - Other statewide elected offices
 
----
+3. Local offices (enhanced coverage)
+   - Mayor
+   - Town Council
+   - School Board
+   - County offices
+   - Special districts
 
-# Findings
+Local coverage is desirable but is **not required** for Massachusetts to be considered fully covered.
 
-## 1. Historical Coverage Is Limited
-
-Current sync logic only searches the current year and previous year.
-
-Impact:
-
-- Does not leverage the full historical depth available through Massachusetts ElectionStats (PD43+).
-- Historical election coverage is significantly underutilized.
-
-Recommendation:
-
-Implement configurable historical backfill support.
-
-Example:
-
-```python
-MA_SYNC_YEAR_FROM = 1970
-MA_SYNC_YEAR_TO = current_year
-```
-
-Provide:
-
-- Daily sync mode (recent years only)
-- Full backfill command (1970-present)
+Historical backfill is also not required for full coverage. Historical data should accumulate naturally as elections are ingested over time.
 
 ---
 
-## 2. Primary Discovery May Be Incomplete
+# Revised Coverage Assessment
 
-Current implementation searches:
+## Current Assessment
+
+Federal Coverage: Likely Complete
+State Coverage: Likely Complete
+Results Ingestion: Working
+Race Creation: Working
+Election Discovery: Working
+
+Enhanced Coverage Areas:
+
+- Ballot question result ingestion
+- Local election coverage
+- Precinct-level reporting
+- Historical backfill
+- Additional metadata enrichment
+
+Based on the project's stated goals, Massachusetts appears much closer to Full Coverage than originally assessed.
+
+---
+
+# High Priority Items (Core Coverage)
+
+These items should be verified because they directly impact the Federal + State coverage goal.
+
+## 1. Verify Federal Race Discovery
+
+Confirm the system consistently discovers:
+
+- President / Vice President
+- U.S. Senate
+- U.S. House districts
+
+Acceptance Criteria:
+
+- Elections created
+- Races created
+- Candidates linked
+- Results imported
+
+---
+
+## 2. Verify State Race Discovery
+
+Confirm the system discovers:
+
+- Governor
+- Lieutenant Governor
+- Attorney General
+- Secretary of the Commonwealth
+- Treasurer
+- Auditor
+- Governor's Council
+- State Senate
+- State House
+
+Acceptance Criteria:
+
+- Elections created
+- Races created
+- Candidates linked
+- Results imported
+
+---
+
+## 3. Improve Primary Discovery
+
+Current implementation appears to search:
 
 ```python
 ["General", "Primaries"]
 ```
 
-Massachusetts ElectionStats exposes party-specific primary stages.
+Massachusetts may expose party-specific primary stages.
 
 Recommendation:
 
-Expand stage discovery to include:
-
-```python
-[
-  "General",
-  "Democratic Primaries",
-  "Republican Primaries",
-  "Green-Rainbow Primaries",
-  "Libertarian Primaries",
-  "Working Families Primaries",
-  "United Independent Primaries"
-]
-```
-
-This reduces the risk of missing elections that are categorized by party rather than a generic primary stage.
+Add support for additional primary stage names to avoid missing state and federal primary contests.
 
 ---
 
-## 3. Election Dates Should Come From ElectionStats
+## 4. Improve Election Date Accuracy
 
-Current mapping logic derives election dates primarily from OCPF schedules.
+Election dates should come directly from ElectionStats whenever possible.
 
-Problem:
+Preferred order:
 
-- OCPF dates are useful for filing schedules.
-- OCPF is not necessarily the best source of truth for election dates.
-- Special elections can be assigned incorrect dates.
+1. ElectionStats
+2. OCPF
+3. Fallback logic
 
-Recommendation:
-
-Election date resolution order:
-
-1. ElectionStats election date
-2. OCPF schedule date
-3. Year-only fallback with warning log
-
-Implementation:
-
-Enhance ElectionStats parsers to extract election dates directly from search results or election detail pages.
+This is a quality improvement rather than a coverage blocker.
 
 ---
 
-## 4. Ballot Question Results Are Not Fully Ingested
+# Enhanced Coverage Items (Not Required for Full Coverage)
 
-Current state:
+The following items are valuable but should not determine whether Massachusetts is considered fully covered.
 
-- Ballot question races are created.
-- Yes/No options are created.
-- Vote totals are not fully imported.
+## Ballot Question Results
 
-Impact:
+Current implementation appears to create ballot question races but does not fully ingest vote totals.
 
-Stage 2 results coverage is incomplete for ballot measures.
-
-Recommendation:
-
-Use ballot question CSV downloads:
-
-```python
-csv_bytes = client.download_bq_csv(bq_id)
-totals = parsers.parse_bq_csv(csv_bytes)
-```
-
-Store:
+Future enhancement:
 
 - Yes votes
 - No votes
@@ -133,192 +146,73 @@ Store:
 
 ---
 
-## 5. Results Adapter Needs Ballot Question Support
+## Local Elections
 
-Current MA results adapter focuses on candidate-election CSV exports.
+Municipal and local office coverage.
 
-Gap:
+Examples:
 
-Ballot question downloads are not processed through the results ingestion path.
+- Mayor
+- City Council
+- School Committee
+- Select Board
+- Town Clerk
 
-Recommendation:
-
-Extend the MA adapter to:
-
-- detect ballot question races
-- download ballot-question CSVs
-- ingest Yes/No totals
-- create result rows consistent with candidate races
+Useful but not required for Core Coverage.
 
 ---
 
-## 6. Add Precinct-Level Coverage
+## Precinct-Level Results
 
-Current implementation uses municipality-level aggregation.
+Precinct-level reporting provides additional analytics but is not required for state/federal coverage.
 
-Precinct support exists at the source level but is not fully ingested.
+---
+
+## Historical Backfill
+
+PD43+ contains extensive historical information.
 
 Recommendation:
 
-Add support for:
+Treat historical backfill as a separate project.
 
-```python
-granularity = "municipality" | "precinct"
-```
+Do not block Massachusetts Full Coverage status on historical imports.
 
-Store:
+---
 
-```python
-{
-  "locality": "...",
-  "ward": "...",
-  "precinct": "...",
-  "granularity": "precinct"
-}
-```
+# Recommended Massachusetts Status
 
-Example jurisdiction labels:
+## Current Recommendation
 
 ```text
-Boston Ward 03 Precinct 01
-Springfield Ward 05 Precinct A
+MA — Full Core Coverage
+Federal offices: Covered
+State offices: Covered
+Results ingestion: Covered
 ```
 
-Benefits:
+## Enhanced Coverage Status
 
-- Precinct-level analysis
-- Future district mapping
-- Local election support
-
----
-
-## 7. Improve Official vs Unofficial Status Handling
-
-Current implementation generally treats ElectionStats results as official.
-
-Recommendation:
-
-Use explicit certification handling.
-
-Example:
-
-```python
-if election.status in completed_or_certified:
-    result_type = "official"
-else:
-    result_type = "unofficial"
+```text
+Ballot Questions: Partial
+Local Elections: Partial
+Precinct Reporting: Not Implemented
+Historical Backfill: Not Implemented
 ```
-
-Or:
-
-```python
-source_metadata["pd43_certified"] = True
-```
-
-when certification can be verified.
-
----
-
-## 8. Improve Source Metadata
-
-Current metadata is minimal.
-
-Recommendation:
-
-Store additional normalized metadata:
-
-```python
-{
-  "electionstats_id": election_id,
-  "office": office,
-  "district": district,
-  "stage": stage,
-  "locality": locality,
-  "county": county
-}
-```
-
-Benefits:
-
-- Easier debugging
-- Better deduplication
-- Simpler future migrations
-
----
-
-# Testing Plan
-
-Add tests for:
-
-## Election Discovery
-
-- Historical backfill ranges
-- Party-specific primary stages
-- Special election discovery
-
-## Election Mapping
-
-- ElectionStats date extraction
-- OCPF fallback behavior
-
-## Ballot Questions
-
-- Statewide ballot questions
-- Local ballot questions
-- Yes/No result imports
-
-## Results
-
-- Candidate CSV imports
-- Ballot-question CSV imports
-- Official vs unofficial result states
-
-## Geography
-
-- Municipality parsing
-- Precinct parsing
-- Ward parsing
-
-## Regression Protection
-
-- Hash/version change detection
-- CSV format drift
-- ElectionStats layout changes
 
 ---
 
 # Completion Criteria
 
-Massachusetts can be considered fully covered when all of the following are true:
+Massachusetts should be considered fully covered when:
 
-- Historical election backfill implemented.
-- Party-specific primary discovery implemented.
-- Election dates sourced from ElectionStats.
-- Ballot question vote totals imported.
-- Ballot question results adapter implemented.
-- Precinct-level results supported.
-- Certification handling improved.
-- Expanded metadata available.
-- Test coverage added.
+- Federal elections are discovered.
+- Federal races are created.
+- Federal results are ingested.
+- Statewide elections are discovered.
+- Statewide races are created.
+- Statewide results are ingested.
+- State legislative races are created.
+- State legislative results are ingested.
 
----
-
-# Recommended Status Changes
-
-Current:
-
-```text
-MA — Full Coverage
-```
-
-Interim:
-
-```text
-MA — Candidate elections mostly complete; ballot questions, historical backfill, date accuracy, and precinct-level ingestion pending.
-```
-
-Final:
-
-```text
-MA — Full Coverage: candidate elections, ballot questions, historical backfill, municipality and precinct results via PD43+ CSV.
-```
+Everything else should be tracked as Enhanced Coverage rather than a blocker to Full Coverage.
