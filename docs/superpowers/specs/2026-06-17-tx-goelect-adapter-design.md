@@ -4,7 +4,7 @@
 **State:** Texas  
 **Source:** CivixApps GoElect ENR (`goelect.txelections.civixapps.com`)  
 **Target elections:** November 2026 General (primary/runoff data already certified)  
-**Primary date:** November 3, 2026  
+**Uniform Election Date:** November 3, 2026 (General Election — not a primary)
 
 ---
 
@@ -13,6 +13,8 @@
 Texas election night results are served by the CivixApps GoElect ENR platform — a public JSON API backed by AWS S3, no authentication required. The adapter follows the same 3-layer pattern as WA/FL/AZ: a client module, mappers, Celery tasks for election/race seeding, and a results polling adapter.
 
 The November 2026 General Election is not yet registered in the ENR system (expected September–October 2026). The adapter handles discovery dynamically via `electionConstants` polling plus a sequential ID probe.
+
+**Texas election calendar:** Primary March 3 → Primary Runoff May 26 → Uniform Election Date (General) November 3.
 
 ---
 
@@ -36,7 +38,7 @@ All requests use a browser `User-Agent` header. The site is behind Cloudflare wi
 
 ```
 integrations/tx_goelect/
-    client.py       — HTTP + base64 decode helpers
+    client.py       — HTTP + base64 decode helpers, tolerant field decoder
     mappers.py      — field mappers for Election, Race, Candidate, county fragment
     tasks.py        — sync_tx_elections (Stage 1), sync_tx_races (Stage 2)
     apps.py
@@ -45,6 +47,10 @@ integrations/tx_goelect/
         test_client.py
         test_mappers.py
         test_tasks.py
+        fixtures/
+            enr_56181_election.json     # sanitized SD4 special election payload
+            enr_58315_runoff_subset.json  # sanitized Republican Runoff subset
+            enr_56181_county_info.json  # sanitized countyInfo payload
 
 results/adapters/tx.py          — TxAdapter (results polling)
 results/tests/test_tx_adapter.py
@@ -68,6 +74,8 @@ class TxGoElectClient:
 - `electionConstants` and `countyInfo` responses: decode `resp.json()["upload"]` → JSON
 - `election/{id}` response: each sub-field (`Home`, `Lookups`, `Race`, `OfficeSummary`, `Federal`, `StateWide`, `StateWideQ`, `Districted`) is individually base64-encoded; `Version` is a plain string
 
+**Tolerant field decoder:** `get_election_data` decodes each known sub-field individually. Missing fields (field absent or empty string) decode to `{}` or `[]` without raising. Unknown top-level keys are logged at DEBUG level so schema drift is visible in logs without breaking ingestion.
+
 **Retry:** 3 attempts on 429/5xx, same pattern as `WaVoteWaClient`. `get_version` on an unknown ID returns `None` (no retry needed — 200 with empty Version is expected).
 
 ---
@@ -86,16 +94,18 @@ class TxGoElectClient:
 - **race_type:** CANDIDATE for all office types; MEASURE for PROPOSITIONS
 - **geography_scope:** `"statewide"` if `office["SSO"]` is 0 or absent; `"district"` otherwise
 - **jurisdiction:** district label built from office name + `SSO` (e.g. `"District 6"`)
+- **source_id:** `f"tx_goelect:{election_id}:office:{office['ID']}"` — stable composite key across syncs
 - **source_metadata:** `{"tx_election_id": ..., "tx_office_id": office["ID"], "office_type": office_type_name}`
 
-### `map_candidate(ballot_option)`
+### `map_candidate(election_id, office_id, ballot_option)`
 - **name:** from `BN` (full name field)
 - **party:** from `P` (`DEM` / `REP` / empty string)
+- **source_id:** `f"tx_goelect:{election_id}:office:{office_id}:candidate:{ballot_option['ID']}"` — collision-safe across elections and offices
 - **source_metadata:** `{"tx_candidate_id": id, "party_abbreviation": party}`
 
 ### `map_county_fragment(county_lookup_entry)`
 - Returns lowercase county name, e.g. `"harris"` from `{"CN": "HARRIS", "MID": 48201}`
-- FIPS (`MID`) preserved in `raw` on ResultRows for future joins
+- `MID` stored in `raw` as `county_mid` (CivixApps internal field — likely FIPS 48xxx but not guaranteed; verify against live samples before treating as authoritative FIPS)
 
 ---
 
@@ -117,16 +127,17 @@ Detects the November 2026 General before it appears in `electionConstants`:
 - Watermark key: `tx_goelect:probe_watermark` in cache (initialized to 58315, the highest known ID)
 - Each run: scan sequentially from `watermark + 1`
 - **Stop after 50 consecutive misses** — general not yet registered; try tomorrow
-- **On hit:** record election, reset miss counter, continue scanning (multiple adjacent IDs possible)
-- Update watermark to highest ID probed each run
+- **On hit: validate before ingesting** — check that `Home["ElecDate"]` parses to `2026-11-03` and election type code is `GE`. Hits that fail validation are logged and skipped (could be specials or locals); the scan continues.
+- When a validated General Election hit is found: ingest it, reset miss counter, continue scanning
+- Update watermark to highest ID probed each run regardless of hit/miss
 - Typical cost: ≤50 HTTP calls/day when no new elections; ≤100 on the day a new election appears
 
 ### `sync_tx_races(election_pk, tx_election_id)` — Stage 2 (queued by Stage 1)
 
 1. Fetch `get_election_data(tx_election_id)` → extract `Lookups`, `Race`, `OfficeSummary`
 2. Build office-type lookup from `Lookups.OfficeType`
-3. Upsert `Race` records from `Lookups.Office` joined to `Race.OfficeTypes`
-4. Upsert `Candidate` records from `OfficeSummary` (zero vote totals pre-election are fine — roster only)
+3. Upsert `Race` records from `Lookups.Office` joined to `Race.OfficeTypes`; use composite `source_id`
+4. Upsert `Candidate` records from `OfficeSummary`; use composite `source_id` including `office_id` and `candidate_id`
 5. Set `election.last_synced_at`
 6. Standard `SyncLog` + retry
 
@@ -147,11 +158,12 @@ class TxAdapter(StateResultsAdapter):
 3. If `n` unchanged and non-None: return `AdapterResult(unchanged=True)`
 4. Call `get_election_data(tx_election_id)` and `get_county_results(tx_election_id)`
 5. Determine `result_type`:
-   - `"official"` if `Home.CR == Home.CT` and `Home.PR == Home.PT` (all counties + precincts reporting)
+   - `"complete_unofficial"` if `Home["CR"] == Home["CT"]` and `Home["PR"] == Home["PT"]` — all counties and precincts have reported, but not certified
    - `"unofficial"` otherwise
+   - `"official"` reserved for when GoElect exposes an explicit certification flag (not yet observed in HAR; revisit when the General is live)
 6. Parse `OfficeSummary` → candidate statewide `ResultRow`s (`jurisdiction_fragment=""`); parse `StateWideQ` → proposition statewide `ResultRow`s (`option_label` instead of `candidate_name`)
 7. Parse `countyInfo` → county `ResultRow`s (`jurisdiction_fragment=county_name_slug`)
-8. Preserve in `raw`: `tx_candidate_id`, `tx_election_id`, `tx_office_id`, `county_fips` (from `MID`)
+8. Preserve in `raw`: `tx_candidate_id`, `tx_election_id`, `tx_office_id`, `county_mid` (raw MID value from Lookups)
 9. Cache new `n`, return `AdapterResult(mapping_confidence="full", source_version=str(n))`
 
 ### ResultRow shape
@@ -162,8 +174,8 @@ ResultRow(
     candidate_name="KEN PAXTON",      # or option_label for propositions
     vote_count=1234567,
     vote_pct=63.8,
-    is_winner=None,                   # ENR does not flag winners
-    result_type="unofficial",
+    is_winner=None,                   # ENR does not expose a winner flag
+    result_type="complete_unofficial",
     office_title="U.S. SENATOR",
     jurisdiction_fragment="",
     raw={"tx_candidate_id": 36388, "tx_election_id": 58315, "tx_office_id": 5031,
@@ -178,11 +190,11 @@ ResultRow(
     vote_count=5757,
     vote_pct=73.05,
     is_winner=None,
-    result_type="unofficial",
+    result_type="complete_unofficial",
     office_title="U.S. SENATOR",
     jurisdiction_fragment="harris",
     raw={"tx_candidate_id": 36388, "tx_election_id": 58315, "tx_office_id": 5031,
-         "county_fips": 48201, "party": "REP", "early_votes": 4394}
+         "county_mid": 48201, "party": "REP", "early_votes": 4394}
 )
 ```
 
@@ -201,6 +213,9 @@ ResultRow(
 - `integrations/tx_goelect/tests/test_client.py`
 - `integrations/tx_goelect/tests/test_mappers.py`
 - `integrations/tx_goelect/tests/test_tasks.py`
+- `integrations/tx_goelect/tests/fixtures/enr_56181_election.json`
+- `integrations/tx_goelect/tests/fixtures/enr_58315_runoff_subset.json`
+- `integrations/tx_goelect/tests/fixtures/enr_56181_county_info.json`
 - `results/adapters/tx.py`
 - `results/tests/test_tx_adapter.py`
 - `elections/migrations/0019_tx_goelect_race_source.py`
@@ -222,16 +237,18 @@ ResultRow(
 
 ## Testing Strategy
 
-- **test_client.py** — mock `requests.get`; verify base64 decode, version extraction, probe logic, retry on 5xx
-- **test_mappers.py** — unit test each mapper with representative payloads from the HAR; cover MMDDYYYY date parsing, election type inference, district vs statewide scope, proposition race type
-- **test_tasks.py** — mock client; test election discovery loop (`O == "Y"` filter), watermark probe (50-miss stop, hit-and-continue), `sync_tx_races` upsert logic
-- **test_tx_adapter.py** — mock client; test version cache hit (unchanged), statewide rows, county rows, official vs unofficial detection, missing `tx_election_id` graceful return
+- **test_client.py** — mock `requests.get`; verify base64 decode (both `upload` wrapper and per-field), version extraction, probe logic (miss/hit/validate), retry on 5xx, tolerant decode of missing fields
+- **test_mappers.py** — unit test each mapper with representative payloads; cover MMDDYYYY date parsing, election type inference, district vs statewide scope, proposition race type, composite source_id construction
+- **test_tasks.py** — mock client; test election discovery loop (`O == "Y"` filter), watermark probe (50-miss stop, hit-and-continue, GE+date validation gate, non-GE hit skipped), `sync_tx_races` upsert logic
+- **test_tx_adapter.py** — mock client; test version cache hit (unchanged), statewide rows, county rows, `complete_unofficial` vs `unofficial` detection, missing `tx_election_id` graceful return
+- **Frozen fixtures** — sanitized real responses from known 2026 elections (SD4 special `56181`, Republican Runoff subset `58315`) used in client and mapper tests to validate the full base64 decode pipeline against actual API response shapes, not just constructed mocks
 
 ---
 
 ## Open Questions / Risks
 
+- **`county_mid` vs FIPS:** `MID` values observed are 48xxx (Texas FIPS range). Store as `county_mid` in `raw`; validate against a Texas county FIPS table during implementation before promoting to `county_fips`. If confirmed, rename in a follow-up.
 - **Cloudflare tightening:** Standard `requests` has worked so far. If active challenges appear, may need a rotating proxy (same pattern as `IA_SOS_PROXY_URL`).
-- **November General timing:** Expected September–October 2026. The probe watermark ensures it's caught within 24 hours of registration. No manual intervention needed.
+- **November General timing:** Expected September–October 2026. The probe watermark + GE/date validation gate ensures it's caught within 24 hours of registration without ingesting stray specials. No manual intervention needed.
 - **`is_winner` field:** ENR does not expose a winner flag. Leave `is_winner=None` on all rows; winner determination handled downstream.
-- **Proposition result type:** `StateWideQ` field carries proposition results. Map `option_label` instead of `candidate_name`; `race_type=MEASURE`.
+- **`official` result_type:** Currently no certification flag observed in ENR. Use `complete_unofficial` when all precincts report. Revisit when the General is live — if GoElect adds a certified flag, promote to `official` at that point.
