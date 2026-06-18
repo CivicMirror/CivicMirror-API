@@ -53,59 +53,81 @@ Additional capabilities beyond Core Coverage:
 
 ## CivicMirror Integration Coverage
 
-Tracks Stage 1 (Election + Race Creation) and Stage 2 (Results Ingestion) implementation status per state.
+Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingestion) implementation status per state.
 
-| Code | State | Stage 1 — Election Creation | Stage 1 — Race Creation | Stage 2 — Results Ingestion |
-|------|-------|----------------------------|-------------------------|-----------------------------|
-| **WV** | West Virginia | ✅ Complete | ✅ Complete | ✅ Complete |
-| **CO** | Colorado | ✅ Complete | ✅ Complete | ✅ Complete |
-| **SC** | South Carolina | ✅ Complete | ✅ Complete | ✅ Complete |
-| **VA** | Virginia | ✅ Complete | ✅ Complete | ✅ Complete |
-| **AZ** | Arizona | ✅ Complete | ✅ Complete | ✅ Complete |
-| **MA** | Massachusetts | ✅ Complete | ✅ Complete | ✅ Complete |
-| **IA** | Iowa | ✅ Complete | ✅ Complete | ⚠️ Adapter built, needs production wiring |
-| **AR** | Arkansas | ✅ Available | ⚠️ Untested | ✅ Complete |
-| **CT** | Connecticut | ✅ Available | ⚠️ Untested | ✅ Complete |
-| **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | Clarity sweep states | ✅ Available | ⚠️ Untested | ✅ Adapter available |
-| All others | — | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter |
+**Stage 1** covers pre-election seeding: elections discovered, races created, candidates linked. Adapters run on a daily schedule and populate the DB before election night.
+
+**Stage 2** covers results ingestion: a results adapter polls the state source on election night and post-election, writing vote totals to the DB. Stage 2 can exist independently of Stage 1 — for Clarity sweep states, elections and races come from Civic API while the results adapter handles ingestion.
+
+| Code | State | Stage 1 — Election Discovery | Stage 1 — Race Creation | Stage 2 — Results Ingestion | Core Coverage |
+|------|-------|------------------------------|-------------------------|-----------------------------|---------------|
+| **WV** | West Virginia | ✅ Complete | ✅ Complete | ✅ Complete (Clarity) | Full Core |
+| **CO** | Colorado | ✅ Complete | ✅ Complete | ✅ Complete (CO SOS) | Full Core |
+| **SC** | South Carolina | ✅ Complete | ✅ Complete | ✅ Complete (SC VREMS + Clarity) | Full Core |
+| **VA** | Virginia | ✅ Complete | ✅ Complete | ✅ Complete (VA ELECT ENR) | Full Core |
+| **AZ** | Arizona | ✅ Complete | ✅ Complete | ✅ Complete (AZ SOS XML) | Full Core |
+| **MA** | Massachusetts | ✅ Complete | ✅ Complete | ✅ Complete (MA SOS) | Full Core |
+| **WA** | Washington | ✅ Complete | ✅ Complete | ✅ Complete (VoteWA ENR) | Full Core |
+| **FL** | Florida | ✅ Complete | ✅ Complete | ✅ Complete (FL Election Watch) | Full Core |
+| **TX** | Texas | ✅ Complete | ✅ Complete | ✅ Complete (GoElect ENR) | Full Core |
+| **NC** | North Carolina | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (NCSBE S3) | Near Core |
+| **NY** | New York | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (Flateau DB) | Near Core |
+| **CA** | California | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (CA SOS) | Near Core |
+| **IA** | Iowa | ✅ Complete | ✅ Complete | ⚠️ Adapter built, needs production wiring | Near Core |
+| **AR** | Arkansas | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (TotalVote ENR) | Results Coverage Only |
+| **CT** | Connecticut | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (PCC EMS) | Results Coverage Only |
+| **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | Clarity sweep (20 states) | ✅ Available (Civic API) | ⚠️ Untested | ✅ Adapter available (Clarity) | Results Coverage Only |
+| **MI** | Michigan | ✅ Available (Civic API) | ⚠️ Untested | ❌ Blocked (API offline) | Blocked |
+| **PA** | Pennsylvania | ✅ Available (Civic API) | ⚠️ Untested | ❌ Blocked (no public API) | Blocked |
+| All others | — | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Federal Only |
 
 ---
 
 ## Core Coverage Status
 
+Coverage terminology follows `docs/design/COVERAGE-CLARIFICATION.md` and `docs/adr/ADR-005-COVERAGE-DEFINITION.md`.
+
 ### Full Core Coverage
 
-States that currently satisfy the CivicMirror Federal + State coverage goal:
+Stage 1 and Stage 2 complete for Federal and State offices. Election discovery, race creation, and results ingestion all wired and active in production.
 
-- Arizona (AZ)
-- Colorado (CO)
-- Massachusetts (MA)
-- South Carolina (SC)
-- Virginia (VA)
-- West Virginia (WV)
-
-These states currently provide:
-
-- Election discovery
-- Race creation
-- Results ingestion
-
-for Federal and State contests.
+- Arizona (AZ) — AZ SOS XML feed
+- Colorado (CO) — CO SOS adapter
+- Florida (FL) — FL Election Watch
+- Massachusetts (MA) — MA SOS adapter
+- South Carolina (SC) — SC VREMS + Clarity
+- Texas (TX) — GoElect ENR
+- Virginia (VA) — VA ELECT ENR
+- Washington (WA) — VoteWA ENR
+- West Virginia (WV) — Clarity
 
 ### Near Core Coverage
 
-- Iowa (IA) — adapter exists but production integration remains incomplete.
+Stage 2 results adapter is complete and active. Stage 1 race creation relies on Civic API (untested for all state offices) or has a production wiring gap.
+
+- California (CA) — results adapter built; race creation depends on Civic API
+- Iowa (IA) — Stage 1 complete; Stage 2 adapter built but production wiring incomplete
+- New York (NY) — results adapter built (Flateau DB); race creation depends on Civic API
+- North Carolina (NC) — results adapter built (NCSBE S3); race creation depends on Civic API
 
 ### Results Coverage Only
 
-- Arkansas (AR)
-- Connecticut (CT)
-- Tier A Clarity states
+Stage 2 results adapter available. No dedicated Stage 1 adapter — elections and races come from Civic API, which may be incomplete for state primaries.
+
+- Arkansas (AR) — TotalVote ENR
+- Connecticut (CT) — PCC EMS
+- Clarity sweep states (AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY) — requires `results_url` set per election in Django admin
 
 ### Blocked
 
-- Pennsylvania (PA)
-- Michigan (MI)
+No adapter and no clear near-term path:
+
+- Michigan (MI) — `michiganelections.io` returning 503; monitor for recovery
+- Pennsylvania (PA) — no public programmatic source for state results; Socrata `data.pa.gov` has only mail ballot data
+
+### Federal Only (no adapter)
+
+Elections available via Civic API for federal contests; no state-level adapter built. All remaining states fall here until a dedicated adapter is shipped.
 
 ---
 
