@@ -214,6 +214,24 @@ jobs:
               --quiet
           fi
 
+          if gcloud scheduler jobs describe sync-tx-goelect --location="${{ env.REGION }}" --quiet 2>/dev/null; then
+            gcloud scheduler jobs update http sync-tx-goelect \
+              --location="${{ env.REGION }}" \
+              --uri="${NEW_BASE}/internal/tasks/sync-tx-goelect/" \
+              --oidc-service-account-email="$SA" \
+              --oidc-token-audience="$NEW_BASE" \
+              --quiet
+          else
+            gcloud scheduler jobs create http sync-tx-goelect \
+              --location="${{ env.REGION }}" \
+              --schedule="0 5 * * *" \
+              --time-zone="Etc/UTC" \
+              --uri="${NEW_BASE}/internal/tasks/sync-tx-goelect/" \
+              --oidc-service-account-email="$SA" \
+              --oidc-token-audience="$NEW_BASE" \
+              --quiet
+          fi
+
   # ── Update sync-elections Cloud Run Job ─────────────────────────────────────
   update-sync-elections-job:
     name: Update sync-elections job

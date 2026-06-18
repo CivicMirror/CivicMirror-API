@@ -7,6 +7,7 @@ from django.views.decorators.http import require_POST
 
 from integrations.az_sos.tasks import sync_az_elections
 from integrations.fl_ew.tasks import sync_fl_elections
+from integrations.tx_goelect.tasks import sync_tx_elections as _sync_tx_elections
 from integrations.wa_votewa.tasks import sync_wa_elections
 from integrations.ca_sos.tasks import sync_ca_elections
 from integrations.civic.tasks import sync_elections
@@ -191,3 +192,10 @@ def sync_wa_votewa_trigger(request):
 @require_internal_task_token
 def sync_fl_ew_trigger(request):
     return _trigger("sync_fl_ew", sync_fl_elections, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_tx_goelect_trigger(request):
+    return _trigger("sync_tx_goelect", _sync_tx_elections, request)
