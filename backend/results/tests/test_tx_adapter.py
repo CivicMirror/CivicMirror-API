@@ -43,7 +43,7 @@ def test_fetch_results_version_unchanged():
 
         mock_mgr.get.return_value = mock_election
         MockClient.return_value.get_version.return_value = 21
-        mock_cache.get.return_value = 21  # matches
+        mock_cache.get.return_value = "21"  # matches (cache stores str(version))
 
         result = adapter.fetch_results(None, election_id=1)
 

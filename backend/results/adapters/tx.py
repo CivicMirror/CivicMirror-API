@@ -24,12 +24,10 @@ from .registry import register
 
 logger = logging.getLogger(__name__)
 
-_VERSION_CACHE_TTL = 86400 * 30  # 30 days
-
-
 @register
 class TxAdapter(StateResultsAdapter):
     state = "TX"
+    VERSION_CACHE_TIMEOUT = 86400 * 30  # 30 days
 
     def version_cache_key(self, election_id: int) -> str:
         return f"tx_goelect:ver:{election_id}"
@@ -59,7 +57,7 @@ class TxAdapter(StateResultsAdapter):
 
         version = client.get_version(tx_election_id)
         cache_key = self.version_cache_key(election_id)
-        if version is not None and cache.get(cache_key) == version:
+        if version is not None and cache.get(cache_key) == str(version):
             logger.debug("TXAdapter: version unchanged tx_id=%d n=%d", tx_election_id, version)
             return AdapterResult(
                 rows=[], source_url=base_url, mapping_confidence="full",
