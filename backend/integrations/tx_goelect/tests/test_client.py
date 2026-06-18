@@ -102,6 +102,25 @@ def test_get_election_data_tolerates_missing_fields():
     assert result["statewide_q"] == {}
 
 
+def test_get_election_data_with_runoff_fixture():
+    """Decode the 58315 runoff fixture — StateWide and Federal should be non-empty."""
+    fixture = _load_fixture("enr_58315_election.json")
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = fixture
+    mock_resp.status_code = 200
+
+    with patch("integrations.tx_goelect.client.requests.Session") as MockSession:
+        MockSession.return_value.get.return_value = mock_resp
+        client = TxGoElectClient()
+        result = client.get_election_data(58315)
+
+    assert isinstance(result["version"], int)
+    # At least one of statewide or federal should be non-empty for a runoff
+    assert result["statewide"] or result["federal"], (
+        "Expected StateWide or Federal to be populated for election 58315"
+    )
+
+
 def test_get_election_data_with_real_fixture():
     """Decode the frozen SD4 fixture without raising."""
     fixture = _load_fixture("enr_56181_election.json")

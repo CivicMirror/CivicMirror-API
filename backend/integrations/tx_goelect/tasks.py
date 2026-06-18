@@ -121,7 +121,10 @@ def sync_tx_elections(self):
                 continue
 
             home = data.get("home") or {}
-            # Type code is unknown from probe path — use "S" (special) as default.
+            # Default to "S" — type code is unknown from probe alone.
+            # Risk: if this election later appears in electionConstants as "GE",
+            # ingest_election will create a second Election record (different canonical key).
+            # The November General is expected to appear in electionConstants directly.
             # classify_election will set is_target_general_2026=True only when it
             # sees type_code=="GE" AND date==2026-11-03, so probed elections won't
             # produce false-positives; the real GE will show up in electionConstants
@@ -143,6 +146,13 @@ def sync_tx_elections(self):
                 source_id=source_id,
                 identity=identity,
                 fields=fields,
+            )
+            logger.info(
+                "tx_goelect.probe: discovered election id=%d date=%s type=%s is_target=%s",
+                probe_id,
+                fields.get("election_date"),
+                type_code,
+                fields.get("source_metadata", {}).get("is_target_general_2026", False),
             )
             if was_created:
                 created_count += 1
