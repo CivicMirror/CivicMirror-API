@@ -100,12 +100,14 @@ Ordered by primary date.
 - Scheduler: `sync-az-sos` daily at 05:00 Phoenix time (`0 5 * * *`, `America/Phoenix`)
 - Research doc: `docs/state-research/AZ/AZ-Election_Research.md`
 
-### WA — Washington (August 4 primary)
+### WA — Washington (August 4 primary) ✅ Complete
 
-- Structured CSV/Excel downloads from `sos.wa.gov`
-- All mail-in state — results on a known schedule
-- Build Tier B when data format confirmed
+- **Implemented:** VoteWA Enhanced Voting ENR API (`api.votewa.gov`)
+- Stage 1 (`sync_wa_votewa`): county fan-out via `localityElections[]`; `enr_slug` stored per election; version-cached via `asOf` / `lastUpdated`
+- Stage 2 (`wa.py`): polls per-county ENR; `EnhancedVotingAdapter` base; `county_slug` extracted from `jurisdiction.shortName`
+- Scheduler: `sync-wa-votewa` daily at 03:00 UTC
 - Research doc: `docs/state-research/WA/WA-Election_Research.md`
+- Core Coverage: **Full Core**
 
 ### MI — Michigan (August 4 primary)
 
@@ -114,30 +116,32 @@ Ordered by primary date.
 - Build Tier B when API is back online
 - Research doc: `docs/state-research/MI/MI-Election_Research.md`
 
-### FL — Florida (August 18 primary)
+### FL — Florida (August 18 primary) ✅ Complete
 
-- Florida "Election Watch" — Excel/tab-delimited/pipe-delimited downloads
-- Precinct-level data available from 2012
-- Build Tier B: file download + parse + ingest
+- **Implemented:** Florida Election Watch file downloads (tab-delimited; URL pattern `dos.myflorida.com/results/`)
+- Stage 1 (`sync_fl_elections`): discovers and upserts elections + races + candidates from EW export files
+- Stage 2 (`fl.py`): polls same export files for vote totals; idempotency via file hash comparison
+- Scheduler: `sync-fl-ew` daily at 04:00 UTC
 - Research doc: `docs/state-research/FL/FL-Election_Research.md`
+- Core Coverage: **Full Core**
 
 ---
 
 ## Group 3: Full Adapters — November 2026 General Wave
 
-After summer primaries are covered, build for the November 2026 general election:
+Build or finalize for the November 3, 2026 general election:
 
-| State | Source | Notes |
-|---|---|---|
-| **TX** | `sos.state.tx.us` downloads | Large state (30M voters); research needed |
-| **NC** | FTP site + election night dashboard (5–10 min) | Weekly updates; high value |
-| **GA** | Partial Clarity + state portal | Verify Clarity scope first |
-| **OH** | XLSX downloads (DATA Act 2023) | Daily county snapshots from 88 counties |
-| **PA** | Socrata `data.pa.gov` | Awaiting 2026 data publication |
-| **IL** | `elections.il.gov` Vote Total Search | 1998–present |
-| **CT** | ~~Socrata `data.ct.gov`~~ PCC EMS `ctemspublic.tgstg.net` | ✅ Custom adapter shipped (PR #11, 2026-06-01). TotalVote transition expected pre-Nov 2026; repoint `source_metadata` to `totalvote_election_id` when live. |
-| **MN** | Downloads + interactive dashboard | `sos.mn.gov` |
-| **OR** | Downloads | High ballot-measure activity |
+| State | Source | Status | Notes |
+|---|---|---|---|
+| **TX** | CivixApps GoElect ENR | ✅ Complete (2026-06-17) | Public JSON API, AWS S3-backed; base64-encoded fields; sequential ID probe for election discovery; `sync-tx-goelect` at 05:00 UTC; Full Core Coverage |
+| **NC** | NCSBE S3 precinct ZIP | ✅ Adapter built | `nc.py` shipped early; weekly updates; high value; race creation depends on Civic API |
+| **GA** | Partial Clarity + state portal | ⏳ Research needed | Verify Clarity scope first |
+| **OH** | XLSX downloads (DATA Act 2023) | ⏳ Research needed | Daily county snapshots from 88 counties |
+| **PA** | Socrata `data.pa.gov` | 🔴 Blocked | Awaiting 2026 data publication; mail ballot only currently |
+| **IL** | `elections.il.gov` Vote Total Search | ⏳ Research needed | 1998–present |
+| **CT** | ~~Socrata `data.ct.gov`~~ PCC EMS `ctemspublic.tgstg.net` | ✅ Adapter shipped (PR #11, 2026-06-01) | TotalVote transition expected pre-Nov 2026; repoint `source_metadata` to `totalvote_election_id` when live |
+| **MN** | Downloads + interactive dashboard | ⏳ Research needed | `sos.mn.gov` |
+| **OR** | Downloads | ⏳ Research needed | High ballot-measure activity |
 
 ---
 

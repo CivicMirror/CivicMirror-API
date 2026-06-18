@@ -73,17 +73,20 @@ A version string confirms Clarity. Only create the adapter after confirmation. N
 
 A Tier A results adapter has immediate value even without a full SOS adapter — `poll_pending_results` fires nightly and will pick up results for any election already in the DB (from Civic API). Ship Tier A adapters before waiting for Tier B work.
 
-## Outcomes (updated 2026-06-04)
+## Outcomes (updated 2026-06-17)
 
 ### Completed adapters
 
-| State | Tier | Adapter | Merged | Notes |
-|---|---|---|---|---|
-| **AR** | B | `results/adapters/ar.py` | 2026-06-01 (PR #10) | TotalVote/TotalResults REST API; GUID + legacy numeric paths; `totalvote_election_id` in `source_metadata` |
-| **CT** | B (custom) | `results/adapters/ct.py` | 2026-06-01 (PR #11) | PCC EMS static JSON; `ct_election_id` in `source_metadata`; TotalVote migration path documented; monitor pre-Nov 2026 |
-| **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | A (Clarity) | `results/adapters/{ak,de,hi,...}.py` | 2026-06-02 (commit a938bd2) | 20 two-line Clarity thin wrappers; `results_url` must be set per election in Django admin |
-| **VA** | B (custom) | `results/adapters/va.py` + `integrations/va_elect/` | 2026-06-02 (commit f04882a) | Enhanced Voting ENR API; `enr_slug` auto-populated by `sync_va_elections`; version-cached via `asOf` timestamp |
-| **AZ** | B | `results/adapters/az.py` + `integrations/az_sos/` | 2026-06-04 (commits 88537bc–f30dfda) | AZ SOS HTTPS XML feed (`Results.Summary.xml`); `az_election_name` auto-derived; `fileId` change detection; Stage 1 (`sync_az_elections`) does race + candidate upsert |
+| State | Tier | Adapter | Merged | Core Coverage | Notes |
+|---|---|---|---|---|---|
+| **AR** | B | `results/adapters/ar.py` | 2026-06-01 (PR #10) | Results Coverage Only | TotalVote/TotalResults REST API; GUID + legacy numeric paths; `totalvote_election_id` in `source_metadata` |
+| **CT** | B (custom) | `results/adapters/ct.py` | 2026-06-01 (PR #11) | Results Coverage Only | PCC EMS static JSON; `ct_election_id` in `source_metadata`; TotalVote migration path documented; monitor pre-Nov 2026 |
+| **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | A (Clarity) | `results/adapters/{ak,de,hi,...}.py` | 2026-06-02 (commit a938bd2) | Results Coverage Only | 20 two-line Clarity thin wrappers; `results_url` must be set per election in Django admin |
+| **VA** | B (custom) | `results/adapters/va.py` + `integrations/va_elect/` | 2026-06-02 (commit f04882a) | Full Core | Enhanced Voting ENR API; `enr_slug` auto-populated by `sync_va_elections`; version-cached via `asOf` timestamp |
+| **AZ** | B | `results/adapters/az.py` + `integrations/az_sos/` | 2026-06-04 (commits 88537bc–f30dfda) | Full Core | AZ SOS HTTPS XML feed (`Results.Summary.xml`); `az_election_name` auto-derived; `fileId` change detection; Stage 1 (`sync_az_elections`) does race + candidate upsert |
+| **WA** | B (custom) | `results/adapters/wa.py` + `integrations/wa_votewa/` | 2026-06-13 | Full Core | VoteWA Enhanced Voting ENR API; county fan-out via `localityElections[]`; `enr_slug` date key; `sync-wa-votewa` at 03:00 UTC |
+| **FL** | B | `results/adapters/fl.py` + `integrations/fl_ew/` | 2026-06-15 | Full Core | Florida Election Watch tab-delimited downloads; file hash change detection; `sync-fl-ew` at 04:00 UTC |
+| **TX** | B | `results/adapters/tx.py` + `integrations/tx_goelect/` | 2026-06-17 | Full Core | CivixApps GoElect ENR; public JSON API; base64-encoded fields; sequential ID probe (50-miss stop) for election discovery; statewide + county `ResultRow`s; `sync-tx-goelect` at 05:00 UTC |
 
 **AR** validated the "Tier B without a full SOS adapter" pattern — the TotalVote REST API is richer than Clarity and eliminates the need for election-by-election `results_url` config. AR elections/races still come from Civic API (Stage 1 only).
 
@@ -94,6 +97,12 @@ A Tier A results adapter has immediate value even without a full SOS adapter —
 **VA** used the Tier B-without-SOS-adapter pattern (results adapter + dedicated SOS integration). Enhanced Voting ENR is fetched programmatically using the `enr_slug` stored on the Election record by `sync_va_elections` — no manual `results_url` required.
 
 **AZ** implemented as HTTPS XML (not the original FTP plan). `apps.azsos.gov` serves `Results.Summary.xml` over HTTPS with confirmed 200 responses. Stage 1 (`sync_az_elections`) upserts Election + Race + Candidate records; Stage 2 (`az.py`) polls the same XML feed for vote totals.
+
+**WA** used the `EnhancedVotingAdapter` base (same underlying ENR platform as VA). County fan-out is driven by `localityElections[]` rather than a single statewide feed. All-mail state — results on a predictable schedule.
+
+**FL** follows the Election Watch export pattern: daily file downloads with tab-delimited results. Stage 1 seeds elections and races from the same export files; Stage 2 polls for vote totals using file hash comparison for idempotency.
+
+**TX** uses the CivixApps GoElect ENR platform — a public S3-backed JSON API with individually base64-encoded response fields. A sequential watermark probe (50 consecutive misses = stop) discovers new election IDs, including the November 2026 General before it appears in `electionConstants`. All discovered elections are classified with `election_scope`, `election_type_code`, `source_date`, and `is_target_general_2026` metadata. County-level breakdowns come from a separate `/countyInfo/{id}` endpoint.
 
 ## Consequences
 
