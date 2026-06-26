@@ -77,6 +77,11 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **AR** | Arkansas | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (TotalVote ENR) | Results Coverage Only |
 | **CT** | Connecticut | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (PCC EMS) | Results Coverage Only |
 | **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | Clarity sweep (20 states) | ✅ Available (Civic API) | ⚠️ Untested | ✅ Adapter available (Clarity) | Results Coverage Only |
+| **OH** | Ohio | ✅ Available (Civic API) | ⚠️ Untested | ❌ Blocked (CF Bot Management on all sources) | Federal Only (Research Complete) |
+| **GA** | Georgia | ✅ Available (Civic API) | ⚠️ Untested | ❓ Clarity scope unverified | Research Needed |
+| **IL** | Illinois | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Research Needed |
+| **MN** | Minnesota | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Research Needed |
+| **OR** | Oregon | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Research Needed |
 | **MI** | Michigan | ✅ Available (Civic API) | ⚠️ Untested | ❌ Blocked (API offline) | Blocked |
 | **PA** | Pennsylvania | ✅ Available (Civic API) | ⚠️ Untested | ❌ Blocked (no public API) | Blocked |
 | All others | — | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Federal Only |
@@ -118,12 +123,19 @@ Stage 2 results adapter available. No dedicated Stage 1 adapter — elections an
 - Connecticut (CT) — PCC EMS
 - Clarity sweep states (AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY) — requires `results_url` set per election in Django admin
 
+### Research Complete — Buildable (no adapter yet)
+
+Stage 2 adapter is buildable for county-level results; statewide source still needed for Full Core Coverage.
+
+(No states currently in this category — Ohio moved to Blocked.)
+
 ### Blocked
 
 No adapter and no clear near-term path:
 
 - Michigan (MI) — `michiganelections.io` returning 503; monitor for recovery
 - Pennsylvania (PA) — no public programmatic source for state results; Socrata `data.pa.gov` has only mail ballot data
+- **Ohio (OH)** — All sources CF Managed Challenge protected. CF Worker proxy + Playwright headless both insufficient. Sources: `liveresults.boe.ohio.gov` (Clarity ENR), `data.ohiosos.gov` (SOS XLSX), `www6.ohiosos.gov` (CFDISCLOSURE APEX). **Stage 1 candidates**: `www6.ohiosos.gov` CFDISCLOSURE `ACT_CAN_LIST.CSV` (ID 120) has 764 active candidates daily for all state legislative + statewide races — excellent source once CF bypassed. Federal races via Civic API (15-address config added 2026-06-26). Unblocked by nodriver+xvfb or residential proxy. See `docs/state-research/OH/OH-Election_Research.md`.
 
 ### Federal Only (no adapter)
 
