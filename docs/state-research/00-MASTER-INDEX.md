@@ -77,7 +77,7 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **AR** | Arkansas | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (TotalVote ENR) | Results Coverage Only |
 | **CT** | Connecticut | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (PCC EMS) | Results Coverage Only |
 | **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | Clarity sweep (20 states) | ✅ Available (Civic API) | ⚠️ Untested | ✅ Adapter available (Clarity) | Results Coverage Only |
-| **OH** | Ohio | ✅ Available (Civic API) | ⚠️ Untested | ❌ Blocked (CF Bot Management on all sources) | Federal Only (Research Complete) |
+| **OH** | Ohio | ✅ Available (Civic API) | ⚠️ Untested | ⚠️ Pending CF solver deploy (Clarity ENR) | Near Core (adapter built, CF solver required) |
 | **GA** | Georgia | ✅ Available (Civic API) | ⚠️ Untested | ❓ Clarity scope unverified | Research Needed |
 | **IL** | Illinois | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Research Needed |
 | **MN** | Minnesota | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Research Needed |
@@ -127,7 +127,7 @@ Stage 2 results adapter available. No dedicated Stage 1 adapter — elections an
 
 Stage 2 adapter is buildable for county-level results; statewide source still needed for Full Core Coverage.
 
-(No states currently in this category — Ohio moved to Blocked.)
+(No states currently in this category.)
 
 ### Blocked
 
@@ -135,7 +135,7 @@ No adapter and no clear near-term path:
 
 - Michigan (MI) — `michiganelections.io` returning 503; monitor for recovery
 - Pennsylvania (PA) — no public programmatic source for state results; Socrata `data.pa.gov` has only mail ballot data
-- **Ohio (OH)** — All sources CF Managed Challenge protected. CF Worker proxy + Playwright headless both insufficient. Sources: `liveresults.boe.ohio.gov` (Clarity ENR), `data.ohiosos.gov` (SOS XLSX), `www6.ohiosos.gov` (CFDISCLOSURE APEX). **Stage 1 candidates**: `www6.ohiosos.gov` CFDISCLOSURE `ACT_CAN_LIST.CSV` (ID 120) has 764 active candidates daily for all state legislative + statewide races — excellent source once CF bypassed. Federal races via Civic API (15-address config added 2026-06-26). Unblocked by nodriver+xvfb or residential proxy. See `docs/state-research/OH/OH-Election_Research.md`.
+- **Ohio (OH)** — Stage 1 adapter built (`integrations/oh_sos/`) using CFDISCLOSURE `ACT_CAN_LIST.CSV` (765 candidates, daily). Stage 2 uses Clarity ENR (`liveresults.boe.ohio.gov`, added to `CLARITY_PROXY_HOSTS`). Both sources require the CF solver microservice (`cloudflare/cf-solver/`) deployed as a Cloud Run service with `CF_SOLVER_URL` + `CF_SOLVER_SECRET` set. CF bypass confirmed working (nodriver+xvfb, 2026-06-28). Task: `sync-oh-sos`. Federal races via Civic API (15-address config). See `docs/state-research/OH/OH-Election_Research.md`.
 
 ### Federal Only (no adapter)
 
