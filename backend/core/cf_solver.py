@@ -26,6 +26,14 @@ import requests
 from django.conf import settings
 from django.core.cache import cache
 
+try:
+    import google.auth
+    import google.auth.transport.requests
+    import google.oauth2.id_token
+    _GOOGLE_AUTH_AVAILABLE = True
+except ImportError:
+    _GOOGLE_AUTH_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 # Redis TTL for cached CF cookies — slightly under cf_clearance's typical 30-min validity.
@@ -95,10 +103,23 @@ class CfSolverClient:
 
         logger.info("cf_solver.solve_start url=%s", url)
         try:
+            headers = {"X-CF-Solver-Secret": self._solver_secret}
+            # Cloud Run service-to-service auth: attach a Google ID token when
+            # google-auth is available (production). Falls back to secret-only
+            # auth in local dev where Application Default Credentials aren't set.
+            if _GOOGLE_AUTH_AVAILABLE:
+                try:
+                    auth_req = google.auth.transport.requests.Request()
+                    id_token = google.oauth2.id_token.fetch_id_token(
+                        auth_req, self._solver_url
+                    )
+                    headers["Authorization"] = f"Bearer {id_token}"
+                except Exception:
+                    pass  # no ADC in local dev — X-CF-Solver-Secret alone suffices
             resp = requests.post(
                 f"{self._solver_url}/solve",
                 json={"url": url, "wait_seconds": self.wait_seconds},
-                headers={"X-CF-Solver-Secret": self._solver_secret},
+                headers=headers,
                 timeout=self.timeout,
             )
         except requests.RequestException as exc:
