@@ -2,7 +2,6 @@ FROM python:3.11-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
-    chromium \
     fonts-liberation \
     libnss3 \
     libatk-bridge2.0-0 \
@@ -10,6 +9,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2 \
     libxss1 \
     libxtst6 \
+    wget \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Google Chrome Stable (sends real "Google Chrome" brand in sec-ch-ua,
+# which CF's JSD fingerprint requires to pass without serving a challenge).
+RUN wget -q -O /tmp/google-chrome.deb \
+    https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends /tmp/google-chrome.deb \
+    && rm /tmp/google-chrome.deb \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir fastapi==0.115.12 uvicorn==0.34.0 nodriver==0.44 httpx
