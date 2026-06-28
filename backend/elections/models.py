@@ -104,6 +104,7 @@ class Race(models.Model):
         WA_VOTEWA = 'wa_votewa', 'Washington VoteWA'
         FL_EW = 'fl_ew', 'Florida Election Watch'
         TX_GOELECT = 'tx_goelect', 'Texas GoElect'
+        OH_SOS = 'oh_sos', 'Ohio SOS'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'

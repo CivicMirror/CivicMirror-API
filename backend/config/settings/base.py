@@ -161,6 +161,7 @@ INSTALLED_APPS += [
     'integrations.wa_votewa',
     'integrations.tx_goelect',
     'integrations.fl_ew',
+    'integrations.oh_sos',
     'internal',
     'api',
     'accounts',
@@ -312,6 +313,13 @@ GITHUB_TOKEN = env('GITHUB_TOKEN', default='')
 # Leave empty in local dev to hit upstream hosts directly.
 CIVICMIRROR_PROXY_URL = env('CIVICMIRROR_PROXY_URL', default='')
 CIVICMIRROR_PROXY_SECRET = env('CIVICMIRROR_PROXY_SECRET', default='')
+
+# CF Solver microservice (cloudflare/cf-solver/) — bypasses CF Bot Management
+# (cType='managed') on sites like www6.ohiosos.gov that block GCP IPs via JS
+# fingerprinting. Set CF_SOLVER_URL to the Cloud Run service URL in production.
+# Leave empty in local dev to skip CF-protected sources gracefully.
+CF_SOLVER_URL = env('CF_SOLVER_URL', default='')
+CF_SOLVER_SECRET = env('CF_SOLVER_SECRET', default='')
 
 # Deprecated — superseded by CIVICMIRROR_PROXY_URL / CIVICMIRROR_PROXY_SECRET.
 # Kept until IA SOS adapter migration is verified in production; retire after.

@@ -44,6 +44,7 @@ _CLARITY_HEADERS = {
 CLARITY_PROXY_HOSTS: frozenset[str] = frozenset({
     "www.enr-scvotes.org",
     "enr-scvotes.org",
+    "liveresults.boe.ohio.gov",
 })
 
 logger = logging.getLogger(__name__)
