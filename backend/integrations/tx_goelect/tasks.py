@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 
 from celery import shared_task
+from celery.exceptions import SoftTimeLimitExceeded
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -204,9 +205,10 @@ def sync_tx_elections(self):
         raise
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=300, time_limit=360)
 def sync_tx_races(self, election_pk: int, tx_election_id: int):
     """Stage 2: Fetch Lookups + OfficeSummary; upsert Race + Candidate records."""
+    logger.info("tx_goelect.sync_races.start election_pk=%d tx_id=%d", election_pk, tx_election_id)
     try:
         election_obj = Election.objects.get(pk=election_pk)
     except Election.DoesNotExist:
@@ -312,6 +314,18 @@ def sync_tx_races(self, election_pk: int, tx_election_id: int):
             "races": {"created": race_created, "updated": race_updated},
             "candidates": {"created": cand_created, "updated": cand_updated},
         }
+
+    except SoftTimeLimitExceeded:
+        logger.warning(
+            "tx_goelect.sync_races.timeout election_pk=%d tx_id=%d exceeded 300s",
+            election_pk, tx_election_id,
+        )
+        sync_log.error_count = 1
+        sync_log.last_error = "SoftTimeLimitExceeded (300s)"
+        sync_log.status = SyncLog.Status.FAILED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+        raise
 
     except TxGoElectRetryableError as exc:
         sync_log.error_count = 1

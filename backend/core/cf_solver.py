@@ -149,3 +149,80 @@ class CfSolverClient:
         result = self.get_cookies(url)
         header = "; ".join(f"{k}={v}" for k, v in result["cookies"].items())
         return header, result.get("user_agent", "")
+
+    def fetch_through_cf(
+        self,
+        solve_url: str,
+        payload_url: str,
+        payload_referer: str | None = None,
+    ) -> str:
+        """
+        Solve a CF challenge on solve_url, then fetch payload_url from within the
+        browser session (using its live cookie jar, including HttpOnly cookies).
+
+        Returns the payload response body as text.  Caches by (solve_url, payload_url)
+        for 25 minutes — the same window as cf_clearance validity.
+
+        Use this instead of get_cookies() + a separate HTTP request whenever the
+        target cookies are HttpOnly (cf_clearance, APEX session, etc.).
+        """
+        if not self._solver_url:
+            raise CfSolverUnavailableError(
+                "CF_SOLVER_URL is not configured — cannot bypass CF Bot Management."
+            )
+
+        from urllib.parse import urlparse
+        cache_key = f"cf_solver:payload:{urlparse(solve_url).hostname}:{payload_url}"
+        cached = cache.get(cache_key)
+        if cached:
+            logger.debug("cf_solver.payload_cache_hit solve_url=%s", solve_url)
+            return cached
+
+        logger.info("cf_solver.fetch_through_cf solve_url=%s payload_url=%s", solve_url, payload_url)
+        try:
+            headers = {"X-CF-Solver-Secret": self._solver_secret}
+            if _GOOGLE_AUTH_AVAILABLE:
+                try:
+                    auth_req = google.auth.transport.requests.Request()
+                    id_token = google.oauth2.id_token.fetch_id_token(
+                        auth_req, self._solver_url
+                    )
+                    headers["Authorization"] = f"Bearer {id_token}"
+                except Exception:
+                    pass
+            payload = {
+                "url": solve_url,
+                "wait_seconds": self.wait_seconds,
+                "payload_url": payload_url,
+            }
+            if payload_referer:
+                payload["payload_referer"] = payload_referer
+            resp = requests.post(
+                f"{self._solver_url}/solve",
+                json=payload,
+                headers=headers,
+                timeout=self.timeout,
+            )
+        except requests.RequestException as exc:
+            raise CfSolverError(f"CF solver request failed: {exc}") from exc
+
+        if resp.status_code == 401:
+            raise CfSolverError("CF solver returned 401 — check CF_SOLVER_SECRET")
+        if not resp.ok:
+            raise CfSolverError(
+                f"CF solver returned HTTP {resp.status_code}: {resp.text[:200]}"
+            )
+
+        result = resp.json()
+        payload_text = result.get("payload_text")
+        if not payload_text:
+            raise CfSolverError(
+                "CF solver returned no payload_text — in-browser fetch may have failed"
+            )
+
+        cache.set(cache_key, payload_text, _COOKIE_CACHE_TTL)
+        logger.info(
+            "cf_solver.fetch_through_cf_complete solve_url=%s payload_bytes=%d",
+            solve_url, len(payload_text),
+        )
+        return payload_text

@@ -4,19 +4,19 @@ Ohio SOS CFDISCLOSURE HTTP client.
 Downloads the ACT_CAN_LIST.CSV (active candidate list) from Ohio's Campaign
 Finance Disclosure Oracle APEX system at www6.ohiosos.gov.
 
-Access pattern (two-step):
-  1. GET the CFDISCLOSURE:73 page — this sets the ORA_WWV_APP_119 APEX session
-     cookie AND triggers the Cloudflare Managed Challenge. The CF solver service
-     handles both via nodriver, returning cf_clearance + ORA_WWV_APP_119.
-  2. GET CFDISCLOSURE:72 with P72_GETID=120 using both cookies — downloads the
-     765-row CSV without triggering a second CF challenge.
+Access pattern (two-step, both performed inside the CF solver's browser session):
+  1. CF solver navigates to CFDISCLOSURE:73 — this sets both the ORA_WWV_APP_119
+     APEX session cookie AND passes Cloudflare Bot Management. Because these
+     cookies are HttpOnly they cannot be extracted from the browser; instead the
+     solver performs the next step from within the same browser session.
+  2. CF solver fetches CFDISCLOSURE:72 with P72_GETID=120 via an in-browser
+     JavaScript fetch(), which automatically includes all cookies (HttpOnly and
+     non-HttpOnly) from the browser's live cookie jar. The CSV text is returned
+     directly without ever extracting individual cookies.
 
-The CF solver result is cached in Redis for 25 minutes, so repeated daily runs
-cost only one Chrome session per day.
+The CF solver result (the CSV text) is cached in Redis for 25 minutes.
 """
 import logging
-
-import requests
 
 from core.cf_solver import CfSolverClient, CfSolverError
 
@@ -31,8 +31,6 @@ _CSV_DOWNLOAD_URL = (
     "https://www6.ohiosos.gov/ords/f?p=CFDISCLOSURE:72:::NO::P72_GETID:120"
 )
 
-_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
-
 
 class OhSosClient:
     def __init__(self, timeout: int = 60):
@@ -41,48 +39,36 @@ class OhSosClient:
 
     def fetch_active_candidates_csv(self) -> str:
         """
-        Obtain CF bypass cookies via the solver service, then download and return
-        the ACT_CAN_LIST.CSV text. Raises OhSosError on failure.
+        Obtain the ACT_CAN_LIST.CSV text by solving the CF challenge and fetching
+        the CSV from within the browser session. Raises OhSosError on failure.
         """
         try:
-            cookie_header, user_agent = self._cf.cookie_header(_APEX_SESSION_URL)
+            csv_text = self._cf.fetch_through_cf(
+                solve_url=_APEX_SESSION_URL,
+                payload_url=_CSV_DOWNLOAD_URL,
+                payload_referer=_APEX_SESSION_URL,
+            )
         except CfSolverError as exc:
             raise OhSosError(
                 f"CF solver failed for www6.ohiosos.gov — cannot fetch candidates: {exc}"
             ) from exc
 
-        headers = {
-            "Cookie": cookie_header,
-            "User-Agent": user_agent,
-            "Referer": _APEX_SESSION_URL,
-        }
+        # APEX exports use \r (CR-only) or \r\n as line endings; count either.
+        row_count = max(csv_text.count("\n"), csv_text.count("\r"))
+        if not csv_text or row_count < 10:
+            raise OhSosError(
+                f"Ohio SOS CSV appears invalid — got {len(csv_text)} chars / "
+                f"{row_count} rows. CF session may have expired."
+            )
 
-        try:
-            resp = requests.get(_CSV_DOWNLOAD_URL, headers=headers, timeout=self.timeout)
-        except requests.RequestException as exc:
-            raise OhSosRetryableError(f"Ohio SOS CSV download failed: {exc}") from exc
-
-        if resp.status_code in _RETRYABLE_STATUSES:
+        if "just a moment" in csv_text.lower() or "<!doctype html" in csv_text.lower():
             raise OhSosRetryableError(
-                f"Ohio SOS CSV returned {resp.status_code} — likely stale CF cookies or transient error"
-            )
-
-        if resp.status_code != 200:
-            raise OhSosError(
-                f"Ohio SOS CSV returned unexpected status {resp.status_code}"
-            )
-
-        content_disposition = resp.headers.get("content-disposition", "").lower()
-        content_type = resp.headers.get("content-type", "").lower()
-        if "csv" not in content_disposition and "csv" not in content_type and "octet" not in content_type:
-            raise OhSosError(
-                f"Ohio SOS response is not a CSV — got Content-Type={resp.headers.get('content-type')!r}. "
-                "CF cookies may have expired."
+                "Ohio SOS returned HTML instead of CSV — CF cookies may have expired."
             )
 
         logger.info(
             "oh_sos.client.csv_downloaded bytes=%d rows_approx=%d",
-            len(resp.content),
-            resp.text.count("\n"),
+            len(csv_text),
+            row_count,
         )
-        return resp.text
+        return csv_text
