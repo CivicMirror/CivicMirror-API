@@ -20,9 +20,9 @@ def test_sync_sc_elections_creates_election(MockClient):
     MockClient.return_value.get_all_elections.return_value = [
         {
             "electionId": "22598",
-            "electionName": "Statewide Primary",
-            "displayName": "6/9/2026 Statewide Primary",
-            "electionDate": "2026-06-09T00:00:00",
+            "electionName": "Statewide General",
+            "displayName": "11/3/2026 Statewide General",
+            "electionDate": "2026-11-03T00:00:00",
             "filingPeriodBeginDate": "2020-03-16T12:00:00",  # already open
             "electionType": "General",
         }
