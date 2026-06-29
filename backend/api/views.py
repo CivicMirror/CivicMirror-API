@@ -38,6 +38,15 @@ def resolve_state_from_zip(zip_code: str) -> str | None:
     return None
 
 
+def _public_race_queryset(races):
+    return races.filter(
+        race_status__in=[
+            Race.RaceStatus.ACTIVE,
+            Race.RaceStatus.ARCHIVED,
+        ]
+    )
+
+
 class ElectionViewSet(ReadOnlyModelViewSet):
     serializer_class = ElectionSerializer
     permission_classes = [HasAPIKey]
@@ -56,8 +65,7 @@ class ElectionViewSet(ReadOnlyModelViewSet):
     def races(self, request, pk=None):
         election = self.get_object()
         qs = (
-            election.races
-            .filter(race_status=Race.RaceStatus.ACTIVE)
+            _public_race_queryset(election.races)
             .prefetch_related('candidates', 'measure_options')
         )
         page = self.paginate_queryset(qs)
@@ -197,8 +205,7 @@ class LookupView(APIView):
         results = []
         for election in elections_qs:
             races = (
-                election.races
-                .filter(race_status=Race.RaceStatus.ACTIVE)
+                _public_race_queryset(election.races)
                 .prefetch_related('candidates', 'measure_options')
             )
             results.append({
