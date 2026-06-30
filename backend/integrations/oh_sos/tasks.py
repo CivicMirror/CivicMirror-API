@@ -23,6 +23,7 @@ Federal races (Ohio's 15 US House districts) are handled by Civic API.
 import logging
 
 from celery import shared_task
+from celery.exceptions import SoftTimeLimitExceeded
 from django.utils import timezone
 
 from elections.models import Candidate, Election
@@ -42,7 +43,7 @@ def _current_election_year() -> int:
     return year if year % 2 == 0 else year + 1
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=120)
+@shared_task(bind=True, max_retries=3, default_retry_delay=120, soft_time_limit=300, time_limit=360)
 def sync_oh_elections(self):
     """
     Stage 1: Download and ingest the Ohio active candidate list from CFDISCLOSURE.
@@ -180,6 +181,14 @@ def sync_oh_elections(self):
         }
 
     except OhSosRetryableError:
+        raise
+    except SoftTimeLimitExceeded:
+        logger.warning("oh_sos.sync_elections.timeout soft_limit=300s")
+        sync_log.error_count = 1
+        sync_log.last_error = "SoftTimeLimitExceeded after 300s"
+        sync_log.status = SyncLog.Status.FAILED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
         raise
     except Exception as exc:
         logger.exception("oh_sos.sync_elections.failed")
