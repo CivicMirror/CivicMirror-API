@@ -10,7 +10,6 @@ import requests as req_lib
 from integrations.fl_ew.client import KNOWN_ELECTION_SLUGS, FlEwClient
 from integrations.fl_ew.exceptions import FlEwError, FlEwRetryableError
 
-
 # ---------------------------------------------------------------------------
 # KNOWN_ELECTION_SLUGS
 # ---------------------------------------------------------------------------
