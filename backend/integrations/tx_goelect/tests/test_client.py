@@ -213,7 +213,6 @@ def test_probe_election_false_when_not_live():
 
 def test_retries_on_503_then_succeeds():
     """Two 503s followed by a success → returns data, no exception raised."""
-    home = {"ElecDate": "05022026", "CountiesReporting": {"CR": 5, "CT": 5}}
     success_resp = MagicMock()
     success_resp.status_code = 200
     success_resp.json.return_value = {"Version": "enr/56181/21/"}

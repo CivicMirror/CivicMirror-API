@@ -8,8 +8,8 @@ import pytest
 
 from integrations.wa_votewa.mappers import (
     _get_text,
-    infer_election_type,
     infer_election_status,
+    infer_election_type,
     map_candidate,
     map_election,
     map_measure_option,
@@ -18,7 +18,6 @@ from integrations.wa_votewa.mappers import (
     parse_election_date,
     parse_election_date_from_slug,
 )
-
 
 # ---------------------------------------------------------------------------
 # helpers

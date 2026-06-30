@@ -11,7 +11,6 @@ from integrations.wa_votewa.client import (
 )
 from integrations.wa_votewa.exceptions import WaVoteWaError, WaVoteWaRetryableError
 
-
 # ---------------------------------------------------------------------------
 # KNOWN_ELECTION_SLUGS
 # ---------------------------------------------------------------------------

@@ -8,7 +8,6 @@ import pytest
 
 from integrations.fl_ew.tasks import sync_fl_elections, sync_fl_races
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
