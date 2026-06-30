@@ -9,7 +9,6 @@ import pytest
 
 from integrations.wa_votewa.tasks import sync_wa_elections, sync_wa_races
 
-
 # ---------------------------------------------------------------------------
 # sync_wa_elections
 # ---------------------------------------------------------------------------
@@ -132,7 +131,7 @@ def test_sync_wa_races_measure_item():
     with patch("integrations.wa_votewa.tasks.Election") as MockElection, \
          patch("integrations.wa_votewa.tasks.WaVoteWaClient") as MockClient, \
          patch("integrations.wa_votewa.tasks.SyncLog") as MockLog, \
-         patch("integrations.wa_votewa.tasks.MeasureOption") as MockMO, \
+         patch("integrations.wa_votewa.tasks.MeasureOption"), \
          patch("aggregation.ingest.ingest_race", return_value=(mock_race, True)) as mock_ir, \
          patch("integrations.wa_votewa.tasks._sync_pdc"):
 

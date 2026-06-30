@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from results.adapters.base import AdapterResult
-from results.adapters.ga import GeorgiaAdapter
 from results.adapters.enhanced_voting import _parse_ballot_items
+from results.adapters.ga import GeorgiaAdapter
 
 # ---------------------------------------------------------------------------
 # Registration
