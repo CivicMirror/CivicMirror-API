@@ -25,6 +25,7 @@ import requests
 from django.core.cache import cache
 
 from elections.models import Election, Race
+from results.models import OfficialResult
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
 from .registry import register
@@ -171,8 +172,8 @@ class CaliforniaAdapter(StateResultsAdapter):
         for contest in data:
             reporting_str = contest.get("Reporting") or ""
             reporting_pct = _parse_reporting_pct(reporting_str)
-            # All results treated as UNOFFICIAL unless manually overridden
-            result_type = "UNOFFICIAL"
+            # All results treated as unofficial unless manually overridden
+            result_type = OfficialResult.ResultType.UNOFFICIAL
 
             raw_candidates = contest.get("candidates") or []
             for raw_cand in raw_candidates:
