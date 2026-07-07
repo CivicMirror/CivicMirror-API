@@ -18,5 +18,6 @@ firebase-admin
 beautifulsoup4
 lxml
 pdfplumber
+openpyxl
 playwright
 playwright-stealth
