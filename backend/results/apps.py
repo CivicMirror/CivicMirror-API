@@ -7,4 +7,23 @@ class ResultsConfig(AppConfig):
 
     def ready(self):
         # Import concrete adapters so @register runs at Django startup.
-        from results.adapters import ar, az, ca, co, ct, fl, ga, ia, ma, me, nc, ny, oh, sc, tx, va, wa, wv  # noqa: F401
+        from results.adapters import (  # noqa: F401
+            ar,
+            az,
+            ca,
+            co,
+            ct,
+            fl,
+            ga,
+            ia,
+            ma,
+            me,
+            nc,
+            ny,
+            oh,
+            sc,
+            tx,
+            va,
+            wa,
+            wv,
+        )
