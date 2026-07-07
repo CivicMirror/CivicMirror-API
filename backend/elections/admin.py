@@ -9,6 +9,35 @@ class ElectionCycleAdmin(admin.ModelAdmin):
     ordering = ('-cycle_year',)
 
 
+@admin.action(description="Fetch Ohio results now")
+def fetch_ohio_results(modeladmin, request, queryset):
+    # Local import: avoids loading the results app's Celery task graph
+    # (and, transitively, the OH adapter's browser-automation imports) for
+    # every admin page load — only needed when this action actually runs.
+    from results.tasks import ingest_official_results
+
+    oh_elections = queryset.filter(state='OH')
+    skipped = queryset.exclude(state='OH').count()
+
+    for election in oh_elections:
+        ingest_official_results.delay('OH', election.pk)
+
+    if oh_elections:
+        modeladmin.message_user(
+            request,
+            f"Queued Ohio results fetch for {oh_elections.count()} election(s). "
+            "This runs a real browser (nodriver + Xvfb) and can take 30-60+ "
+            "seconds per election — check ops.SyncLog or the Race/OfficialResult "
+            "records shortly to confirm it completed.",
+        )
+    if skipped:
+        modeladmin.message_user(
+            request,
+            f"Skipped {skipped} non-Ohio election(s) — this action only applies to state=OH.",
+            level='warning',
+        )
+
+
 @admin.register(Election)
 class ElectionAdmin(admin.ModelAdmin):
     list_display = ('name', 'election_date', 'jurisdiction_level', 'state', 'status', 'last_synced_at')
@@ -16,6 +45,7 @@ class ElectionAdmin(admin.ModelAdmin):
     search_fields = ('name', 'source_id', 'state')
     readonly_fields = ('last_synced_at',)
     ordering = ('-election_date',)
+    actions = [fetch_ohio_results]
 
 
 @admin.register(Race)

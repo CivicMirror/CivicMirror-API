@@ -18,5 +18,7 @@ firebase-admin
 beautifulsoup4
 lxml
 pdfplumber
+openpyxl
+nodriver==0.45.2
 playwright
 playwright-stealth
