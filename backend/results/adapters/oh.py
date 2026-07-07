@@ -140,6 +140,7 @@ class OhioAdapter(StateResultsAdapter):
 
             if not file_url:
                 logger.warning("oh_sos.adapter.missing_file_url entry=%s", entry)
+                notes_parts.append(f"missing_file_url:{party or entry}")
                 continue
 
             try:
@@ -166,7 +167,7 @@ class OhioAdapter(StateResultsAdapter):
 
             all_rows.extend(rows)
 
-        fingerprint = "".join(fingerprint_parts)
+        fingerprint = "|".join(fingerprint_parts)
         cache_key = self.version_cache_key(election_id)
         cached_fingerprint = cache.get(cache_key)
         if fingerprint and fingerprint == cached_fingerprint:
@@ -183,10 +184,17 @@ class OhioAdapter(StateResultsAdapter):
             election_id, len(all_rows), len(result_files),
         )
 
+        if not all_rows:
+            mapping_confidence = "none"
+        elif notes_parts:
+            mapping_confidence = "partial"
+        else:
+            mapping_confidence = "full"
+
         return AdapterResult(
             rows=all_rows,
             source_url=_PORTAL_URL,
-            mapping_confidence="full" if not notes_parts else "partial",
+            mapping_confidence=mapping_confidence,
             notes="; ".join(notes_parts),
             source_version=fingerprint,
         )
