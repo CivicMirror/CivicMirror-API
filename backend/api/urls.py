@@ -1,6 +1,8 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from ops.views import CoverageSyncStatusView
+
 from . import views
 
 router = DefaultRouter()
@@ -15,4 +17,5 @@ router.register('districts', views.DistrictViewSet, basename='district')
 urlpatterns = [
     path('', include('community.urls')),
     path('lookup/', views.LookupView.as_view(), name='api-lookup'),
+    path('coverage/sync-status/', CoverageSyncStatusView.as_view(), name='coverage-sync-status'),
 ] + router.urls
