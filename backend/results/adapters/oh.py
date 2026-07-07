@@ -12,12 +12,15 @@ that fingerprints headless browsers, not just IP reputation. Plain
 headed Chrome driven by `nodriver` (undetected-chromedriver's async
 successor) against an actual X display. See _fetch_via_browser below.
 
-**Infrastructure requirement**: this adapter needs a real Chrome binary and
-a running X display (DISPLAY env var pointing at a live X server, e.g. via
-Xvfb) wherever it executes. Neither is currently present in the
-`civicmirror-worker` container — this adapter will raise at runtime there
-until that's provisioned. Confirmed working from a machine with a live
-desktop session.
+**Infrastructure**: `_fetch_via_browser` starts its own throwaway `Xvfb`
+virtual display for each fetch (via `xvfb` in the Dockerfile) and points
+`nodriver` at Playwright's already-downloaded Chromium binary
+(`/ms-playwright/.../chrome-linux64/chrome`) — no dependency on a real
+desktop session. This is unavoidably heavier than every other adapter
+(spins up a real browser process per fetch instead of a plain HTTP
+request), which is why Ohio is meant to be triggered manually via the
+"Fetch Ohio results now" admin action on Election, not on the regular
+scheduled cadence, until proven stable enough for that.
 
 File discovery: fetch files-index.json (via the browser, same CF wall),
 find `pastElectionResults[].elections[].fileGroups[].files[]` for the
@@ -55,9 +58,15 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
+import hashlib
 import io
 import logging
+import os
+import random
 import re
+import subprocess
+import time
 
 import openpyxl
 from django.core.cache import cache
@@ -69,10 +78,25 @@ from .registry import register
 
 logger = logging.getLogger(__name__)
 
-_CHROME_BINARY = "/usr/bin/google-chrome"
+_PLAYWRIGHT_BROWSERS_PATH = "/ms-playwright"
 _PORTAL_URL = "https://data.ohiosos.gov/portal/past-election-results"
 _NAME_PARTY_RE = re.compile(r"^(?P<name>.+?)\s*(?:\((?P<wi>WI)\)\*?\s*)?\((?P<party>[A-Z]+)\)\s*$")
 _METADATA_COLUMNS = 6  # County Name, Region Name, Media Market, Registered Voters, Ballots Counted, Turnout
+
+
+def _resolve_chrome_binary() -> str:
+    """Find Playwright's already-downloaded Chromium binary rather than
+    hardcoding a revision-specific path (e.g. chromium-1228), which would
+    silently break on the next `playwright install` version bump."""
+    import glob
+
+    matches = glob.glob(os.path.join(_PLAYWRIGHT_BROWSERS_PATH, "chromium-*", "chrome-linux64", "chrome"))
+    if not matches:
+        raise RuntimeError(
+            f"No Chromium binary found under {_PLAYWRIGHT_BROWSERS_PATH} "
+            "(expected Playwright's `playwright install chromium` to have run)"
+        )
+    return sorted(matches)[-1]
 
 
 @register
@@ -128,7 +152,7 @@ class OhioAdapter(StateResultsAdapter):
                 notes_parts.append(f"fetch_error:{party}")
                 continue
 
-            fingerprint_parts.append(str(hash(file_bytes)))
+            fingerprint_parts.append(hashlib.sha256(file_bytes).hexdigest())
 
             try:
                 rows = _parse_master_sheet(file_bytes)
@@ -168,17 +192,46 @@ class OhioAdapter(StateResultsAdapter):
         )
 
 
-def _fetch_via_browser(file_url: str) -> bytes:
-    """Fetch a Cloudflare-walled file via a real headed Chrome session.
+@contextlib.contextmanager
+def _virtual_display():
+    """Start a throwaway Xvfb display for the duration of one fetch and set
+    DISPLAY to it. A random display number avoids collisions between
+    concurrent Celery workers running this adapter at the same time."""
+    display_num = random.randint(100, 9999)
+    display = f":{display_num}"
+    proc = subprocess.Popen(
+        ["Xvfb", display, "-screen", "0", "1280x1024x24", "-nolisten", "tcp"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    time.sleep(1)  # give Xvfb a moment to bind before Chrome tries to connect
+    old_display = os.environ.get("DISPLAY")
+    os.environ["DISPLAY"] = display
+    try:
+        yield
+    finally:
+        if old_display is not None:
+            os.environ["DISPLAY"] = old_display
+        else:
+            os.environ.pop("DISPLAY", None)
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
-    Requires a live X display (DISPLAY env var) and a real Chrome binary.
-    Not currently viable inside the civicmirror-worker container — see
-    module docstring.
-    """
+
+def _fetch_via_browser(file_url: str) -> bytes:
+    """Fetch a Cloudflare-walled file via a real headed Chrome session
+    running on a throwaway Xvfb virtual display."""
     import nodriver as uc
 
     async def _fetch() -> bytes:
-        browser = await uc.start(headless=False, browser_executable_path=_CHROME_BINARY)
+        browser = await uc.start(
+            headless=False,
+            browser_executable_path=_resolve_chrome_binary(),
+            sandbox=False,  # required under Docker regardless of container user
+        )
         try:
             page = await browser.get(_PORTAL_URL)
             await asyncio.sleep(5)
@@ -203,7 +256,8 @@ def _fetch_via_browser(file_url: str) -> bytes:
             except Exception:
                 pass
 
-    return asyncio.run(_fetch())
+    with _virtual_display():
+        return asyncio.run(_fetch())
 
 
 def _parse_master_sheet(file_bytes: bytes) -> list[ResultRow]:
@@ -265,20 +319,24 @@ def _parse_master_sheet(file_bytes: bytes) -> list[ResultRow]:
 
 
 def _mark_winners(rows: list[ResultRow]) -> None:
-    """Mark the highest vote-getter within each office_title group as the winner.
+    """Mark the highest vote-getter within each (office, party) group as the
+    winner.
 
-    Each party's file is parsed independently, so this must run once across
-    the combined set (a Republican primary winner and a Democratic primary
-    winner for the same office both get is_winner=True — there is no single
-    statewide winner until the general).
+    This is a primary: Republican and Democratic candidates for the same
+    office are not competing against each other yet, so grouping by
+    office_title alone would incorrectly pick a single cross-party
+    "winner" and mark the other party's actual primary winner as a loser.
+    Grouping by (office_title, party) gives each party's primary its own
+    winner, matching reality — both advance to the general.
     """
-    by_office: dict[str, list[ResultRow]] = {}
+    by_office_party: dict[tuple[str, str], list[ResultRow]] = {}
     for row in rows:
-        by_office.setdefault(row.office_title or "", []).append(row)
+        party = (row.raw or {}).get("party", "")
+        by_office_party.setdefault((row.office_title or "", party), []).append(row)
 
-    for office_rows in by_office.values():
-        max_votes = max((r.vote_count for r in office_rows), default=0)
-        for r in office_rows:
+    for group_rows in by_office_party.values():
+        max_votes = max((r.vote_count for r in group_rows), default=0)
+        for r in group_rows:
             r.is_winner = r.vote_count == max_votes and max_votes > 0
 
 

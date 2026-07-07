@@ -18,10 +18,14 @@ COPY --from=builder /install /usr/local
 # Configure Playwright
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# Install system dependencies for Playwright Chromium, then clean up
+# Install system dependencies for Playwright Chromium, then clean up.
+# xvfb: virtual display for nodriver's headed-Chrome fetches (results/adapters/oh.py) —
+# some state sources (Ohio) block headless browsers via Cloudflare bot management and
+# only pass a real, headed browser session.
 RUN apt-get update && \
     /usr/local/bin/playwright install-deps chromium && \
     /usr/local/bin/playwright install chromium && \
+    apt-get install -y --no-install-recommends xvfb && \
     chmod -R o+rx /ms-playwright && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
