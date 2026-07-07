@@ -88,7 +88,7 @@ class TestCaliforniaAdapter:
         assert len(result.rows) >= 1
         alice = next((r for r in result.rows if r.candidate_name == "Alice Smith"), None)
         assert alice is not None
-        assert alice.result_type == "UNOFFICIAL"
+        assert alice.result_type == "unofficial"
         assert alice.office_title == "Governor - Statewide Results"
 
     def test_skips_race_without_ca_endpoint(self, db):
