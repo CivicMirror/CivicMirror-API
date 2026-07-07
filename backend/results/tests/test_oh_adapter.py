@@ -4,8 +4,8 @@ import io
 import openpyxl
 import pytest
 
-from results.adapters.oh import OhioAdapter, _mark_winners, _parse_master_sheet, _split_name_party
 from results.adapters.base import ResultRow
+from results.adapters.oh import OhioAdapter, _mark_winners, _parse_master_sheet, _split_name_party
 
 
 def _build_master_sheet_xlsx(write_in: bool = False) -> bytes:
