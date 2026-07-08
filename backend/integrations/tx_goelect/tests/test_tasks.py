@@ -81,6 +81,47 @@ def test_sync_tx_elections_ingests_online_election():
     mock_subtask.apply_async.assert_called_once()
 
 
+def test_first_queued_race_sync_is_not_immediate():
+    """
+    The first sync_tx_races queued by a sync_tx_elections run must not use
+    countdown=0. sync_tx_elections keeps writing to the DB (more elections
+    to fetch/ingest) after queuing the first race sync, and ingest_race's
+    select_for_update() can then block behind those writes — this is how a
+    modest-sized race sync ate into (and exceeded) the SoftTimeLimitExceeded
+    budget in production (TX's large primaries, 2026-07-01 through 07-08).
+    A nonzero delay lets sync_tx_elections's own DB activity for this
+    iteration finish first.
+    """
+    constants = {
+        "electionInfo": {
+            "2026": {
+                "RU": {"58315": {"O": "Y", "N": "2026 REPUBLICAN PRIMARY RUNOFF"}}
+            }
+        }
+    }
+    home = {"ElecDate": "05262026", "CountiesReporting": {"CR": 254, "CT": 254}}
+    mock_election = MagicMock()
+    mock_election.pk = 42
+
+    with patch("integrations.tx_goelect.tasks.TxGoElectClient") as MockClient, \
+         patch("integrations.tx_goelect.tasks.SyncLog") as MockLog, \
+         patch("integrations.tx_goelect.tasks.cache") as mock_cache, \
+         patch("integrations.tx_goelect.tasks.sync_tx_races") as mock_subtask, \
+         patch("aggregation.ingest.ingest_election", return_value=(mock_election, True)):
+
+        client = MockClient.return_value
+        client.get_election_constants.return_value = constants
+        client.get_election_data.return_value = {"version": 70, "home": home, "lookups": {}}
+        client.probe_election.return_value = False
+        mock_cache.get.side_effect = lambda key, default=None: 99999 if "watermark" in key else default
+        MockLog.objects.create.return_value = _mock_log()
+
+        sync_tx_elections()
+
+    _, kwargs = mock_subtask.apply_async.call_args
+    assert kwargs["countdown"] > 0
+
+
 # ---------------------------------------------------------------------------
 # sync_tx_elections — sequential ID probe
 # ---------------------------------------------------------------------------
@@ -314,3 +355,16 @@ def test_sync_tx_races_missing_election_returns_early():
         result = sync_tx_races(999, 56181)
 
     assert result is None
+
+
+def test_sync_tx_races_time_limit_covers_largest_primaries():
+    """
+    TX's largest statewide primaries (~1300 offices / ~2000 candidates,
+    measured against the live API 2026-07-08) took ~100s to ingest under
+    uncontended conditions but repeatedly hit the previous 300s soft limit
+    under DB lock contention, failing outright every night from 2026-07-01
+    through 2026-07-08. 300s doesn't leave enough headroom above the
+    uncontended baseline to absorb that contention.
+    """
+    assert sync_tx_races.soft_time_limit >= 600
+    assert sync_tx_races.time_limit > sync_tx_races.soft_time_limit
