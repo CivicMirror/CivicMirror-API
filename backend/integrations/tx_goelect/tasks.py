@@ -33,6 +33,15 @@ _PROBE_WATERMARK_KEY = "tx_goelect:probe_watermark"
 _PROBE_WATERMARK_INIT = 58315  # highest confirmed election ID as of 2026-06-17
 _PROBE_MAX_MISSES = 50
 
+# TX's largest statewide primaries run ~1300 offices / ~2000 candidates through
+# sequential per-record ingest_race/ingest_candidate calls — measured at ~100s
+# under uncontended conditions (2026-07-08), but consistently exceeded the
+# previous 300s soft limit under DB lock contention with the still-running
+# parent sync_tx_elections task. 600s/660s gives ~2x headroom over the
+# uncontended case.
+_RACES_SOFT_TIME_LIMIT = 600
+_RACES_TIME_LIMIT = 660
+
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_tx_elections(self):
@@ -93,9 +102,15 @@ def sync_tx_elections(self):
                     else:
                         updated_count += 1
 
+                    # +1: never start the first race sync at countdown=0 — this task
+                    # (sync_tx_elections) is itself still writing to the DB at that
+                    # point (more elections left to fetch/ingest below), and
+                    # ingest_race's select_for_update() can then block behind those
+                    # writes, which is how a modest-sized race sync ends up eating
+                    # into the SoftTimeLimitExceeded budget before doing any real work.
                     sync_tx_races.apply_async(
                         args=[election_obj.pk, election_id],
-                        countdown=queued_count * 5,
+                        countdown=(queued_count + 1) * 5,
                     )
                     queued_count += 1
 
@@ -160,9 +175,11 @@ def sync_tx_elections(self):
             else:
                 updated_count += 1
 
+            # See the +1 note on the electionConstants loop's apply_async above —
+            # same reasoning applies to probe-discovered elections.
             sync_tx_races.apply_async(
                 args=[election_obj.pk, probe_id],
-                countdown=queued_count * 5,
+                countdown=(queued_count + 1) * 5,
             )
             queued_count += 1
             probe_id += 1
@@ -205,7 +222,10 @@ def sync_tx_elections(self):
         raise
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=300, time_limit=360)
+@shared_task(
+    bind=True, max_retries=3, default_retry_delay=60,
+    soft_time_limit=_RACES_SOFT_TIME_LIMIT, time_limit=_RACES_TIME_LIMIT,
+)
 def sync_tx_races(self, election_pk: int, tx_election_id: int):
     """Stage 2: Fetch Lookups + OfficeSummary; upsert Race + Candidate records."""
     logger.info("tx_goelect.sync_races.start election_pk=%d tx_id=%d", election_pk, tx_election_id)
