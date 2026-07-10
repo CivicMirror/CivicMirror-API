@@ -33,6 +33,16 @@ _PROBE_WATERMARK_KEY = "tx_goelect:probe_watermark"
 _PROBE_WATERMARK_INIT = 58315  # highest confirmed election ID as of 2026-06-17
 _PROBE_MAX_MISSES = 50
 
+# TX's largest statewide primaries run ~1300 offices / ~2000 candidates through
+# sequential per-record ingest_race/ingest_candidate calls — measured at ~100s
+# under uncontended conditions (2026-07-08), but consistently exceeded the
+# previous 300s soft limit when sync_tx_elections queued a race sync while
+# still mid-discovery itself (see the to_queue comment in sync_tx_elections).
+# 600s/660s gives ~2x headroom over the uncontended baseline for any
+# contention that queuing after discovery completes doesn't fully absorb.
+_RACES_SOFT_TIME_LIMIT = 600
+_RACES_TIME_LIMIT = 660
+
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_tx_elections(self):
@@ -43,7 +53,14 @@ def sync_tx_elections(self):
         status=SyncLog.Status.STARTED,
     )
     client = TxGoElectClient()
-    created_count = updated_count = queued_count = skipped_count = 0
+    created_count = updated_count = skipped_count = 0
+    # (election_pk, tx_election_id) pairs to queue as sync_tx_races once this
+    # task is fully done — not queued inline during discovery. Queuing inline
+    # let a race sync start executing while this task was still mid-loop
+    # (more elections left to fetch/ingest, then the sequential ID probe),
+    # and that overlap in DB/network activity is what pushed TX's largest
+    # primaries past sync_tx_races's soft time limit every night.
+    to_queue: list[tuple[int, int]] = []
 
     try:
         from aggregation import ingest
@@ -93,11 +110,7 @@ def sync_tx_elections(self):
                     else:
                         updated_count += 1
 
-                    sync_tx_races.apply_async(
-                        args=[election_obj.pk, election_id],
-                        countdown=queued_count * 5,
-                    )
-                    queued_count += 1
+                    to_queue.append((election_obj.pk, election_id))
 
         # ── Sequential ID probe ─────────────────────────────────────────────
         watermark = cache.get(_PROBE_WATERMARK_KEY, _PROBE_WATERMARK_INIT)
@@ -160,19 +173,27 @@ def sync_tx_elections(self):
             else:
                 updated_count += 1
 
-            sync_tx_races.apply_async(
-                args=[election_obj.pk, probe_id],
-                countdown=queued_count * 5,
-            )
-            queued_count += 1
+            to_queue.append((election_obj.pk, probe_id))
             probe_id += 1
 
         cache.set(_PROBE_WATERMARK_KEY, probe_id - 1, timeout=None)
 
+        # Only now — after every ingest_election call and the full probe scan
+        # are done — start queuing race syncs, staggered 5s apart. This is
+        # what actually keeps them from racing this task's own DB/network work
+        # (a delay applied while discovery was still interleaved could not
+        # guarantee that; discovery duration varies with how many elections
+        # and probe misses there are).
+        for idx, (election_pk, tx_election_id) in enumerate(to_queue):
+            sync_tx_races.apply_async(
+                args=[election_pk, tx_election_id],
+                countdown=idx * 5,
+            )
+
         sync_log.records_created = created_count
         sync_log.records_updated = updated_count
         sync_log.records_skipped = skipped_count
-        sync_log.notes = f"Queued {queued_count} race syncs; probe watermark now {probe_id - 1}"
+        sync_log.notes = f"Queued {len(to_queue)} race syncs; probe watermark now {probe_id - 1}"
         sync_log.status = SyncLog.Status.COMPLETED
         sync_log.completed_at = timezone.now()
         sync_log.save(update_fields=[
@@ -184,7 +205,7 @@ def sync_tx_elections(self):
             "created": created_count,
             "updated": updated_count,
             "skipped": skipped_count,
-            "queued": queued_count,
+            "queued": len(to_queue),
         }
 
     except TxGoElectRetryableError as exc:
@@ -205,7 +226,10 @@ def sync_tx_elections(self):
         raise
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=300, time_limit=360)
+@shared_task(
+    bind=True, max_retries=3, default_retry_delay=60,
+    soft_time_limit=_RACES_SOFT_TIME_LIMIT, time_limit=_RACES_TIME_LIMIT,
+)
 def sync_tx_races(self, election_pk: int, tx_election_id: int):
     """Stage 2: Fetch Lookups + OfficeSummary; upsert Race + Candidate records."""
     logger.info("tx_goelect.sync_races.start election_pk=%d tx_id=%d", election_pk, tx_election_id)
@@ -317,11 +341,11 @@ def sync_tx_races(self, election_pk: int, tx_election_id: int):
 
     except SoftTimeLimitExceeded:
         logger.warning(
-            "tx_goelect.sync_races.timeout election_pk=%d tx_id=%d exceeded 300s",
-            election_pk, tx_election_id,
+            "tx_goelect.sync_races.timeout election_pk=%d tx_id=%d exceeded %ds",
+            election_pk, tx_election_id, _RACES_SOFT_TIME_LIMIT,
         )
         sync_log.error_count = 1
-        sync_log.last_error = "SoftTimeLimitExceeded (300s)"
+        sync_log.last_error = f"SoftTimeLimitExceeded ({_RACES_SOFT_TIME_LIMIT}s)"
         sync_log.status = SyncLog.Status.FAILED
         sync_log.completed_at = timezone.now()
         sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
