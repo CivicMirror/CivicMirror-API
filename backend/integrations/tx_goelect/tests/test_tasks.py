@@ -15,6 +15,41 @@ def _mock_log():
     return log
 
 
+def _run_sync_tx_elections_with_one_online_election(
+    *, ingest_election_return, extra_patches=()
+):
+    """
+    Shared scaffolding for the single-online-election, no-probe-hits case.
+    Returns (result, mock_subtask) so callers can assert on either.
+    """
+    constants = {
+        "electionInfo": {
+            "2026": {
+                "RU": {"58315": {"O": "Y", "N": "2026 REPUBLICAN PRIMARY RUNOFF"}}
+            }
+        }
+    }
+    home = {"ElecDate": "05262026", "CountiesReporting": {"CR": 254, "CT": 254}}
+
+    with patch("integrations.tx_goelect.tasks.TxGoElectClient") as MockClient, \
+         patch("integrations.tx_goelect.tasks.SyncLog") as MockLog, \
+         patch("integrations.tx_goelect.tasks.cache") as mock_cache, \
+         patch("integrations.tx_goelect.tasks.sync_tx_races") as mock_subtask, \
+         patch("aggregation.ingest.ingest_election", return_value=ingest_election_return):
+
+        client = MockClient.return_value
+        client.get_election_constants.return_value = constants
+        client.get_election_data.return_value = {"version": 70, "home": home, "lookups": {}}
+        client.probe_election.return_value = False  # no probe hits
+        # Watermark past probe range so probe loop doesn't run
+        mock_cache.get.side_effect = lambda key, default=None: 99999 if "watermark" in key else default
+        MockLog.objects.create.return_value = _mock_log()
+
+        result = sync_tx_elections()
+
+    return result, mock_subtask
+
+
 # ---------------------------------------------------------------------------
 # sync_tx_elections — electionConstants polling
 # ---------------------------------------------------------------------------
@@ -49,53 +84,32 @@ def test_sync_tx_elections_skips_offline_elections():
 
 def test_sync_tx_elections_ingests_online_election():
     """Elections with O='Y' → ingest_election called, sync_tx_races queued."""
-    constants = {
-        "electionInfo": {
-            "2026": {
-                "RU": {"58315": {"O": "Y", "N": "2026 REPUBLICAN PRIMARY RUNOFF"}}
-            }
-        }
-    }
-    home = {"ElecDate": "05262026", "CountiesReporting": {"CR": 254, "CT": 254}}
-
     mock_election = MagicMock()
     mock_election.pk = 42
 
-    with patch("integrations.tx_goelect.tasks.TxGoElectClient") as MockClient, \
-         patch("integrations.tx_goelect.tasks.SyncLog") as MockLog, \
-         patch("integrations.tx_goelect.tasks.cache") as mock_cache, \
-         patch("integrations.tx_goelect.tasks.sync_tx_races") as mock_subtask, \
-         patch("aggregation.ingest.ingest_election", return_value=(mock_election, True)):
-
-        client = MockClient.return_value
-        client.get_election_constants.return_value = constants
-        client.get_election_data.return_value = {"version": 70, "home": home, "lookups": {}}
-        client.probe_election.return_value = False  # no probe hits
-        # Watermark past probe range so probe loop doesn't run
-        mock_cache.get.side_effect = lambda key, default=None: 99999 if "watermark" in key else default
-        MockLog.objects.create.return_value = _mock_log()
-
-        result = sync_tx_elections()
+    result, mock_subtask = _run_sync_tx_elections_with_one_online_election(
+        ingest_election_return=(mock_election, True),
+    )
 
     assert result["created"] == 1
     mock_subtask.apply_async.assert_called_once()
 
 
-def test_first_queued_race_sync_is_not_immediate():
+def test_race_syncs_queued_only_after_all_discovery_done():
     """
-    The first sync_tx_races queued by a sync_tx_elections run must not use
-    countdown=0. sync_tx_elections keeps writing to the DB (more elections
-    to fetch/ingest) after queuing the first race sync, and ingest_race's
-    select_for_update() can then block behind those writes — this is how a
-    modest-sized race sync ate into (and exceeded) the SoftTimeLimitExceeded
-    budget in production (TX's large primaries, 2026-07-01 through 07-08).
-    A nonzero delay lets sync_tx_elections's own DB activity for this
-    iteration finish first.
+    sync_tx_races must never be queued while sync_tx_elections still has its
+    own DB writes or network calls left to make. Queuing inline during
+    discovery let a race sync start executing concurrently with the parent's
+    remaining work, and that overlap is what pushed TX's largest primaries
+    past sync_tx_races's soft time limit every night from 2026-07-01 through
+    2026-07-08. Verified here by recording call order across both mocks:
+    every ingest_election call must precede every apply_async call.
     """
     constants = {
         "electionInfo": {
             "2026": {
-                "RU": {"58315": {"O": "Y", "N": "2026 REPUBLICAN PRIMARY RUNOFF"}}
+                "P": {"53814": {"O": "Y", "N": "2026 DEMOCRATIC PRIMARY"}},
+                "RU": {"58315": {"O": "Y", "N": "2026 DEMOCRATIC PRIMARY RUNOFF"}},
             }
         }
     }
@@ -103,11 +117,20 @@ def test_first_queued_race_sync_is_not_immediate():
     mock_election = MagicMock()
     mock_election.pk = 42
 
+    call_order = []
+
+    def fake_ingest_election(**kwargs):
+        call_order.append("ingest")
+        return (mock_election, True)
+
+    def fake_apply_async(**kwargs):
+        call_order.append("queue")
+
     with patch("integrations.tx_goelect.tasks.TxGoElectClient") as MockClient, \
          patch("integrations.tx_goelect.tasks.SyncLog") as MockLog, \
          patch("integrations.tx_goelect.tasks.cache") as mock_cache, \
          patch("integrations.tx_goelect.tasks.sync_tx_races") as mock_subtask, \
-         patch("aggregation.ingest.ingest_election", return_value=(mock_election, True)):
+         patch("aggregation.ingest.ingest_election", side_effect=fake_ingest_election):
 
         client = MockClient.return_value
         client.get_election_constants.return_value = constants
@@ -115,11 +138,16 @@ def test_first_queued_race_sync_is_not_immediate():
         client.probe_election.return_value = False
         mock_cache.get.side_effect = lambda key, default=None: 99999 if "watermark" in key else default
         MockLog.objects.create.return_value = _mock_log()
+        mock_subtask.apply_async.side_effect = fake_apply_async
 
         sync_tx_elections()
 
-    _, kwargs = mock_subtask.apply_async.call_args
-    assert kwargs["countdown"] > 0
+    assert call_order == ["ingest", "ingest", "queue", "queue"], call_order
+
+    # And each queued call is still staggered — first at countdown=0 (safe now
+    # that it only fires after discovery is fully done), each next +5s.
+    countdowns = [c.kwargs["countdown"] for c in mock_subtask.apply_async.call_args_list]
+    assert countdowns == [0, 5]
 
 
 # ---------------------------------------------------------------------------
