@@ -104,6 +104,18 @@ def test_aggregate_rows_skips_rows_without_contest_or_choice():
     assert _aggregate_rows(raw) == []
 
 
+def test_aggregate_rows_treats_nul_only_choice_as_blank():
+    raw = [
+        {"Contest Name": "TOWN COUNCIL", "Choice": "\x00", "Total Votes": "12", "Contest Type": "C"},
+        {"Contest Name": "TOWN COUNCIL", "Choice": "ALICE SMITH", "Total Votes": "100", "Contest Type": "C"},
+    ]
+
+    rows = _aggregate_rows(raw)
+
+    assert len(rows) == 1
+    assert rows[0].candidate_name == "ALICE SMITH"
+
+
 # ---------------------------------------------------------------------------
 # _date_str_from_url
 # ---------------------------------------------------------------------------
@@ -178,6 +190,41 @@ def test_adapter_fetches_and_parses_when_etag_differs():
     assert result.unchanged is False
     assert len(result.rows) > 0
     assert result.mapping_confidence == "full"
+
+
+def test_adapter_missing_results_zip_returns_empty_result_without_download():
+    from elections.models import Election
+
+    election = Election(
+        id=12345,
+        pk=12345,
+        name="2024 NC Primary Runoff",
+        state="NC",
+        election_type="primary",
+        election_date=date(2024, 5, 14),
+        status="results_pending",
+        jurisdiction_level="state",
+        source_metadata={
+            "nc_date_str": "2024_05_14",
+            "results_url": "https://s3.amazonaws.com/dl.ncsbe.gov/ENRS/2024_05_14/results_pct_20240514.zip",
+        },
+    )
+
+    adapter = NorthCarolinaAdapter()
+
+    with patch("results.adapters.nc.cache") as mock_cache, \
+         patch("elections.models.Election.objects.get", return_value=election), \
+         patch("results.adapters.nc.NcSbeClient") as MockClient, \
+         patch("results.adapters.nc._fetch_zip") as mock_fetch_zip:
+        mock_cache.get.return_value = None
+        MockClient.return_value.fetch_results_etag.return_value = None
+
+        result = adapter.fetch_results(election.election_date, election.pk)
+
+    assert result.rows == []
+    assert result.mapping_confidence == "none"
+    assert "not found" in (result.notes or "").lower()
+    mock_fetch_zip.assert_not_called()
 
 
 @pytest.mark.django_db

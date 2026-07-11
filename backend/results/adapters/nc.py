@@ -79,12 +79,22 @@ class NorthCarolinaAdapter(StateResultsAdapter):
 
         # --- Version check via ETag -------------------------------------------
         cache_key = self.version_cache_key(election_id)
+        date_str = _date_str_from_url(source_url)
         try:
             client = NcSbeClient()
-            etag = client.fetch_results_etag(_date_str_from_url(source_url))
+            etag = client.fetch_results_etag(date_str)
         except Exception as exc:
             logger.warning("nc_sbe.adapter.etag_check_failed url=%s: %s", source_url, exc)
             etag = None
+
+        if date_str and etag is None:
+            logger.warning("nc_sbe.adapter.results_zip_not_found url=%s", source_url)
+            return AdapterResult(
+                rows=[],
+                source_url=source_url,
+                mapping_confidence="none",
+                notes=f"NC results ZIP not found: {source_url}",
+            )
 
         if etag and cache.get(cache_key) == etag:
             logger.debug("nc_sbe.adapter.unchanged election=%d etag=%s", election_id, etag)
@@ -167,8 +177,8 @@ def _aggregate_rows(raw_rows: list[dict]) -> list[ResultRow]:
     contest_types: dict[tuple[str, str], str] = {}
 
     for row in raw_rows:
-        contest_name = (row.get("Contest Name") or "").strip()
-        choice = (row.get("Choice") or "").strip()
+        contest_name = _clean_text(row.get("Contest Name") or "")
+        choice = _clean_text(row.get("Choice") or "")
         if not contest_name or not choice:
             continue
 
@@ -201,3 +211,8 @@ def _aggregate_rows(raw_rows: list[dict]) -> list[ResultRow]:
         ))
 
     return result_rows
+
+
+def _clean_text(value: str) -> str:
+    """Remove NUL/control bytes that PostgreSQL cannot store, then trim."""
+    return "".join(ch for ch in value if ch >= " " or ch == "\t").strip()

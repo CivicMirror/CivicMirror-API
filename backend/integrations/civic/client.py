@@ -106,7 +106,12 @@ class CivicAPIClient:
                 time.sleep(self.backoff_seconds * (2 ** attempt))
                 continue
 
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as exc:
+                raise requests.HTTPError(
+                    f"{response.status_code} Client Error for url: {url}", response=response
+                ) from exc
             return response.json()
 
         raise CivicAPIRetryableError("Civic API request retries were exhausted.")
