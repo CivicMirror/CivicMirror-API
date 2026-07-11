@@ -64,3 +64,20 @@ def test_aggregate_csv_rows_strips_control_bytes_from_candidate_name():
     )
     rows = aggregate_csv_rows(csv_text, "UNITED STATES SENATOR")
     assert rows[0].candidate_name == "JANE DOE"
+
+
+def test_aggregate_csv_rows_emits_zero_vote_write_in_aggregate():
+    """Write-in ResultRow should be emitted even when total write-in votes = 0."""
+    csv_text = (
+        "JurisdictionID,JurisContainerID,JurisName,EISCandidateID,CandidateName,"
+        "EISContestID,ContestName,PrecinctName,Registration,EISPartyID,PartyName,VoteCount\n"
+        "1,0,ADAMS,0,WRITE-IN,150,UNITED STATES SENATOR,PCT 1,500,11,DEMOCRATIC,0\n"
+        "1,0,ADAMS,0,Write-in,150,UNITED STATES SENATOR,PCT 2,500,11,DEMOCRATIC,0\n"
+    )
+    rows = aggregate_csv_rows(csv_text, "UNITED STATES SENATOR")
+
+    write_in_rows = [r for r in rows if r.is_write_in_aggregate]
+    assert len(write_in_rows) == 1
+    assert write_in_rows[0].candidate_name == "Write-In"
+    assert write_in_rows[0].vote_count == 0
+    assert write_in_rows[0].is_write_in_aggregate is True
