@@ -27,7 +27,12 @@ import logging
 
 from django.core.cache import cache
 
-from integrations.il_sbe.client import OFFICE_TYPE_FEDERAL_STATEWIDE, OFFICE_TYPE_SENATE, IllinoisSbeClient
+from integrations.il_sbe.client import (
+    OFFICE_TYPE_FEDERAL_STATEWIDE,
+    OFFICE_TYPE_HOUSE_ALL,
+    OFFICE_TYPE_SENATE,
+    IllinoisSbeClient,
+)
 from integrations.il_sbe.mappers import is_federal_or_state_office
 from integrations.il_sbe.parsers import parse_category_offices, parse_election_id_token
 
@@ -78,7 +83,11 @@ class IllinoisAdapter(StateResultsAdapter):
             election.save(update_fields=["source_metadata"])
 
         offices: list[dict] = []
-        for office_type_token in (OFFICE_TYPE_FEDERAL_STATEWIDE, OFFICE_TYPE_SENATE):
+        for office_type_token in (
+            OFFICE_TYPE_FEDERAL_STATEWIDE,
+            OFFICE_TYPE_SENATE,
+            OFFICE_TYPE_HOUSE_ALL,
+        ):
             category_html = client.fetch_category_page(id_token, office_type_token)
             offices.extend(parse_category_offices(category_html))
 

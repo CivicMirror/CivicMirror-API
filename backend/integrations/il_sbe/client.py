@@ -26,6 +26,13 @@ RESULTS_PAGE_URL = f"{BASE_URL}/ElectionVoteTotals.aspx"
 # Stable category tokens (decoded), confirmed identical across elections.
 OFFICE_TYPE_FEDERAL_STATEWIDE = "LpWf6lpbWOfBN3kEuxRi3A=="
 OFFICE_TYPE_SENATE = "XmLrbPr2rU0jTLF//JHNA=="
+# "House" is a flyout submenu on the site; hypDistrictAll returns all 118
+# State House districts in one request (confirmed live 2026-07-11).
+OFFICE_TYPE_HOUSE_ALL = "TPsWaFcg2f+ZHFrYI+6FR0aY47e3tS2y"
+# Reserved for the deferred Judicial-races build (see
+# docs/state-research/IL/IL-Election_Research.md) — not wired into any
+# category loop yet. Confirmed correct live 2026-07-11.
+OFFICE_TYPE_JUDICIAL = "OIPn0DmJsHWCRPQwcCA4+K+zeOSGzX4E"
 
 _DDL_ELECTIONS_FIELD = "ctl00$ContentPlaceHolder1$ddlElections"
 
