@@ -28,6 +28,7 @@ import logging
 from django.core.cache import cache
 
 from integrations.il_sbe.client import OFFICE_TYPE_FEDERAL_STATEWIDE, OFFICE_TYPE_SENATE, IllinoisSbeClient
+from integrations.il_sbe.mappers import is_federal_or_state_office
 from integrations.il_sbe.parsers import parse_category_offices, parse_election_id_token
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
@@ -93,6 +94,8 @@ class IllinoisAdapter(StateResultsAdapter):
 
         for office in offices:
             office_name = office["office_name"]
+            if not is_federal_or_state_office(office_name):
+                continue
             csv_url = office["csv_url"]
             try:
                 csv_text = client.fetch_office_csv(csv_url)
