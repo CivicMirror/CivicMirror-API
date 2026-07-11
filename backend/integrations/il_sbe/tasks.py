@@ -9,8 +9,9 @@ Stage 1a — sync_il_elections:
 
 Stage 1b — sync_il_races:
   Resolve the election's encrypted SBE `ID` token (cached on the Election
-  row after first resolution), fetch the Federal/Statewide + Senate results
-  category pages, filter to Federal + State offices, and upsert Race rows.
+  row after first resolution), fetch the Federal/Statewide + Senate + House
+  results category pages, filter to Federal + State offices, and upsert
+  Race rows.
 """
 import logging
 
@@ -20,7 +21,12 @@ from django.utils import timezone
 from elections.models import Election
 from ops.models import SyncLog
 
-from .client import OFFICE_TYPE_FEDERAL_STATEWIDE, OFFICE_TYPE_SENATE, IllinoisSbeClient
+from .client import (
+    OFFICE_TYPE_FEDERAL_STATEWIDE,
+    OFFICE_TYPE_HOUSE_ALL,
+    OFFICE_TYPE_SENATE,
+    IllinoisSbeClient,
+)
 from .exceptions import IlSbeRetryableError
 from .mappers import is_federal_or_state_office, map_election, map_race
 from .parsers import parse_category_offices, parse_election_id_token, parse_election_options
@@ -139,7 +145,11 @@ def sync_il_races(self, election_pk: int):
             election_obj.save(update_fields=["source_metadata"])
 
         offices: list[dict] = []
-        for office_type_token in (OFFICE_TYPE_FEDERAL_STATEWIDE, OFFICE_TYPE_SENATE):
+        for office_type_token in (
+            OFFICE_TYPE_FEDERAL_STATEWIDE,
+            OFFICE_TYPE_SENATE,
+            OFFICE_TYPE_HOUSE_ALL,
+        ):
             category_html = client.fetch_category_page(id_token, office_type_token)
             offices.extend(parse_category_offices(category_html))
 

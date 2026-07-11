@@ -57,3 +57,18 @@ def test_parse_category_offices_extracts_office_name_and_csv_url():
 
     governor = next(o for o in offices if o["office_name"] == "GOVERNOR AND LIEUTENANT GOVERNOR")
     assert "69-180-GOVERNOR AND LIEUTENANT GOVERNOR-2026GP.csv" in governor["csv_url"]
+
+
+def test_parse_category_offices_extracts_all_118_house_districts():
+    html = _load_fixture("category_house_all.html")
+    offices = parse_category_offices(html)
+    assert len(offices) == 118
+
+    first_district = next(o for o in offices if o["office_name"] == "1ST REPRESENTATIVE")
+    assert first_district["csv_url"] == (
+        "https://www.elections.il.gov/Downloads/ElectionOperations/ElectionResults/"
+        "ByOffice/69/69-1380-1ST REPRESENTATIVE-2026GP.csv"
+    )
+
+    last_district = next(o for o in offices if o["office_name"] == "118TH REPRESENTATIVE")
+    assert "69-2550-118TH REPRESENTATIVE-2026GP.csv" in last_district["csv_url"]
