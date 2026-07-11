@@ -34,6 +34,7 @@ def aggregate_csv_rows(csv_text: str, office_name: str) -> list[ResultRow]:
 
     totals: dict[str, int] = defaultdict(int)
     write_in_total = 0
+    saw_write_in = False
     party_by_candidate: dict[str, str] = {}
 
     for row in reader:
@@ -47,6 +48,7 @@ def aggregate_csv_rows(csv_text: str, office_name: str) -> list[ResultRow]:
             vote_count = 0
 
         if _is_write_in(raw_name):
+            saw_write_in = True
             write_in_total += vote_count
             continue
 
@@ -68,7 +70,7 @@ def aggregate_csv_rows(csv_text: str, office_name: str) -> list[ResultRow]:
         for name, count in totals.items()
     ]
 
-    if write_in_total:
+    if saw_write_in:
         rows.append(
             ResultRow(
                 candidate_name="Write-In",
