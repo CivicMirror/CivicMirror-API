@@ -23,4 +23,5 @@ urlpatterns = [
     path("tasks/sync-fl-ew/", views.sync_fl_ew_trigger, name="internal-sync-fl-ew"),
     path("tasks/sync-tx-goelect/", views.sync_tx_goelect_trigger, name="internal-sync-tx-goelect"),
     path("tasks/sync-oh-sos/", views.sync_oh_sos_trigger, name="internal-sync-oh-sos"),
+    path("tasks/sync-il-sbe/", views.sync_il_sbe_trigger, name="internal-sync-il-sbe"),
 ]
