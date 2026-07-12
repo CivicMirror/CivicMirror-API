@@ -70,6 +70,7 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **WA** | Washington | ✅ Complete | ✅ Complete | ✅ Complete (VoteWA ENR) | Full Core |
 | **FL** | Florida | ✅ Complete | ✅ Complete | ✅ Complete (FL Election Watch) | Full Core |
 | **TX** | Texas | ✅ Complete | ✅ Complete | ✅ Complete (GoElect ENR) | Full Core |
+| **IL** | Illinois | ✅ Complete | ✅ Complete | ✅ Complete (IL SBE CSV) | Full Core |
 | **NC** | North Carolina | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (NCSBE S3) | Near Core |
 | **NY** | New York | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (Flateau DB) | Near Core |
 | **CA** | California | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (CA SOS) | Near Core |
@@ -79,7 +80,6 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | Clarity sweep (20 states) | ✅ Available (Civic API) | ⚠️ Untested | ✅ Adapter available (Clarity) | Results Coverage Only |
 | **OH** | Ohio | ✅ Available (Civic API) | ⚠️ Untested | ⚠️ Pending CF solver deploy (Clarity ENR) | Near Core (adapter built, CF solver required) |
 | **GA** | Georgia | ✅ Available (Civic API) | ⚠️ Untested | ❓ Clarity scope unverified | Research Needed |
-| **IL** | Illinois | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Research Needed |
 | **MN** | Minnesota | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Research Needed |
 | **OR** | Oregon | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Research Needed |
 | **MI** | Michigan | ✅ Available (Civic API) | ⚠️ Untested | ❌ Blocked (API offline) | Blocked |
@@ -99,6 +99,7 @@ Stage 1 and Stage 2 complete for Federal and State offices. Election discovery, 
 - Arizona (AZ) — AZ SOS XML feed
 - Colorado (CO) — CO SOS adapter
 - Florida (FL) — FL Election Watch
+- Illinois (IL) — IL SBE CSV adapter
 - Massachusetts (MA) — MA SOS adapter
 - South Carolina (SC) — SC VREMS + Clarity
 - Texas (TX) — GoElect ENR

@@ -16,6 +16,7 @@ class ResultsConfig(AppConfig):
             fl,
             ga,
             ia,
+            il,
             ma,
             me,
             nc,
