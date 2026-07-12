@@ -150,6 +150,7 @@ INSTALLED_APPS += [
     'integrations.sc_enr',
     'integrations.ia_sos',
     'integrations.co_sos',
+    'integrations.il_sbe',
     'integrations.va_elect',
     'integrations.ma_sos',
     'integrations.ca_sos',
