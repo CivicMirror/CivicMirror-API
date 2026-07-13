@@ -1,6 +1,16 @@
 from django.db import migrations
 
 
+def drop_legacy_moderator_notes(apps, schema_editor):
+    if schema_editor.connection.vendor == "postgresql":
+        schema_editor.execute("ALTER TABLE elections_race DROP COLUMN IF EXISTS moderator_notes;")
+
+
+def restore_legacy_moderator_notes(apps, schema_editor):
+    if schema_editor.connection.vendor == "postgresql":
+        schema_editor.execute("ALTER TABLE elections_race ADD COLUMN moderator_notes TEXT NOT NULL DEFAULT '';")
+
+
 class Migration(migrations.Migration):
     """
     Drop the moderator_notes column that exists in the production DB but was
@@ -13,8 +23,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql="ALTER TABLE elections_race DROP COLUMN IF EXISTS moderator_notes;",
-            reverse_sql="ALTER TABLE elections_race ADD COLUMN moderator_notes TEXT NOT NULL DEFAULT '';",
-        ),
+        migrations.RunPython(drop_legacy_moderator_notes, reverse_code=restore_legacy_moderator_notes),
     ]

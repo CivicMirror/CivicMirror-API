@@ -1,6 +1,11 @@
 from django.db import migrations
 
 
+def drop_legacy_username_column(apps, schema_editor):
+    if schema_editor.connection.vendor == 'postgresql':
+        schema_editor.execute('ALTER TABLE accounts_userprofile DROP COLUMN IF EXISTS username;')
+
+
 class Migration(migrations.Migration):
     """
     Production DB has a 'username' NOT NULL column in accounts_userprofile
@@ -13,8 +18,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql='ALTER TABLE accounts_userprofile DROP COLUMN IF EXISTS username;',
-            reverse_sql=migrations.RunSQL.noop,
-        ),
+        migrations.RunPython(drop_legacy_username_column, reverse_code=migrations.RunPython.noop),
     ]

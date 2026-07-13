@@ -3,6 +3,13 @@
 from django.db import migrations
 
 
+def drop_legacy_terms_columns(apps, schema_editor):
+    if schema_editor.connection.vendor != 'postgresql':
+        return
+    schema_editor.execute('ALTER TABLE accounts_userprofile DROP COLUMN IF EXISTS terms_accepted_at;')
+    schema_editor.execute('ALTER TABLE accounts_userprofile DROP COLUMN IF EXISTS terms_version;')
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,12 +17,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql=[
-                'ALTER TABLE accounts_userprofile DROP COLUMN IF EXISTS terms_accepted_at;',
-                'ALTER TABLE accounts_userprofile DROP COLUMN IF EXISTS terms_version;',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(drop_legacy_terms_columns, reverse_code=migrations.RunPython.noop),
             ],
-            reverse_sql=migrations.RunSQL.noop,
             state_operations=[
                 migrations.RemoveField(model_name='userprofile', name='terms_accepted_at'),
                 migrations.RemoveField(model_name='userprofile', name='terms_version'),
