@@ -87,6 +87,9 @@ A Tier A results adapter has immediate value even without a full SOS adapter —
 | **WA** | B (custom) | `results/adapters/wa.py` + `integrations/wa_votewa/` | 2026-06-13 | Full Core | VoteWA Enhanced Voting ENR API; county fan-out via `localityElections[]`; `enr_slug` date key; `sync-wa-votewa` at 03:00 UTC |
 | **FL** | B | `results/adapters/fl.py` + `integrations/fl_ew/` | 2026-06-15 | Full Core | Florida Election Watch tab-delimited downloads; file hash change detection; `sync-fl-ew` at 04:00 UTC |
 | **TX** | B | `results/adapters/tx.py` + `integrations/tx_goelect/` | 2026-06-17 | Full Core | CivixApps GoElect ENR; public JSON API; base64-encoded fields; sequential ID probe (50-miss stop) for election discovery; statewide + county `ResultRow`s; `sync-tx-goelect` at 05:00 UTC |
+| **NJ** | B (custom) | `results/adapters/nj.py` + `integrations/nj_elections/` | 2026-07-13 | Near Core (partial) | Multi-county Clarity fan-out for ~16/21 counties; off-platform counties deferred; county URL enrichment via `sync-nj-elections` |
+| **MN** | B | `results/adapters/mn.py` + `integrations/mn_sos/` | 2026-07-13 | Near Core (partial) | SOS semicolon-delimited result files; checksum change detection; scoped federal/state race/candidate sync via `sync-mn-sos`; election discovery still POC/upsert |
+| **OR** | B | `results/adapters/oregon.py` + `integrations/or_sos/` | 2026-07-13 | Near Core (partial) | Oregon SOS + ORESTAR Stage 1 sources; structured certified result document parser; no centralized live statewide results feed and PDF/legacy XLS still unsupported |
 
 **AR** validated the "Tier B without a full SOS adapter" pattern — the TotalVote REST API is richer than Clarity and eliminates the need for election-by-election `results_url` config. AR elections/races still come from Civic API (Stage 1 only).
 

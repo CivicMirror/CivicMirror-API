@@ -75,14 +75,15 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **NY** | New York | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (Flateau DB) | Near Core |
 | **CA** | California | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (CA SOS) | Near Core |
 | **NJ** | New Jersey | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (multi-county Clarity, ~16/21 counties) | Near Core (partial) |
+| **MN** | Minnesota | ⚠️ POC election upsert | ✅ Complete for federal/state result-file scope | ✅ Complete (MN SOS flat files) | Near Core (partial) |
+| **OR** | Oregon | ✅ Complete for current statewide election | ✅ Complete for core skeleton/candidates | ⚠️ Partial (structured certified files; no live statewide feed) | Near Core (partial) |
 | **IA** | Iowa | ✅ Complete | ✅ Complete | ⚠️ Adapter built, needs production wiring | Near Core |
 | **AR** | Arkansas | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (TotalVote ENR) | Results Coverage Only |
 | **CT** | Connecticut | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (PCC EMS) | Results Coverage Only |
 | **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | Clarity sweep (20 states) | ✅ Available (Civic API) | ⚠️ Untested | ✅ Adapter available (Clarity) | Results Coverage Only |
 | **OH** | Ohio | ✅ Available (Civic API) | ⚠️ Untested | ⚠️ Pending CF solver deploy (Clarity ENR) | Near Core (adapter built, CF solver required) |
-| **GA** | Georgia | ✅ Available (Civic API) | ⚠️ Untested | ❓ Clarity scope unverified | Research Needed |
-| **MN** | Minnesota | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Research Needed |
-| **OR** | Oregon | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Research Needed |
+| **GA** | Georgia | ✅ Ready to build | ✅ Ready to build | ✅ Ready to build (Enhanced Voting API) | Research Complete — Buildable |
+| **TN** | Tennessee | ✅ Available (Civic API) | ⚠️ Untested | ❓ Live dashboard endpoint discovery needed | Research Needed |
 | **MI** | Michigan | ✅ Available (Civic API) | ⚠️ Untested | ❌ Blocked (API offline) | Blocked |
 | **PA** | Pennsylvania | ✅ Available (Civic API) | ⚠️ Untested | ❌ Blocked (no public API) | Blocked |
 | All others | — | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Federal Only |
@@ -114,9 +115,11 @@ Stage 2 results adapter is complete and active. Stage 1 race creation relies on 
 
 - California (CA) — results adapter built; race creation depends on Civic API
 - Iowa (IA) — Stage 1 complete; Stage 2 adapter built but production wiring incomplete
+- Minnesota (MN) — results adapter built for SOS semicolon-delimited flat files; `sync_mn_races` seeds the scoped federal/state race/candidate set from the same official files. Election discovery is still a POC/upsert path, not a full election-manifest adapter.
 - New Jersey (NJ) — results adapter built (multi-county Clarity sweep, ~16 of 21 counties); 5 off-platform counties (Bergen, Camden, Sussex, Warren, Hunterdon) deferred. Includes office/candidate name normalization to handle cross-county inconsistency. See `docs/state-research/NJ/NJ-Election_Research.md`.
 - New York (NY) — results adapter built (Flateau DB); race creation depends on Civic API
 - North Carolina (NC) — results adapter built (NCSBE S3); race creation depends on Civic API
+- Oregon (OR) — Stage 1 current-election/race/candidate/local-measure sync built from Oregon SOS + ORESTAR sources; Stage 2 parses structured certified result documents when discoverable or when `or_results_url` is present. PDF/legacy XLS and statewide live results remain out of scope.
 
 ### Results Coverage Only
 
@@ -128,9 +131,9 @@ Stage 2 results adapter available. No dedicated Stage 1 adapter — elections an
 
 ### Research Complete — Buildable (no adapter yet)
 
-Stage 2 adapter is buildable for county-level results; statewide source still needed for Full Core Coverage.
+Stage 1/Stage 2 adapter is buildable from researched source details, but not yet implemented.
 
-(No states currently in this category.)
+- Georgia (GA) — Enhanced Voting API at `results.sos.ga.gov`; same vendor family as VA/WA. Build next after confirming Cloud Run/local access and current election slug/list endpoint behavior.
 
 ### Blocked
 
