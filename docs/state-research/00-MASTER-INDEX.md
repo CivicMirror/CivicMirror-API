@@ -74,6 +74,7 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **NC** | North Carolina | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (NCSBE S3) | Near Core |
 | **NY** | New York | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (Flateau DB) | Near Core |
 | **CA** | California | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (CA SOS) | Near Core |
+| **NJ** | New Jersey | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (multi-county Clarity, ~16/21 counties) | Near Core (partial) |
 | **IA** | Iowa | ✅ Complete | ✅ Complete | ⚠️ Adapter built, needs production wiring | Near Core |
 | **AR** | Arkansas | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (TotalVote ENR) | Results Coverage Only |
 | **CT** | Connecticut | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (PCC EMS) | Results Coverage Only |
@@ -113,6 +114,7 @@ Stage 2 results adapter is complete and active. Stage 1 race creation relies on 
 
 - California (CA) — results adapter built; race creation depends on Civic API
 - Iowa (IA) — Stage 1 complete; Stage 2 adapter built but production wiring incomplete
+- New Jersey (NJ) — results adapter built (multi-county Clarity sweep, ~16 of 21 counties); 5 off-platform counties (Bergen, Camden, Sussex, Warren, Hunterdon) deferred. Includes office/candidate name normalization to handle cross-county inconsistency. See `docs/state-research/NJ/NJ-Election_Research.md`.
 - New York (NY) — results adapter built (Flateau DB); race creation depends on Civic API
 - North Carolina (NC) — results adapter built (NCSBE S3); race creation depends on Civic API
 

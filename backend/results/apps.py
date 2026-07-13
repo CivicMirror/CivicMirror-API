@@ -20,6 +20,7 @@ class ResultsConfig(AppConfig):
             ma,
             me,
             nc,
+            nj,
             ny,
             oh,
             sc,

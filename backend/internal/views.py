@@ -16,6 +16,7 @@ from integrations.il_sbe.tasks import sync_il_elections
 from integrations.ia_sos.tasks import sync_ia_elections
 from integrations.ma_sos.tasks import sync_ma_elections
 from integrations.nc_sbe.tasks import sync_nc_elections
+from integrations.nj_elections.tasks import sync_nj_county_urls
 from integrations.oh_sos.tasks import sync_oh_elections
 from integrations.openstates.tasks import sync_openstates_all_states
 from integrations.sc_enr.tasks import poll_sc_enr_elections, sync_sc_enr_results
@@ -173,6 +174,13 @@ def seed_election_calendar_trigger(request):
 @require_internal_task_token
 def sync_nc_sbe_trigger(request):
     return _trigger("sync_nc_sbe", sync_nc_elections, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_nj_elections_trigger(request):
+    return _trigger("sync_nj_elections", sync_nj_county_urls, request)
 
 
 @csrf_exempt
