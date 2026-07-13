@@ -90,12 +90,19 @@ def test_all_flag_falls_back_gracefully_on_non_redis_backend():
 
 
 def test_registry_covers_every_triggered_task():
-    """Every task the internal views can trigger must be in the lock registry."""
-    expected = {
-        "sync_elections", "poll_sc_enr", "sync_sc_enr_results", "sync_fec",
-        "sync_openstates", "sync_sc_vrems", "sync_ia_sos", "sync_co_sos",
-        "sync_va_elect", "sync_ma_sos", "sync_ca_sos", "sync_az_sos",
-        "sync_nc_sbe", "seed_2026_elections", "poll_pending_results",
-        "sync_fl_ew", "sync_tx_goelect", "sync_wa_votewa", "sync_oh_sos",
-    }
+    """
+    Every task the internal views can trigger must be in the lock registry.
+
+    Derive the expected set from internal/views.py's source rather than a
+    hardcoded list so newly added state triggers cannot drift from TASK_LOCKS.
+    """
+    import inspect
+    import re
+
+    from internal import views
+
+    source = inspect.getsource(views)
+    expected = set(re.findall(r'_trigger\(\s*"([^"]+)"', source))
+
+    assert expected, "no _trigger(...) calls found in internal/views.py — regex is broken"
     assert set(TASK_LOCKS) == expected
