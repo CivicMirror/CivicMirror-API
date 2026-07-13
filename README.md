@@ -45,7 +45,7 @@ Use this table to identify the next best integration target. States with multipl
 | **MD** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **ME** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **MI** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| **MN** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **MN** | ⚠️ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **MO** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **MS** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **MT** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
@@ -53,13 +53,13 @@ Use this table to identify the next best integration target. States with multipl
 | **ND** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **NE** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **NH** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **NJ** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **NJ** | ⚠️ | ⚠️ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **NM** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **NV** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **NY** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **OH** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **OK** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **OR** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **OR** | ✅ | ✅ | ⚠️ | ⚠️ | ❌ | ⚠️ | ✅ |
 | **PA** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **RI** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **SC** | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
@@ -96,13 +96,13 @@ States closest to a full ✅ row based on available public data:
 
 | State | Opportunity | Source |
 |---|---|---|
-| **PA** | Socrata/SODA API | PA Open Data Portal |
-| **NC** | FTP — live + GIS | NC SBE FTP site |
-| **MI** | Community REST API | `michiganelections.io` |
-| **MN** | Real-time portal + GIS | MN SOS |
+| **GA** | Enhanced Voting API, same family as VA/WA | Georgia SOS results API |
+| **TN** | Live election-night dashboard needs endpoint discovery | Tennessee SOS / ENR |
+| **OH** | Adapter built; needs CF solver deployment/wiring | Ohio SOS + Clarity ENR |
+| **NC** | Existing adapter; Stage 1 race creation hardening | NC SBE FTP site |
 
 > See [`docs/state-research/COVERAGE-ANALYSIS-RESULTS.md`](docs/state-research/COVERAGE-ANALYSIS-RESULTS.md) for the full source analysis on all 48 researched states.
 
 ---
 
-*Last updated: 2026-06-04*
+*Last updated: 2026-07-13*
