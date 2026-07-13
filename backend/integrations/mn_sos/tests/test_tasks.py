@@ -122,3 +122,94 @@ def test_sync_mn_races_marks_disappeared_candidate_withdrawn():
 
     withdrawn = Candidate.objects.get(name="Someone Who Withdrew")
     assert withdrawn.candidate_status == Candidate.CandidateStatus.WITHDRAWN
+
+
+_STSENATE_RESULT_ROWS = [
+    {
+        "state": "MN", "county_id": "", "precinct_name": "", "office_id": "0201",
+        "office_name": "State Senator District 1", "district": "1",
+        "candidate_order_code": "0301", "candidate_name": "Jane Statehouse", "suffix": "",
+        "incumbent_code": "", "party": "DFL", "precincts_reporting": "10",
+        "total_precincts": "10", "candidate_votes": "5000", "candidate_pct": "60.00",
+        "total_office_votes": "8333",
+    },
+]
+
+_TWO_IN_SCOPE_FILES = [
+    {"label": "U.S. Senator Statewide", "url": "https://x/ussenate.txt"},
+    {"label": "State Senator by District", "url": "https://x/stsenate.txt"},
+]
+
+_CANDIDATE_ROWS_TWO_OFFICES = _CANDIDATE_ROWS + [
+    {
+        "candidate_id": "02010301", "candidate_name": "Jane Statehouse",
+        "office_id": "0201", "office_title": "State Senator District 1",
+        "county_id": "88", "order_code": "01", "party": "DFL",
+    },
+]
+
+
+def _fake_parse_result_file(text):
+    if "ussenate" in text:
+        return _SENATE_RESULT_ROWS
+    if "stsenate" in text:
+        return _STSENATE_RESULT_ROWS
+    return []
+
+
+@pytest.mark.django_db
+def test_sync_mn_races_skips_withdrawal_check_on_partial_fetch_failure():
+    # Run 1: both result files fetch successfully, seeding a RUNNING candidate
+    # for each of two distinct offices (U.S. Senator and State Senator).
+    with patch(
+        "integrations.mn_sos.tasks.MnSosClient.fetch_file_index",
+        return_value=_FILE_INDEX_HTML,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_file_index",
+        return_value=_TWO_IN_SCOPE_FILES,
+    ), patch(
+        "integrations.mn_sos.tasks.MnSosClient.fetch_file",
+        side_effect=lambda url: "fake text for " + url,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_result_file",
+        side_effect=_fake_parse_result_file,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_candidate_table",
+        return_value=_CANDIDATE_ROWS_TWO_OFFICES,
+    ):
+        sync_mn_races()
+
+    state_senate_candidate = Candidate.objects.get(name="Jane Statehouse")
+    assert state_senate_candidate.candidate_status == Candidate.CandidateStatus.RUNNING
+
+    # Run 2: the State Senator result file fails to fetch this run, so its
+    # office never enters in_scope_office_ids. Without the fix, this would
+    # cause the withdrawal pass to wrongly mark Jane Statehouse as WITHDRAWN
+    # even though she never actually withdrew — it was just a transient
+    # fetch failure on an unrelated file.
+    def fetch_file_one_fails(url):
+        if "stsenate" in url:
+            raise Exception("simulated transient fetch failure")
+        return "fake text for " + url
+
+    with patch(
+        "integrations.mn_sos.tasks.MnSosClient.fetch_file_index",
+        return_value=_FILE_INDEX_HTML,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_file_index",
+        return_value=_TWO_IN_SCOPE_FILES,
+    ), patch(
+        "integrations.mn_sos.tasks.MnSosClient.fetch_file",
+        side_effect=fetch_file_one_fails,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_result_file",
+        side_effect=_fake_parse_result_file,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_candidate_table",
+        return_value=_CANDIDATE_ROWS_TWO_OFFICES,
+    ):
+        result = sync_mn_races()
+
+    state_senate_candidate.refresh_from_db()
+    assert state_senate_candidate.candidate_status == Candidate.CandidateStatus.RUNNING
+    assert result["withdrawn"] == 0

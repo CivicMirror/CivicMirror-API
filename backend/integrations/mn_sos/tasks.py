@@ -64,6 +64,7 @@ def sync_mn_races(self):
 
         in_scope_office_ids: set[str] = set()
         office_titles_by_id: dict[str, str] = {}
+        fetch_failure_count = 0
         for file_entry in in_scope_files:
             try:
                 text = client.fetch_file(file_entry["url"])
@@ -72,6 +73,7 @@ def sync_mn_races(self):
                     "mn_sos.sync_races.result_file_fetch_failed url=%s err=%s",
                     file_entry["url"], exc,
                 )
+                fetch_failure_count += 1
                 continue
             for row in parse_result_file(text):
                 in_scope_office_ids.add(row["office_id"])
@@ -129,13 +131,21 @@ def sync_mn_races(self):
                 else:
                     updated_count += 1
 
-        withdrawn_qs = (
-            Candidate.objects
-            .filter(race__election=election_obj, race__source="mn_sos")
-            .exclude(pk__in=seen_candidate_pks)
-            .filter(candidate_status=Candidate.CandidateStatus.RUNNING)
-        )
-        withdrawn_count = withdrawn_qs.update(candidate_status=Candidate.CandidateStatus.WITHDRAWN)
+        if fetch_failure_count == 0:
+            withdrawn_qs = (
+                Candidate.objects
+                .filter(race__election=election_obj, race__source="mn_sos")
+                .exclude(pk__in=seen_candidate_pks)
+                .filter(candidate_status=Candidate.CandidateStatus.RUNNING)
+            )
+            withdrawn_count = withdrawn_qs.update(candidate_status=Candidate.CandidateStatus.WITHDRAWN)
+        else:
+            logger.warning(
+                "mn_sos.sync_races.skipping_withdrawal_check_due_to_fetch_failures "
+                "fetch_failure_count=%s",
+                fetch_failure_count,
+            )
+            withdrawn_count = 0
 
         election_obj.last_synced_at = timezone.now()
         election_obj.save(update_fields=["last_synced_at"])

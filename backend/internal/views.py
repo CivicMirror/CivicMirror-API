@@ -13,9 +13,9 @@ from integrations.election_calendar.tasks import seed_2026_elections
 from integrations.fec.tasks import sync_fec_candidates
 from integrations.fl_ew.tasks import sync_fl_elections
 from integrations.il_sbe.tasks import sync_il_elections
-from integrations.mn_sos.tasks import sync_mn_races
 from integrations.ia_sos.tasks import sync_ia_elections
 from integrations.ma_sos.tasks import sync_ma_elections
+from integrations.mn_sos.tasks import sync_mn_races
 from integrations.nc_sbe.tasks import sync_nc_elections
 from integrations.oh_sos.tasks import sync_oh_elections
 from integrations.openstates.tasks import sync_openstates_all_states
