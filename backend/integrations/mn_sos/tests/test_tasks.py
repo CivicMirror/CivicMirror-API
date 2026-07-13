@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from elections.models import Candidate, Election, Race
+from elections.models import Candidate, Election, ElectionSourceLink, Race
 from integrations.mn_sos.tasks import sync_mn_races
 
 _FILE_INDEX_HTML = "<html>fake index</html>"
@@ -67,7 +67,9 @@ def test_sync_mn_races_creates_election_race_and_in_scope_candidate_only():
         result = sync_mn_races()
 
     assert result["created"] >= 2  # 1 race + 1 candidate at minimum
-    election = Election.objects.get(source_id="mn_sos_2024_general")
+    link = ElectionSourceLink.objects.filter(source="mn_sos", source_id="mn_sos_2024_general").first()
+    assert link is not None
+    election = link.election
     assert election.state == "MN"
 
     race = Race.objects.get(election=election, office_title="U.S. Senator")

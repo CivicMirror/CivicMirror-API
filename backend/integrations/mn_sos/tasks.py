@@ -54,12 +54,6 @@ def sync_mn_races(self):
         election_obj, election_was_created = ingest.ingest_election(
             source="mn_sos", source_id=source_id, identity=identity, fields=fields,
         )
-        # ingest_election only records source_id on ElectionSourceLink for the
-        # canonical-key path; MN is currently single-source, so mirror it onto
-        # Election.source_id directly for convenient lookup (e.g. admin, tests).
-        if election_obj.source_id != source_id:
-            election_obj.source_id = source_id
-            election_obj.save(update_fields=["source_id"])
 
         meta = election_obj.source_metadata or {}
         ers_election_id = meta.get("mn_ers_election_id")
