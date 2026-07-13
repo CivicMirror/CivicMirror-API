@@ -1,0 +1,122 @@
+from unittest.mock import patch
+
+import pytest
+
+from elections.models import Candidate, Election, Race
+from integrations.mn_sos.tasks import sync_mn_races
+
+_FILE_INDEX_HTML = "<html>fake index</html>"
+
+_IN_SCOPE_FILES = [
+    {"label": "U.S. Senator Statewide", "url": "https://x/ussenate.txt"},
+]
+_OUT_OF_SCOPE_FILES = [
+    {"label": "County Races", "url": "https://x/cntyRaces.txt"},
+]
+
+_SENATE_RESULT_ROWS = [
+    {
+        "state": "MN", "county_id": "", "precinct_name": "", "office_id": "0102",
+        "office_name": "U.S. Senator", "district": "", "candidate_order_code": "0202",
+        "candidate_name": "Amy Klobuchar", "suffix": "", "incumbent_code": "",
+        "party": "DFL", "precincts_reporting": "4103", "total_precincts": "4103",
+        "candidate_votes": "1792441", "candidate_pct": "56.20", "total_office_votes": "3189323",
+    },
+    {
+        "state": "MN", "county_id": "", "precinct_name": "", "office_id": "0102",
+        "office_name": "U.S. Senator", "district": "", "candidate_order_code": "9901",
+        "candidate_name": "WRITE-IN", "suffix": "", "incumbent_code": "",
+        "party": "WI", "precincts_reporting": "4103", "total_precincts": "4103",
+        "candidate_votes": "3578", "candidate_pct": "0.11", "total_office_votes": "3189323",
+    },
+]
+
+_CANDIDATE_ROWS = [
+    {
+        "candidate_id": "01020202", "candidate_name": "Amy Klobuchar",
+        "office_id": "0102", "office_title": "U.S. Senator",
+        "county_id": "88", "order_code": "02", "party": "DFL",
+    },
+    {
+        # County candidate — must be filtered out (office_id 0102 not present for this row).
+        "candidate_id": "99990101", "candidate_name": "County Commissioner Person",
+        "office_id": "9999", "office_title": "County Commissioner",
+        "county_id": "01", "order_code": "01", "party": "",
+    },
+]
+
+
+@pytest.mark.django_db
+def test_sync_mn_races_creates_election_race_and_in_scope_candidate_only():
+    with patch(
+        "integrations.mn_sos.tasks.MnSosClient.fetch_file_index",
+        return_value=_FILE_INDEX_HTML,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_file_index",
+        return_value=_IN_SCOPE_FILES + _OUT_OF_SCOPE_FILES,
+    ), patch(
+        "integrations.mn_sos.tasks.MnSosClient.fetch_file",
+        side_effect=lambda url: "fake text for " + url,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_result_file",
+        return_value=_SENATE_RESULT_ROWS,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_candidate_table",
+        return_value=_CANDIDATE_ROWS,
+    ):
+        result = sync_mn_races()
+
+    assert result["created"] >= 2  # 1 race + 1 candidate at minimum
+    election = Election.objects.get(source_id="mn_sos_2024_general")
+    assert election.state == "MN"
+
+    race = Race.objects.get(election=election, office_title="U.S. Senator")
+    assert race.source == "mn_sos"
+
+    candidate_names = set(Candidate.objects.filter(race=race).values_list("name", flat=True))
+    assert candidate_names == {"Amy Klobuchar"}  # county candidate excluded, write-in row excluded
+
+
+@pytest.mark.django_db
+def test_sync_mn_races_marks_disappeared_candidate_withdrawn():
+    with patch(
+        "integrations.mn_sos.tasks.MnSosClient.fetch_file_index",
+        return_value=_FILE_INDEX_HTML,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_file_index",
+        return_value=_IN_SCOPE_FILES,
+    ), patch(
+        "integrations.mn_sos.tasks.MnSosClient.fetch_file",
+        side_effect=lambda url: "fake text for " + url,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_result_file",
+        return_value=_SENATE_RESULT_ROWS,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_candidate_table",
+        return_value=_CANDIDATE_ROWS,
+    ):
+        sync_mn_races()
+
+    race = Race.objects.get(office_title="U.S. Senator")
+    Candidate.objects.create(race=race, name="Someone Who Withdrew", party="DFL")
+
+    with patch(
+        "integrations.mn_sos.tasks.MnSosClient.fetch_file_index",
+        return_value=_FILE_INDEX_HTML,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_file_index",
+        return_value=_IN_SCOPE_FILES,
+    ), patch(
+        "integrations.mn_sos.tasks.MnSosClient.fetch_file",
+        side_effect=lambda url: "fake text for " + url,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_result_file",
+        return_value=_SENATE_RESULT_ROWS,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_candidate_table",
+        return_value=_CANDIDATE_ROWS,
+    ):
+        sync_mn_races()
+
+    withdrawn = Candidate.objects.get(name="Someone Who Withdrew")
+    assert withdrawn.candidate_status == Candidate.CandidateStatus.WITHDRAWN
