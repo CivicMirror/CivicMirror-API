@@ -15,6 +15,8 @@ from results.adapters.nj_normalize import (
     ("DEM UNITED STATES SENATE", ("US_SENATE", "DEM")),
     ("REP UNITED STATES SENATE", ("US_SENATE", "REP")),
     ("Member of Congress - 1st Congressional District (DEM)", ("US_HOUSE_01", "DEM")),
+    ("DEM House of Representatives 2nd Congressional District", ("US_HOUSE_02", "DEM")),
+    ("REP House of Representatives 2nd Congressional District", ("US_HOUSE_02", "REP")),
 ])
 def test_normalize_office_real_variants(raw_title, expected):
     assert normalize_office(raw_title) == expected
@@ -27,6 +29,13 @@ def test_canonical_office_title_embeds_party_for_primary():
 
 def test_canonical_office_title_omits_party_for_general():
     assert canonical_office_title("US_SENATE", "") == "UNITED STATES SENATOR"
+
+
+def test_canonical_office_title_for_us_house_district():
+    title = canonical_office_title("US_HOUSE_02", "DEM")
+    assert "2" in title
+    assert "DISTRICT 2" in title
+    assert "(DEM PRIMARY)" in title
 
 
 @pytest.mark.parametrize("raw_name,expected", [

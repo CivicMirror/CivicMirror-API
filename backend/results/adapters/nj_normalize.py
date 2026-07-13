@@ -64,8 +64,15 @@ def normalize_office(raw_title: str) -> tuple[str, str]:
     if re.fullmatch(r'(US SENAT(OR|E)|UNITED STATES SENAT(OR|E))', norm):
         key = "US_SENATE"
     else:
+        # The digit precedes "CONGRESSIONAL DISTRICT" in every observed
+        # county format, but its position relative to the literal word
+        # "CONGRESS" varies:
+        #   "Member of Congress - 1st Congressional District"  (Burlington)
+        #   "House of Representatives 2nd Congressional District"  (Atlantic)
+        # so anchor on "CONGRESSIONAL DISTRICT" itself rather than requiring
+        # the digit to follow "CONGRESS".
         district_match = re.search(
-            r'CONGRESS.*?(\d+)(?:ST|ND|RD|TH)?\s*(?:CONGRESSIONAL)?\s*DISTRICT', norm,
+            r'(\d+)(?:ST|ND|RD|TH)?\s*CONGRESSIONAL\s*DISTRICT', norm,
         )
         if district_match:
             key = f"US_HOUSE_{int(district_match.group(1)):02d}"
@@ -82,7 +89,15 @@ def normalize_office(raw_title: str) -> tuple[str, str]:
 
 def canonical_office_title(canonical_key: str, party: str) -> str:
     """Human-readable Race.office_title for a canonical office key + party."""
-    base = _CANONICAL_DISPLAY_TITLES.get(canonical_key, canonical_key)
+    if canonical_key in _CANONICAL_DISPLAY_TITLES:
+        base = _CANONICAL_DISPLAY_TITLES[canonical_key]
+    elif canonical_key.startswith("US_HOUSE_"):
+        # e.g. "US_HOUSE_02" -> "U.S. HOUSE - DISTRICT 2" (leading zero
+        # stripped for display; the zero-padded key is kept for grouping).
+        district_num = int(canonical_key.removeprefix("US_HOUSE_"))
+        base = f"U.S. HOUSE - DISTRICT {district_num}"
+    else:
+        base = canonical_key
     if party:
         return f"{base} ({party} PRIMARY)"
     return base

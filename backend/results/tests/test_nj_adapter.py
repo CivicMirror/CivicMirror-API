@@ -120,6 +120,55 @@ def test_fetch_results_keeps_dem_and_rep_primaries_as_separate_races():
 
 
 @pytest.mark.django_db
+def test_fetch_results_includes_us_house_races_from_atlantic_real_fixture():
+    """
+    Regression test for the Critical review finding: Atlantic's real Clarity
+    contest titles are "DEM House of Representatives 2nd Congressional
+    District" / "REP House of Representatives 2nd Congressional District" —
+    the digit precedes "Congressional District" rather than following the
+    literal word "Congress" (contrast Burlington's "Member of Congress -
+    1st Congressional District"). normalize_office()'s district regex used
+    to require the digit to appear after "CONGRESS", which silently dropped
+    every US House race sourced from a county using this title format.
+    """
+    atlantic_payload = _load_json_fixture("nj_atlantic_summary.json")
+
+    election = Election.objects.create(
+        name="2026 New Jersey Primary",
+        election_date="2026-06-02",
+        election_type="primary",
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state="NJ",
+        source_id="civic_api_nj_2026_primary_5",
+        status=Election.Status.RESULTS_PENDING,
+        source_metadata={
+            "nj_county_urls": [
+                {"county": "Atlantic", "url": "https://results.enr.clarityelections.com/NJ/Atlantic/126380/", "election_id": "126380"},
+            ],
+        },
+    )
+
+    adapter = NewJerseyAdapter()
+    with patch(
+        "results.adapters.nj.proxy_get",
+        side_effect=_mock_proxy_get_for_counties({"Atlantic": atlantic_payload}),
+    ):
+        result = adapter.fetch_results(election.election_date, election.pk)
+
+    house_titles = {r.office_title for r in result.rows if "HOUSE" in (r.office_title or "")}
+    assert "U.S. HOUSE - DISTRICT 2 (DEM PRIMARY)" in house_titles
+    assert "U.S. HOUSE - DISTRICT 2 (REP PRIMARY)" in house_titles
+
+    dem_house_rows = [r for r in result.rows if r.office_title == "U.S. HOUSE - DISTRICT 2 (DEM PRIMARY)"]
+    dem_names = {r.candidate_name for r in dem_house_rows}
+    assert dem_names == {"ZACK MULLOCK", "BAYLY WINDER", "TIM ALEXANDER", "TERRI REESE"}
+
+    rep_house_rows = [r for r in result.rows if r.office_title == "U.S. HOUSE - DISTRICT 2 (REP PRIMARY)"]
+    van_drew_row = next(r for r in rep_house_rows if r.candidate_name == "JEFF VAN DREW")
+    assert van_drew_row.vote_count == 10528
+
+
+@pytest.mark.django_db
 def test_fetch_results_returns_empty_when_no_county_urls():
     election = Election.objects.create(
         name="2026 New Jersey Primary",

@@ -135,10 +135,13 @@ class NewJerseyAdapter(ClarityAdapter):
                 is_district_key = canonical_key.startswith("US_HOUSE_")
                 if canonical_key not in _STATEWIDE_OFFICE_KEYS and not is_district_key:
                     # Unrecognized office (e.g. a county-level row office like
-                    # SHERIFF or COUNTY CLERK) — out of scope for this adapter
-                    # (Federal + State only). Skip entirely rather than risk
-                    # fabricating a cross-county race out of coincidentally
-                    # matching normalized titles (see Task 7 review, issue 2).
+                    # SHERIFF or COUNTY CLERK, or a NJ State Senate/General
+                    # Assembly race — normalize_office() only recognizes
+                    # US_SENATE, GOVERNOR, and US_HOUSE_NN; state legislative
+                    # normalization is not implemented) — out of scope for
+                    # this adapter. Skip entirely rather than risk fabricating
+                    # a cross-county race out of coincidentally matching
+                    # normalized titles (see Task 7 review, issue 2).
                     continue
 
                 name = normalize_candidate_name(row.candidate_name or "")
