@@ -151,6 +151,7 @@ INSTALLED_APPS += [
     'integrations.ia_sos',
     'integrations.co_sos',
     'integrations.il_sbe',
+    'integrations.nj_elections',
     'integrations.va_elect',
     'integrations.ma_sos',
     'integrations.ca_sos',
