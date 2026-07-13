@@ -1,4 +1,7 @@
-from integrations.mn_sos.mappers import is_in_scope_file, is_write_in
+import datetime
+
+from elections.models import Election, Race
+from integrations.mn_sos.mappers import is_in_scope_file, is_write_in, map_candidate, map_election, map_race
 
 
 def test_is_in_scope_file_matches_confirmed_federal_state_labels():
@@ -39,12 +42,6 @@ def test_is_write_in_matches_9901_only():
     assert is_write_in("9901") is True
     assert is_write_in("0202") is False
     assert is_write_in("") is False
-
-
-import datetime
-
-from elections.models import Election, Race
-from integrations.mn_sos.mappers import map_candidate, map_election, map_race
 
 
 def test_map_election_returns_2024_general_poc_identity():
