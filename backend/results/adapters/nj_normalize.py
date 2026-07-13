@@ -100,6 +100,7 @@ def normalize_candidate_name(raw_name: str) -> str | None:
         name = " ".join(words[1:])
 
     collapsed = " ".join(name.split())
-    if collapsed.lower() in _NON_CANDIDATE_NAMES:
+    # Return None for empty results or known non-candidate bookkeeping rows
+    if not collapsed or collapsed.lower() in _NON_CANDIDATE_NAMES:
         return None
     return collapsed.upper()

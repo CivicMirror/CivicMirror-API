@@ -41,3 +41,13 @@ def test_normalize_candidate_name_real_variants(raw_name, expected):
 @pytest.mark.parametrize("raw_name", ["Write-in", "WRITE-IN", "Write-In", "Personal Choice"])
 def test_normalize_candidate_name_returns_none_for_bookkeeping_rows(raw_name):
     assert normalize_candidate_name(raw_name) is None
+
+
+@pytest.mark.parametrize("raw_name", [
+    "",           # Empty string
+    "   ",        # Whitespace-only
+    "DEM",        # Bare party token with nothing else
+])
+def test_normalize_candidate_name_returns_none_for_empty_or_bare_party(raw_name):
+    """Verify that empty strings and bare party tokens return None, not empty string."""
+    assert normalize_candidate_name(raw_name) is None
