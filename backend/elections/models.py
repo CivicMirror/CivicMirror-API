@@ -108,6 +108,7 @@ class Race(models.Model):
         GA_SOS = 'ga_sos', 'Georgia SOS'
         IL_SBE = 'il_sbe', 'Illinois SBE'
         MN_SOS = 'mn_sos', 'Minnesota SOS'
+        OR_SOS = 'or_sos', 'Oregon SOS'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'

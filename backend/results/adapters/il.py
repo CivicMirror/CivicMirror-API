@@ -37,8 +37,8 @@ from integrations.il_sbe.mappers import is_federal_or_state_office
 from integrations.il_sbe.parsers import parse_category_offices, parse_election_id_token
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
-from .registry import register
 from .il_aggregate import aggregate_csv_rows
+from .registry import register
 
 logger = logging.getLogger(__name__)
 

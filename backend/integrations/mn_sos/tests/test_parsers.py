@@ -1,6 +1,6 @@
 import os
 
-from integrations.mn_sos.parsers import parse_file_index, parse_candidate_table, parse_result_file
+from integrations.mn_sos.parsers import parse_candidate_table, parse_file_index, parse_result_file
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 

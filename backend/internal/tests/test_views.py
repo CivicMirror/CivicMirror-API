@@ -74,7 +74,7 @@ def test_sync_elections_no_token_configured(client):
     SCHEDULER_SA_EMAIL="cloudrun-runtime@project.iam.gserviceaccount.com",
 )
 def test_oidc_token_accepted(client):
-    """Cloud Scheduler OIDC JWT is accepted when shared secret is absent."""
+    """Optional Google OIDC JWT is accepted when shared secret is absent."""
     fake_payload = {
         "iss": "https://accounts.google.com",
         "email": "cloudrun-runtime@project.iam.gserviceaccount.com",
@@ -279,3 +279,40 @@ def test_sync_co_sos_idempotency(client, internal_token):
     assert second.json()["status"] == "already_running"
     mock_task.apply_async.assert_called_once()
 
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_or_sos_valid_token(client, internal_token):
+    with patch("internal.views.sync_or_elections") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "or-678"
+        mock_task.apply_async.return_value = mock_result
+        response = client.post(
+            "/internal/tasks/sync-or-sos/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert response.status_code == 202
+    assert response.json()["task_id"] == "or-678"
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_or_sos_idempotency(client, internal_token):
+    with patch("internal.views.sync_or_elections") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "or-678"
+        mock_task.apply_async.return_value = mock_result
+
+        first = client.post(
+            "/internal/tasks/sync-or-sos/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+        second = client.post(
+            "/internal/tasks/sync-or-sos/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert first.status_code == 202
+    assert first.json()["task_id"] == "or-678"
+    assert second.status_code == 202
+    assert second.json()["status"] == "already_running"
+    mock_task.apply_async.assert_called_once()
