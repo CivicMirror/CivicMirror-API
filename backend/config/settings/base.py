@@ -164,6 +164,7 @@ INSTALLED_APPS += [
     'integrations.tx_goelect',
     'integrations.fl_ew',
     'integrations.oh_sos',
+    'integrations.mn_sos',
     'internal',
     'api',
     'accounts',

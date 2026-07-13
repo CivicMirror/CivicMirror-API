@@ -1,0 +1,995 @@
+01010101;Donald J. Trump and JD Vance;0101;U.S. President & Vice President;88;01;R
+01010201;Kamala D. Harris and Tim Walz;0101;U.S. President & Vice President;88;02;DFL
+01010301;Chase Oliver and Mike ter Maat;0101;U.S. President & Vice President;88;03;LIB
+01010401;Robert F. Kennedy Jr. and Nicole Shanahan;0101;U.S. President & Vice President;88;04;WTP
+01010501;Jill Stein and Samson Kpadenou;0101;U.S. President & Vice President;88;05;G
+01010601;Claudia De la Cruz and Karina Garcia;0101;U.S. President & Vice President;88;06;SLP
+01010701;Rachele Fruit and Dennis Richter;0101;U.S. President & Vice President;88;07;SWP
+01010801;Cornel West and Melina Abdullah;0101;U.S. President & Vice President;88;08;JFA
+01010901;Shiva Ayyadurai and Crystal Ellis;0101;U.S. President & Vice President;88;09;IND
+01020301;Rebecca Whiting;0102;U.S. Senator;88;03;LIB
+01020202;Amy Klobuchar;0102;U.S. Senator;88;02;DFL
+01021303;Joyce Lynne Lacey;0102;U.S. Senator;88;13;IA
+01020104;Royce White;0102;U.S. Senator;88;01;R
+01040201;Rachel Bohman;0104;U.S. Representative District 1;88;02;DFL
+01040102;Brad Finstad;0104;U.S. Representative District 1;88;01;R
+01051101;Thomas William Bowman;0105;U.S. Representative District 2;88;11;CC
+01050102;Joe Teirab;0105;U.S. Representative District 2;88;01;R
+01050203;Angie Craig;0105;U.S. Representative District 2;88;02;DFL
+01060201;Kelly Morrison;0106;U.S. Representative District 3;88;02;DFL
+01060102;Tad Jude;0106;U.S. Representative District 3;88;01;R
+01070101;May Lor Xiong;0107;U.S. Representative District 4;88;01;R
+01070202;Betty McCollum;0107;U.S. Representative District 4;88;02;DFL
+01080101;Dalia Al-Aqidi;0108;U.S. Representative District 5;88;01;R
+01080202;Ilhan Omar;0108;U.S. Representative District 5;88;02;DFL
+01090101;Tom Emmer;0109;U.S. Representative District 6;88;01;R
+01090202;Jeanne Hendricks;0109;U.S. Representative District 6;88;02;DFL
+01100201;AJ (John) Peters;0110;U.S. Representative District 7;88;02;DFL
+01100102;Michelle Fischbach;0110;U.S. Representative District 7;88;01;R
+01110201;Jen Schultz;0111;U.S. Representative District 8;88;02;DFL
+01110102;Pete Stauber;0111;U.S. Representative District 8;88;01;R
+01650201;Ann Johnson Stewart;0165;State Senator District 45;88;02;DFL
+01650102;Kathleen Fowke;0165;State Senator District 45;88;01;R
+01880201;James Sceville;0188;State Representative District 1A;88;02;DFL
+01880102;John Burkel;0188;State Representative District 1A;88;01;R
+01890101;Steve Gander;0189;State Representative District 1B;88;01;R
+01890202;Mike Christopherson;0189;State Representative District 1B;88;02;DFL
+01900101;Bidal Duran Jr;0190;State Representative District 2A;88;01;R
+01900202;Reed Olson;0190;State Representative District 2A;88;02;DFL
+01910101;Matt Bliss;0191;State Representative District 2B;88;01;R
+01910202;Michael Reyes;0191;State Representative District 2B;88;02;DFL
+01920101;Roger J. Skraba;0192;State Representative District 3A;88;01;R
+01920202;Harley Droba;0192;State Representative District 3A;88;02;DFL
+01921203;Rich Tru;0192;State Representative District 3A;88;12;FPI
+01930101;Natalie Zeleznikar;0193;State Representative District 3B;88;01;R
+01930202;Mark Munger;0193;State Representative District 3B;88;02;DFL
+01940101;Joshua Zincke;0194;State Representative District 4A;88;01;R
+01940202;Heather M. Keeler;0194;State Representative District 4A;88;02;DFL
+01950101;Jim Joy;0195;State Representative District 4B;88;01;R
+01950202;Thaddeus Laugisch;0195;State Representative District 4B;88;02;DFL
+01960101;Krista Knudsen;0196;State Representative District 5A;88;01;R
+01960202;Brian Hobson;0196;State Representative District 5A;88;02;DFL
+01970101;Mike Wiener;0197;State Representative District 5B;88;01;R
+01970202;Gregg Hendrickson;0197;State Representative District 5B;88;02;DFL
+01980101;Ben Davis;0198;State Representative District 6A;88;01;R
+01980202;Earl Butenhoff;0198;State Representative District 6A;88;02;DFL
+01990101;Josh Heintzeman;0199;State Representative District 6B;88;01;R
+01990202;Emily LeClaire;0199;State Representative District 6B;88;02;DFL
+01991003;Troy Kenneth Scheffler;0199;State Representative District 6B;88;10;AF
+02000201;Aron Schnaser;0200;State Representative District 7A;88;02;DFL
+02000102;Spencer Igo;0200;State Representative District 7A;88;01;R
+02010101;Cal Warwas;0201;State Representative District 7B;88;01;R
+02010202;Lorrie Janatopoulos;0201;State Representative District 7B;88;02;DFL
+02020101;Mark McGrew;0202;State Representative District 8A;88;01;R
+02020202;Peter Johnson;0202;State Representative District 8A;88;02;DFL
+02030101;Shawn Savela;0203;State Representative District 8B;88;01;R
+02030202;Alicia (Liish) Kozlowski;0203;State Representative District 8B;88;02;DFL
+02040101;Jeff Backer;0204;State Representative District 9A;88;01;R
+02040202;Michael Ziomko;0204;State Representative District 9A;88;02;DFL
+02050201;Jason Satter;0205;State Representative District 9B;88;02;DFL
+02050102;Tom Murphy;0205;State Representative District 9B;88;01;R
+02060201;Julia Samsal Hipp;0206;State Representative District 10A;88;02;DFL
+02060102;Ron Kresha;0206;State Representative District 10A;88;01;R
+02070101;Isaac Schultz;0207;State Representative District 10B;88;01;R
+02070202;JoEllen Burns;0207;State Representative District 10B;88;02;DFL
+02080101;Jeff Dotseth;0208;State Representative District 11A;88;01;R
+02080202;Pete Radosevich;0208;State Representative District 11A;88;02;DFL
+02090101;Nathan Nelson;0209;State Representative District 11B;88;01;R
+02090202;Eric Olson;0209;State Representative District 11B;88;02;DFL
+02100201;Becky K. Parker;0210;State Representative District 12A;88;02;DFL
+02100102;Paul H. Anderson;0210;State Representative District 12A;88;01;R
+02110101;Mary Franson;0211;State Representative District 12B;88;01;R
+02110202;Judd Hoff;0211;State Representative District 12B;88;02;DFL
+02120101;Lisa Demuth;0212;State Representative District 13A;88;01;R
+02120202;Cindy Aho;0212;State Representative District 13A;88;02;DFL
+02130101;Tim O'Driscoll;0213;State Representative District 13B;88;01;R
+02130202;Dusty Bolstad;0213;State Representative District 13B;88;02;DFL
+02140101;Bernie Perryman;0214;State Representative District 14A;88;01;R
+02140202;Abdi Daisane;0214;State Representative District 14A;88;02;DFL
+02150201;Dan Wolgamott;0215;State Representative District 14B;88;02;DFL
+02150102;Sue Ek;0215;State Representative District 14B;88;01;R
+02160101;Chris Swedzinski;0216;State Representative District 15A;88;01;R
+02160202;Anthony M Studemann;0216;State Representative District 15A;88;02;DFL
+02170101;Paul Torkelson;0217;State Representative District 15B;88;01;R
+02170202;Tom Kuster;0217;State Representative District 15B;88;02;DFL
+02180101;Scott Van Binsbergen;0218;State Representative District 16A;88;01;R
+02180202;Kathy Hegstad;0218;State Representative District 16A;88;02;DFL
+02190201;Josiah Ampian;0219;State Representative District 16B;88;02;DFL
+02190102;Dave Baker;0219;State Representative District 16B;88;01;R
+02200101;Dawn Gillman;0220;State Representative District 17A;88;01;R
+02200202;Chad Tschimperle;0220;State Representative District 17A;88;02;DFL
+02210201;Jennifer Nuesse;0221;State Representative District 17B;88;02;DFL
+02210102;Bobbie Harder;0221;State Representative District 17B;88;01;R
+02220201;Jeff Brand;0222;State Representative District 18A;88;02;DFL
+02220102;Erica Schwartz;0222;State Representative District 18A;88;01;R
+02230101;Dar Vosburg;0223;State Representative District 18B;88;01;R
+02230202;Luke Frederick;0223;State Representative District 18B;88;02;DFL
+02240101;Keith Allen;0224;State Representative District 19A;88;01;R
+02240202;Jessica Navarro;0224;State Representative District 19A;88;02;DFL
+02250101;Thomas J. Sexton;0225;State Representative District 19B;88;01;R
+02250202;Edelgard Fernandez Mejia;0225;State Representative District 19B;88;02;DFL
+02260101;Pam Altendorf;0226;State Representative District 20A;88;01;R
+02260202;Heather Arndt;0226;State Representative District 20A;88;02;DFL
+02270201;Michael Hutchinson;0227;State Representative District 20B;88;02;DFL
+02270102;Steven E Jacob;0227;State Representative District 20B;88;01;R
+02281301;Creedence Matthew Petroff;0228;State Representative District 21A;88;13;IA
+02280102;Joe Schomacker;0228;State Representative District 21A;88;01;R
+02290101;Marj J Fogelman;0229;State Representative District 21B;88;01;R
+02290202;Jon Wilson;0229;State Representative District 21B;88;02;DFL
+02300101;Bjorn Olson;0230;State Representative District 22A;88;01;R
+02300202;Marisa Ulmen;0230;State Representative District 22A;88;02;DFL
+02310201;Sara Nett-Torgrimson;0231;State Representative District 22B;88;02;DFL
+02310102;Terry M. Stier;0231;State Representative District 22B;88;01;R
+02320201;Joe Staloch;0232;State Representative District 23A;88;02;DFL
+02320102;Peggy Bennett;0232;State Representative District 23A;88;01;R
+02330101;Patricia Mueller;0233;State Representative District 23B;88;01;R
+02330202;Joseph Pacovsky;0233;State Representative District 23B;88;02;DFL
+02340201;Heather Holmes;0234;State Representative District 24A;88;02;DFL
+02340102;Duane Quam;0234;State Representative District 24A;88;01;R
+02350101;Dan Sepeda;0235;State Representative District 24B;88;01;R
+02350202;Tina Liebling;0235;State Representative District 24B;88;02;DFL
+02360101;Ken Navitsky;0236;State Representative District 25A;88;01;R
+02360202;Kim Hicks;0236;State Representative District 25A;88;02;DFL
+02370201;Andy Smith;0237;State Representative District 25B;88;02;DFL
+02370102;Wes Lund;0237;State Representative District 25B;88;01;R
+02380101;Aaron Repinski;0238;State Representative District 26A;88;01;R
+02380202;Sarah Kruger;0238;State Representative District 26A;88;02;DFL
+02390101;Gregory M. Davids;0239;State Representative District 26B;88;01;R
+02390202;Allie Wolf;0239;State Representative District 26B;88;02;DFL
+02400201;Kathryn A. Geary;0240;State Representative District 27A;88;02;DFL
+02400102;Shane Mekeland;0240;State Representative District 27A;88;01;R
+02410101;Bryan Lawrence;0241;State Representative District 27B;88;01;R
+02410202;Andrew Scouten;0241;State Representative District 27B;88;02;DFL
+02420101;James "Jimmy" Gordon;0242;State Representative District 28A;88;01;R
+02420202;Tim Dummer;0242;State Representative District 28A;88;02;DFL
+02430101;Max Rymer;0243;State Representative District 28B;88;01;R
+02430202;Mary J Murphy;0243;State Representative District 28B;88;02;DFL
+02440101;Joe McDonald;0244;State Representative District 29A;88;01;R
+02440202;Chris Brazelton;0244;State Representative District 29A;88;02;DFL
+02450101;Marion (O'Neill) Rarick;0245;State Representative District 29B;88;01;R
+02450202;Colton Kratky;0245;State Representative District 29B;88;02;DFL
+02460201;Sonja Buckmeier;0246;State Representative District 30A;88;02;DFL
+02460102;Walter Hudson;0246;State Representative District 30A;88;01;R
+02470101;Paul Novotny;0247;State Representative District 30B;88;01;R
+02470202;Paul Bolin;0247;State Representative District 30B;88;02;DFL
+02480201;Dara Grimmer;0248;State Representative District 31A;88;02;DFL
+02480102;Harry Niska;0248;State Representative District 31A;88;01;R
+02490201;Gadisa Berkessa;0249;State Representative District 31B;88;02;DFL
+02490102;Peggy Scott;0249;State Representative District 31B;88;01;R
+02500101;Nolan West;0250;State Representative District 32A;88;01;R
+02500202;Ashton Ramsammy;0250;State Representative District 32A;88;02;DFL
+02510101;Alex Moe;0251;State Representative District 32B;88;01;R
+02510202;Matt Norris;0251;State Representative District 32B;88;02;DFL
+02520101;Patti Anderson;0252;State Representative District 33A;88;01;R
+02520202;Jake Ross;0252;State Representative District 33A;88;02;DFL
+02530101;Jessica L. Johnson;0253;State Representative District 33B;88;01;R
+02530202;Josiah Hill;0253;State Representative District 33B;88;02;DFL
+02540101;Danny Nadeau;0254;State Representative District 34A;88;01;R
+02540202;Brian Raines;0254;State Representative District 34A;88;02;DFL
+02550201;Melissa Hortman;0255;State Representative District 34B;88;02;DFL
+02550102;Scott Simmons;0255;State Representative District 34B;88;01;R
+02560201;Zack Stephenson;0256;State Representative District 35A;88;02;DFL
+02560102;Josh Jungling;0256;State Representative District 35A;88;01;R
+02570101;Steve Pape;0257;State Representative District 35B;88;01;R
+02570202;Kari Rehrauer;0257;State Representative District 35B;88;02;DFL
+02580101;Elliott Engen;0258;State Representative District 36A;88;01;R
+02580202;Janelle Calhoun;0258;State Representative District 36A;88;02;DFL
+02590201;Brion Curran;0259;State Representative District 36B;88;02;DFL
+02590102;Patty Bradway;0259;State Representative District 36B;88;01;R
+02600201;Laurie Wolfe;0260;State Representative District 37A;88;02;DFL
+02600102;Kristin Robbins;0260;State Representative District 37A;88;01;R
+02610201;Kristin Bahner;0261;State Representative District 37B;88;02;DFL
+02610102;John R. Bristol;0261;State Representative District 37B;88;01;R
+02620101;Brad Olson;0262;State Representative District 38A;88;01;R
+02620202;Huldah Hiltsley;0262;State Representative District 38A;88;02;DFL
+02630201;Samantha Vang;0263;State Representative District 38B;88;02;DFL
+02630102;Robert Marvin;0263;State Representative District 38B;88;01;R
+02640101;Rod Sylvester;0264;State Representative District 39A;88;01;R
+02640202;Erin Koegel;0264;State Representative District 39A;88;02;DFL
+02650101;Kt Jacobs;0265;State Representative District 39B;88;01;R
+02650202;Sandra Feist;0265;State Representative District 39B;88;02;DFL
+02660201;Kelly Moller;0266;State Representative District 40A;88;02;DFL
+02670201;Curtis Johnson;0267;State Representative District 40B;88;02;DFL
+02670102;Paul Wikstrom;0267;State Representative District 40B;88;01;R
+02680101;Wayne A Johnson;0268;State Representative District 41A;88;01;R
+02680202;Lucia Wroblewski;0268;State Representative District 41A;88;02;DFL
+02690201;Jen Fox;0269;State Representative District 41B;88;02;DFL
+02690102;Tom Dippel;0269;State Representative District 41B;88;01;R
+02700101;Kathy Burkett;0270;State Representative District 42A;88;01;R
+02700202;Ned Carroll;0270;State Representative District 42A;88;02;DFL
+02710101;Perry Nouis;0271;State Representative District 42B;88;01;R
+02710202;Ginny Klevorn;0271;State Representative District 42B;88;02;DFL
+02720201;Cedrick B. Frazier;0272;State Representative District 43A;88;02;DFL
+02720102;Todd Hesemann;0272;State Representative District 43A;88;01;R
+02730201;Mike Freiberg;0273;State Representative District 43B;88;02;DFL
+02730102;Steve Merriman;0273;State Representative District 43B;88;01;R
+02740201;Peter M Fischer;0274;State Representative District 44A;88;02;DFL
+02740102;Karla J. Nelson;0274;State Representative District 44A;88;01;R
+02750301;TJ Hawthorne;0275;State Representative District 44B;88;03;LIB
+02750202;Leon M. Lillie;0275;State Representative District 44B;88;02;DFL
+02750103;Bill Dahn;0275;State Representative District 44B;88;01;R
+02760101;Andrew Myers;0276;State Representative District 45A;88;01;R
+02760202;Tracey Breazeale;0276;State Representative District 45A;88;02;DFL
+02770201;Patty Acomb;0277;State Representative District 45B;88;02;DFL
+02780101;John Nagel;0278;State Representative District 46A;88;01;R
+02780202;Larry Kraft;0278;State Representative District 46A;88;02;DFL
+02790101;Kim Rich;0279;State Representative District 46B;88;01;R
+02790202;Cheryl Youakim;0279;State Representative District 46B;88;02;DFL
+02800101;Teresa Whitson;0280;State Representative District 47A;88;01;R
+02800202;Amanda Hemmingsen-Jaeger;0280;State Representative District 47A;88;02;DFL
+02810101;Dwight Dorau;0281;State Representative District 47B;88;01;R
+02810202;Ethan Cha;0281;State Representative District 47B;88;02;DFL
+02820101;Jim Nash;0282;State Representative District 48A;88;01;R
+02820202;Nathan Kells;0282;State Representative District 48A;88;02;DFL
+02830101;Caleb Steffenhagen;0283;State Representative District 48B;88;01;R
+02830202;Lucille "Lucy" Rehm;0283;State Representative District 48B;88;02;DFL
+02840201;Alex Falconer;0284;State Representative District 49A;88;02;DFL
+02840102;Stacy L. Bettison;0284;State Representative District 49A;88;01;R
+02850201;Carlie Kotyza-Witthuhn;0285;State Representative District 49B;88;02;DFL
+02850102;Wendi Russo;0285;State Representative District 49B;88;01;R
+02860201;Julie Greene;0286;State Representative District 50A;88;02;DFL
+02860102;Owen Michaelson;0286;State Representative District 50A;88;01;R
+02870201;Steve Elkins;0287;State Representative District 50B;88;02;DFL
+02870102;Bob Gust;0287;State Representative District 50B;88;01;R
+02880201;Michael Howard;0288;State Representative District 51A;88;02;DFL
+02880102;Jeffrey Thompson;0288;State Representative District 51A;88;01;R
+02890201;Nathan Coulter;0289;State Representative District 51B;88;02;DFL
+02890102;Lion Dale Johnson;0289;State Representative District 51B;88;01;R
+02900101;Diane Anderson;0290;State Representative District 52A;88;01;R
+02900202;Liz Reyer;0290;State Representative District 52A;88;02;DFL
+02910201;Bianca Virnig;0291;State Representative District 52B;88;02;DFL
+02910102;Douglas Willetts;0291;State Representative District 52B;88;01;R
+02920201;Mary Frances Clardy;0292;State Representative District 53A;88;02;DFL
+02920102;Nathan Herschbach;0292;State Representative District 53A;88;01;R
+02930101;Aaron M. Brooksby;0293;State Representative District 53B;88;01;R
+02930202;Rick Hansen;0293;State Representative District 53B;88;02;DFL
+02940101;Aaron Paul;0294;State Representative District 54A;88;01;R
+02940202;Brad Tabke;0294;State Representative District 54A;88;02;DFL
+02950101;Ben Bakeberg;0295;State Representative District 54B;88;01;R
+02950202;Jean Lee;0295;State Representative District 54B;88;02;DFL
+02960101;Gabriela Kroetch;0296;State Representative District 55A;88;01;R
+02960202;Jessica Hanson;0296;State Representative District 55A;88;02;DFL
+02970101;Van Holston;0297;State Representative District 55B;88;01;R
+02970202;Kaela Berg;0297;State Representative District 55B;88;02;DFL
+02980101;Angela Zorn;0298;State Representative District 56A;88;01;R
+02980202;Robert Bierman;0298;State Representative District 56A;88;02;DFL
+02990201;John Huot;0299;State Representative District 56B;88;02;DFL
+02990102;Angeline Anderson;0299;State Representative District 56B;88;01;R
+03000101;Jon Koznick;0300;State Representative District 57A;88;01;R
+03000202;Veda Kanitz;0300;State Representative District 57A;88;02;DFL
+03010101;Jeff Witte;0301;State Representative District 57B;88;01;R
+03010202;Brian Cohn;0301;State Representative District 57B;88;02;DFL
+03020101;Rita Hillmann Olson;0302;State Representative District 58A;88;01;R
+03020202;Kristi Pursell;0302;State Representative District 58A;88;02;DFL
+03030201;Ian English;0303;State Representative District 58B;88;02;DFL
+03030102;Drew Roach;0303;State Representative District 58B;88;01;R
+03040201;Fue Lee;0304;State Representative District 59A;88;02;DFL
+03050201;Esther Agbaje;0305;State Representative District 59B;88;02;DFL
+03050102;Kenneth Smoron;0305;State Representative District 59B;88;01;R
+03060101;Mary Holmberg;0306;State Representative District 60A;88;01;R
+03060202;Sydney Jordan;0306;State Representative District 60A;88;02;DFL
+03070101;Abigail Wolters;0307;State Representative District 60B;88;01;R
+03070202;Mohamud Noor;0307;State Representative District 60B;88;02;DFL
+03080501;Toya López;0308;State Representative District 61A;88;05;G
+03080202;Katie Jones;0308;State Representative District 61A;88;02;DFL
+03090101;Bob "Again" Carney Jr;0309;State Representative District 61B;88;01;R
+03090202;Jamie Long;0309;State Representative District 61B;88;02;DFL
+03100101;Alexandra (ZaZa) Hoffman Novick;0310;State Representative District 62A;88;01;R
+03100202;Aisha Gomez;0310;State Representative District 62A;88;02;DFL
+03110101;Bob Sullentrop;0311;State Representative District 62B;88;01;R
+03110202;Anquam Mahamoud;0311;State Representative District 62B;88;02;DFL
+03120201;Samantha Sencer-Mura;0312;State Representative District 63A;88;02;DFL
+03130101;Diane Napper;0313;State Representative District 63B;88;01;R
+03130202;Emma Greenman;0313;State Representative District 63B;88;02;DFL
+03140201;Kaohly Vang Her;0314;State Representative District 64A;88;02;DFL
+03140102;Dan Walsh;0314;State Representative District 64A;88;01;R
+03150201;Dave Pinto;0315;State Representative District 64B;88;02;DFL
+03150102;Peter Donahue;0315;State Representative District 64B;88;01;R
+03160201;Samakab Hussein;0316;State Representative District 65A;88;02;DFL
+03170201;María Isa Pérez-Vega;0317;State Representative District 65B;88;02;DFL
+03170102;Mike Hilborn;0317;State Representative District 65B;88;01;R
+03180101;Fadil Jama;0318;State Representative District 66A;88;01;R
+03180202;Leigh Finke;0318;State Representative District 66A;88;02;DFL
+03190201;Athena Hollins;0319;State Representative District 66B;88;02;DFL
+03190102;Greg Copeland;0319;State Representative District 66B;88;01;R
+03200101;Scott Hesselgrave;0320;State Representative District 67A;88;01;R
+03200202;Liz Lee;0320;State Representative District 67A;88;02;DFL
+03210201;Jay Xiong;0321;State Representative District 67B;88;02;DFL
+03210102;Sharon Anderson;0321;State Representative District 67B;88;01;R
+03919001;John Heinrich;0391;Special Election for County Commissioner District 1;02;90;NP
+03919001;Craig Gaasvig;0391;County Commissioner District 1;04;90;NP
+03919001;Scott Johnson;0391;County Commissioner District 1;05;90;NP
+03919001;Caleb Dunlap;0391;County Commissioner District 1;09;90;NP
+03919001;Greg Boe;0391;County Commissioner District 1;10;90;NP
+03919001;Paul Krabbenhoft;0391;County Commissioner District 1;14;90;NP
+03919001;Paul Koering;0391;County Commissioner District 1;18;90;NP
+03919001;John Allen;0391;County Commissioner District 1;20;90;NP
+03919001;Jeff Way;0391;County Commissioner District 1;21;90;NP
+03919001;Gertrude Paschke;0391;County Commissioner District 1;22;90;NP
+03919001;Brad Edwin;0391;County Commissioner District 1;24;90;NP
+03919001;Linda Flanders;0391;County Commissioner District 1;25;90;NP
+03919001;Troy Johnson;0391;County Commissioner District 1;26;90;NP
+03919001;Gulled Ahmed Badel;0391;County Commissioner District 1;27;90;NP
+03919001;Cindy Wright;0391;County Commissioner District 1;28;90;NP
+03919001;Alan Duff;0391;County Commissioner District 1;30;90;NP
+03919001;Scott McClure;0391;County Commissioner District 1;32;90;NP
+03919001;Brad J Johnson;0391;County Commissioner District 1;35;90;NP
+03919001;Elizabeth (Liz) Krocak;0391;County Commissioner District 1;40;90;NP
+03919001;Corey Sik;0391;County Commissioner District 1;41;90;NP
+03919001;Nathan Schmalz;0391;County Commissioner District 1;43;90;NP
+03919001;Darvin Schoenborn;0391;County Commissioner District 1;44;90;NP
+03919001;Kevin Kristenson;0391;County Commissioner District 1;46;90;NP
+03919001;Genny Reynolds;0391;County Commissioner District 1;48;90;NP
+03919001;Mike LeMieur;0391;County Commissioner District 1;49;90;NP
+03919001;John Mueller;0391;County Commissioner District 1;50;90;NP
+03919001;Loy Woelber;0391;County Commissioner District 1;51;90;NP
+03919001;Justin J Ahlers;0391;County Commissioner District 1;53;90;NP
+03919001;Randal Gorder;0391;County Commissioner District 1;54;90;NP
+03919001;Laurel Podulke-Smith;0391;County Commissioner District 1;55;90;NP
+03919001;Seth R. Nelson;0391;County Commissioner District 1;57;90;NP
+03919001;Luke Johnson;0391;County Commissioner District 1;59;90;NP
+03919001;Paul Reese;0391;County Commissioner District 1;60;90;NP
+03919001;Tara Jebens-Singh;0391;County Commissioner District 1;62;90;NP
+03919001;Rick Wakefield;0391;County Commissioner District 1;64;90;NP
+03919001;Robert M Wright;0391;County Commissioner District 1;65;90;NP
+03919001;Erik Sahlin;0391;County Commissioner District 1;66;90;NP
+03919001;Gary Overgaard;0391;County Commissioner District 1;67;90;NP
+03919001;Joe Wagner;0391;County Commissioner District 1;70;90;NP
+03919001;Andrew Hulse;0391;County Commissioner District 1;71;90;NP
+03919001;Gary Hendrickx;0391;County Commissioner District 1;76;90;NP
+03919001;Barbara Becker;0391;County Commissioner District 1;77;90;NP
+03919001;Chad Edward Metz;0391;County Commissioner District 1;78;90;NP
+03919001;Robert Walkes;0391;County Commissioner District 1;79;90;NP
+03919001;John Donahue;0391;County Commissioner District 1;81;90;NP
+03919001;Fran Miron;0391;County Commissioner District 1;82;90;NP
+03919001;Jim Pettersen;0391;County Commissioner District 1;83;90;NP
+03919001;Eric P. Klindt;0391;County Commissioner District 1;84;90;NP
+03919002;Sarah Plante Buhs;0391;County Commissioner District 1;09;90;NP
+03919002;Lisa Anderson;0391;County Commissioner District 1;10;90;NP
+03919002;John L Roper;0391;County Commissioner District 1;22;90;NP
+03919002;Julie D. Ackland;0391;County Commissioner District 1;24;90;NP
+03919002;John Kreft;0391;County Commissioner District 1;26;90;NP
+03919002;Jeffrey Lunde;0391;County Commissioner District 1;27;90;NP
+03919002;Rick Schneider;0391;County Commissioner District 1;30;90;NP
+03919002;Dennis Tietz;0391;County Commissioner District 1;40;90;NP
+03919002;Micheal Anderson;0391;County Commissioner District 1;46;90;NP
+03919002;René Krousey;0391;County Commissioner District 1;49;90;NP
+03919002;Craig Carlson;0391;County Commissioner District 1;65;90;NP
+03919002;Jim Purfeerst;0391;County Commissioner District 1;66;90;NP
+03919002;Barb Weckman Brekke;0391;County Commissioner District 1;70;90;NP
+03919002;John Holtz;0391;County Commissioner District 1;76;90;NP
+03919002;Sharon Thiel;0391;County Commissioner District 1;77;90;NP
+03919002;Todd Johnson;0391;County Commissioner District 1;78;90;NP
+03919002;Douglas Christopherson;0391;County Commissioner District 1;81;90;NP
+03919003;Betsy O'Berry;0391;Special Election for County Commissioner District 1;02;90;NP
+03919003;Scot Umlauf;0391;County Commissioner District 1;21;90;NP
+03919003;Kent Bargfrede;0391;County Commissioner District 1;32;90;NP
+03919003;Timothy Oistad;0391;County Commissioner District 1;54;90;NP
+03919001;David Borchert;0391;County Commissioner District 1;08;90;NP
+03919001;Mitch Lentz;0391;County Commissioner District 1;23;90;NP
+03919001;Jill Kemen;0391;County Commissioner District 1;37;90;NP
+03919001;Dan Bucholz;0391;County Commissioner District 1;56;90;NP
+03919002;Todd Patzer;0391;County Commissioner District 1;37;90;NP
+03929001;Joe Gould;0392;County Commissioner District 2;04;90;NP
+03929001;Vance Stuehrenberg;0392;County Commissioner District 2;07;90;NP
+03929001;Robert Kangas;0392;County Commissioner District 2;11;90;NP
+03929001;Kurt Stranberg;0392;County Commissioner District 2;12;90;NP
+03929001;Ezra Baer;0392;County Commissioner District 2;14;90;NP
+03929001;Garry Gamble;0392;County Commissioner District 2;16;90;NP
+03929001;Kevin Stevens;0392;County Commissioner District 2;17;90;NP
+03929001;Charlene Christenson;0392;County Commissioner District 2;29;90;NP
+03929001;Terry Snyder;0392;County Commissioner District 2;31;90;NP
+03929001;Steven J. Gardner;0392;County Commissioner District 2;34;90;NP
+03929001;Theresia Gillie;0392;County Commissioner District 2;35;90;NP
+03929001;Derrick "Rick" Goutermont;0392;County Commissioner District 2;38;90;NP
+03929001;Cody Hasbargen;0392;County Commissioner District 2;39;90;NP
+03929001;Todd Draper;0392;County Commissioner District 2;42;90;NP
+03929001;Rolland Miller;0392;County Commissioner District 2;45;90;NP
+03929001;Steve Reinartz;0392;County Commissioner District 2;50;90;NP
+03929001;Nicole Helget;0392;County Commissioner District 2;52;90;NP
+03929001;David S. Sorenson;0392;County Commissioner District 2;57;90;NP
+03929001;Gordon Wagner;0392;County Commissioner District 2;61;90;NP
+03929001;Mary Jo McGuire;0392;County Commissioner District 2;62;90;NP
+03929001;Andy Moran;0392;County Commissioner District 2;63;90;NP
+03929001;Galen Malecha;0392;County Commissioner District 2;66;90;NP
+03929001;Jack Swanson;0392;County Commissioner District 2;68;90;NP
+03929001;Joe Perske;0392;County Commissioner District 2;73;90;NP
+03929001;Bryan Winkels;0392;County Commissioner District 2;80;90;NP
+03929001;Brian W. Harguth;0392;County Commissioner District 2;81;90;NP
+03929001;Darek Vetsch;0392;County Commissioner District 2;86;90;NP
+03929002;Adam J. Bommersbach;0392;County Commissioner District 2;04;90;NP
+03929002;Ed Moran;0392;County Commissioner District 2;49;90;NP
+03929002;Polly Glynn;0392;County Commissioner District 2;50;90;NP
+03929002;Trevor J. Humphrey;0392;County Commissioner District 2;51;90;NP
+03929002;Jerry Theisen;0392;County Commissioner District 2;73;90;NP
+03929002;Michael Weyer;0392;County Commissioner District 2;80;90;NP
+03929003;Waylin Olson;0392;County Commissioner District 2;35;90;NP
+03929003;Hasten Warnberg;0392;County Commissioner District 2;49;90;NP
+03929003;Mark K. Carlson;0392;County Commissioner District 2;51;90;NP
+03929004;Bryan Ramsrud;0392;County Commissioner District 2;15;90;NP
+03929005;Greg Scherzer;0392;County Commissioner District 2;15;90;NP
+03929001;Laurie Ann Westerlund;0392;County Commissioner District 2;01;90;NP
+03929001;Cheryl VanOrt;0392;County Commissioner District 2;47;90;NP
+03929001;Patrick Boyle;0392;County Commissioner District 2;69;90;NP
+03939001;Scott Winger;0393;County Commissioner District 3;04;90;NP
+03939001;Edie Barrett;0393;County Commissioner District 3;06;90;NP
+03939001;Mark Piepho;0393;County Commissioner District 3;07;90;NP
+03939001;Thomas R. Proulx;0393;County Commissioner District 3;09;90;NP
+03939001;John Peter Mihajlov;0393;County Commissioner District 3;10;90;NP
+03939001;Rusty Lilyquist;0393;County Commissioner District 3;11;90;NP
+03939001;David Nordaune;0393;County Commissioner District 3;12;90;NP
+03939001;Jerry L. Rapp;0393;County Commissioner District 3;21;90;NP
+03939001;William (Bill) Groskreutz Jr;0393;County Commissioner District 3;22;90;NP
+03939001;Lawrence Hindt;0393;County Commissioner District 3;23;90;NP
+03939001;Lukas Severson;0393;County Commissioner District 3;24;90;NP
+03939001;Todd O. Greseth;0393;County Commissioner District 3;25;90;NP
+03939001;Paul "PK" Hedstrom;0393;County Commissioner District 3;26;90;NP
+03939001;Kurt W Zehnder;0393;County Commissioner District 3;28;90;NP
+03939001;Steve Westerberg;0393;County Commissioner District 3;30;90;NP
+03939001;Adam McIntyre;0393;County Commissioner District 3;36;90;NP
+03939001;John King;0393;County Commissioner District 3;40;90;NP
+03939001;Dean Nielsen;0393;County Commissioner District 3;41;90;NP
+03939001;Paul Wright;0393;County Commissioner District 3;43;90;NP
+03939001;Joe Loughmiller;0393;County Commissioner District 3;46;90;NP
+03939001;Jeremy J. Pekula;0393;County Commissioner District 3;49;90;NP
+03939001;Jean Johnson;0393;County Commissioner District 3;53;90;NP
+03939001;April Sutor;0393;County Commissioner District 3;55;90;NP
+03939001;Roger Nelson;0393;County Commissioner District 3;58;90;NP
+03939001;Dallas Roskamp;0393;County Commissioner District 3;59;90;NP
+03939001;Gary C. Willhite;0393;County Commissioner District 3;60;90;NP
+03939001;Paul Gerde;0393;County Commissioner District 3;61;90;NP
+03939001;Jackie Edwards;0393;County Commissioner District 3;65;90;NP
+03939001;Greg Burger;0393;County Commissioner District 3;67;90;NP
+03939001;Jody L. Brennan;0393;County Commissioner District 3;70;90;NP
+03939001;Fred Latzke JR;0393;County Commissioner District 3;72;90;NP
+03939001;Josh Prokopec;0393;County Commissioner District 3;74;90;NP
+03939001;Charles O'Keefe;0393;County Commissioner District 3;75;90;NP
+03939001;Peter Peterson;0393;County Commissioner District 3;76;90;NP
+03939001;Bob Byers;0393;County Commissioner District 3;77;90;NP
+03939001;Mark Gail;0393;County Commissioner District 3;78;90;NP
+03939001;Eugene Brent McNallan;0393;County Commissioner District 3;79;90;NP
+03939001;Bethany Cox;0393;County Commissioner District 3;82;90;NP
+03939001;Jim Branstad;0393;County Commissioner District 3;83;90;NP
+03939001;Jon Braton Sr.;0393;County Commissioner District 3;84;90;NP
+03939001;Josh Elsing;0393;County Commissioner District 3;85;90;NP
+03939001;Troy Bruflat;0393;County Commissioner District 3;87;90;NP
+03939002;Kari Howe;0393;County Commissioner District 3;04;90;NP
+03939002;William "Bill" Thyne;0393;County Commissioner District 3;06;90;NP
+03939002;Ross E. Arneson;0393;County Commissioner District 3;07;90;NP
+03939002;Orry Trisco;0393;County Commissioner District 3;21;90;NP
+03939002;Ken Johnson;0393;County Commissioner District 3;26;90;NP
+03939002;George E Carlson;0393;County Commissioner District 3;30;90;NP
+03939002;Doyle Benson;0393;County Commissioner District 3;43;90;NP
+03939002;Michael Schutz;0393;County Commissioner District 3;46;90;NP
+03939002;Diana Klages;0393;County Commissioner District 3;48;90;NP
+03939002;Randy H. Winscher;0393;County Commissioner District 3;49;90;NP
+03939002;Bob Paplow;0393;County Commissioner District 3;53;90;NP
+03939002;Terry Lovgren;0393;County Commissioner District 3;58;90;NP
+03939002;Greg Mertens;0393;County Commissioner District 3;65;90;NP
+03939002;Lyle W. Grochow;0393;County Commissioner District 3;72;90;NP
+03939002;Rick A. Gnemi;0393;County Commissioner District 3;74;90;NP
+03939002;Ron Staples;0393;County Commissioner District 3;75;90;NP
+03939002;Scott Schultz;0393;County Commissioner District 3;78;90;NP
+03939002;Donald S springer;0393;County Commissioner District 3;79;90;NP
+03939002;Mitch Kling;0393;County Commissioner District 3;87;90;NP
+03939003;Matt Udermann;0393;County Commissioner District 3;10;90;NP
+03939003;Karen Goodenough;0393;County Commissioner District 3;11;90;NP
+03939003;Gerald A. Wolf;0393;County Commissioner District 3;23;90;NP
+03939003;Gregg Wright;0393;County Commissioner District 3;55;90;NP
+03939003;Mark Wiens;0393;County Commissioner District 3;82;90;NP
+03939004;Jay Munson;0393;County Commissioner District 3;48;90;NP
+03939001;Scott A Windschitl;0393;County Commissioner District 3;08;90;NP
+03939001;Paul M. Zahrbock;0393;County Commissioner District 3;37;90;NP
+03939001;Paul M Johnson;0393;County Commissioner District 3;47;90;NP
+03939001;Kurt A. Mortenson;0393;County Commissioner District 3;56;90;NP
+03939001;Ashley Grimm;0393;County Commissioner District 3;69;90;NP
+03939002;Terry L Mackner;0393;County Commissioner District 3;03;90;NP
+03939002;Greg Thole;0393;County Commissioner District 3;37;90;NP
+03939002;Greg Anderson;0393;County Commissioner District 3;56;90;NP
+03939002;Janet Kennedy;0393;County Commissioner District 3;69;90;NP
+03939003;Phil Hansen;0393;County Commissioner District 3;03;90;NP
+03949001;Frank Duresky;0394;County Commissioner District 4;04;90;NP
+03949001;Jared J Gapinski;0394;County Commissioner District 4;05;90;NP
+03949001;Kelsey J Stock;0394;County Commissioner District 4;06;90;NP
+03949001;Bill Pauling;0394;County Commissioner District 4;12;90;NP
+03949001;Ann Sullivan;0394;County Commissioner District 4;16;90;NP
+03949001;Richard Gisch;0394;County Commissioner District 4;17;90;NP
+03949001;Bill Droste;0394;County Commissioner District 4;19;90;NP
+03949001;Steven Keranen;0394;County Commissioner District 4;29;90;NP
+03949001;Mike Warring;0394;County Commissioner District 4;30;90;NP
+03949001;Burl Ives;0394;County Commissioner District 4;31;90;NP
+03949001;Paul R. Ryan;0394;County Commissioner District 4;34;90;NP
+03949001;Jonathan Waibel;0394;County Commissioner District 4;39;90;NP
+03949001;Gary Crowley;0394;County Commissioner District 4;42;90;NP
+03949001;Lori Cacka;0394;County Commissioner District 4;43;90;NP
+03949001;Sharon Bring;0394;County Commissioner District 4;45;90;NP
+03949001;Mark Dehen;0394;County Commissioner District 4;52;90;NP
+03949001;Robert S. Demuth;0394;County Commissioner District 4;53;90;NP
+03949001;J.J. Waldhalm;0394;County Commissioner District 4;58;90;NP
+03949001;Robert Van Hee;0394;County Commissioner District 4;64;90;NP
+03949001;Kermit Jensen;0394;County Commissioner District 4;68;90;NP
+03949001;Joe Kreger;0394;County Commissioner District 4;72;90;NP
+03949001;Jim Abbe;0394;County Commissioner District 4;74;90;NP
+03949001;Donald D Wohlers;0394;County Commissioner District 4;75;90;NP
+03949001;Murlyn Kreklau;0394;County Commissioner District 4;80;90;NP
+03949001;Jerald Hettenbach;0394;County Commissioner District 4;85;90;NP
+03949002;Tim Sumner;0394;County Commissioner District 4;04;90;NP
+03949002;Paul Radermacher;0394;County Commissioner District 4;06;90;NP
+03949002;Jon Hokins;0394;County Commissioner District 4;12;90;NP
+03949002;Juleigh Prosser;0394;County Commissioner District 4;15;90;NP
+03949002;Dean Berglund;0394;County Commissioner District 4;16;90;NP
+03949002;Wayne "Gritz" Maras;0394;County Commissioner District 4;17;90;NP
+03949002;Todd Christensen;0394;County Commissioner District 4;30;90;NP
+03949002;Brian Oftelie;0394;County Commissioner District 4;31;90;NP
+03949002;Roger R. Imdieke;0394;County Commissioner District 4;34;90;NP
+03949002;Derry Jones;0394;County Commissioner District 4;35;90;NP
+03949002;Brent Switzer;0394;County Commissioner District 4;58;90;NP
+03949002;Keith Hennen;0394;County Commissioner District 4;72;90;NP
+03949002;Greg (Skip) Olson;0394;County Commissioner District 4;85;90;NP
+03949003;Bruce Emmel;0394;County Commissioner District 4;15;90;NP
+03949004;Leon Olson;0394;County Commissioner District 4;35;90;NP
+03949001;Bret Sample;0394;County Commissioner District 4;01;90;NP
+03949001;Donald Skarie;0394;County Commissioner District 4;03;90;NP
+03949001;Ben Montzka;0394;County Commissioner District 4;13;90;NP
+03949001;Rickey Mattson;0394;County Commissioner District 4;33;90;NP
+03949001;Darren Sombke;0394;County Commissioner District 4;47;90;NP
+03949002;Richard Vareberg;0394;County Commissioner District 4;03;90;NP
+03949002;Danny Schiefelbein;0394;County Commissioner District 4;47;90;NP
+03959001;Randy Nelson;0395;County Commissioner District 5;02;90;NP
+03959001;John Carlson;0395;County Commissioner District 5;04;90;NP
+03959001;Pamela Benoit;0395;County Commissioner District 5;05;90;NP
+03959001;Alex French;0395;County Commissioner District 5;09;90;NP
+03959001;Rick Haaland;0395;County Commissioner District 5;11;90;NP
+03959001;Joel Paulsen;0395;County Commissioner District 5;14;90;NP
+03959001;David Kenworthy;0395;County Commissioner District 5;20;90;NP
+03959001;Bruce (Charlie) Anderson;0395;County Commissioner District 5;22;90;NP
+03959001;Nicole Eckstrom;0395;County Commissioner District 5;24;90;NP
+03959001;Susan Nelson Betcher;0395;County Commissioner District 5;25;90;NP
+03959001;Doyle Sperr;0395;County Commissioner District 5;26;90;NP
+03959001;Jeffrey A. Beck;0395;County Commissioner District 5;27;90;NP
+03959001;Mikal Sylling;0395;County Commissioner District 5;28;90;NP
+03959001;Larry Liepold;0395;County Commissioner District 5;32;90;NP
+03959001;Dale N. Erickson;0395;County Commissioner District 5;36;90;NP
+03959001;RIch Sve;0395;County Commissioner District 5;38;90;NP
+03959001;Edward Arnesen;0395;County Commissioner District 5;39;90;NP
+03959001;Steve Hauswedell;0395;County Commissioner District 5;41;90;NP
+03959001;Tom Chandler;0395;County Commissioner District 5;42;90;NP
+03959001;John M. Darco;0395;County Commissioner District 5;44;90;NP
+03959001;Tyler Ask;0395;County Commissioner District 5;46;90;NP
+03959001;Ronda Bjornson;0395;County Commissioner District 5;48;90;NP
+03959001;Roger Zins;0395;County Commissioner District 5;51;90;NP
+03959001;Gregory Crader;0395;County Commissioner District 5;54;90;NP
+03959001;Michelle Rossman;0395;County Commissioner District 5;55;90;NP
+03959001;Bruce Lawrence;0395;County Commissioner District 5;57;90;NP
+03959001;Chris Hollingsworth;0395;County Commissioner District 5;59;90;NP
+03959001;Mark Holy;0395;County Commissioner District 5;60;90;NP
+03959001;Anthony "Tony" Gerardy;0395;County Commissioner District 5;63;90;NP
+03959001;David Forkrud;0395;County Commissioner District 5;64;90;NP
+03959001;David Hamre;0395;County Commissioner District 5;65;90;NP
+03959001;Charles Peters;0395;County Commissioner District 5;66;90;NP
+03959001;Jody James Reisch;0395;County Commissioner District 5;67;90;NP
+03959001;Brad Schumacher;0395;County Commissioner District 5;71;90;NP
+03959001;Steve Notch;0395;County Commissioner District 5;73;90;NP
+03959001;Scott Prestegard;0395;County Commissioner District 5;74;90;NP
+03959001;Eric G. Rudningen;0395;County Commissioner District 5;76;90;NP
+03959001;Randy Neumann;0395;County Commissioner District 5;77;90;NP
+03959001;Dwight Nelson;0395;County Commissioner District 5;78;90;NP
+03959001;Dillon Melheim;0395;County Commissioner District 5;83;90;NP
+03959001;Dennis Larson;0395;County Commissioner District 5;84;90;NP
+03959001;Bill Nibbe;0395;County Commissioner District 5;86;90;NP
+03959001;Glen Kack;0395;County Commissioner District 5;87;90;NP
+03959002;Dan Reed;0395;County Commissioner District 5;09;90;NP
+03959002;David Ebinger;0395;County Commissioner District 5;14;90;NP
+03959002;Johnna Johnson;0395;County Commissioner District 5;18;90;NP
+03959002;Debbie Goettel;0395;County Commissioner District 5;27;90;NP
+03959002;Rick Anderson;0395;County Commissioner District 5;42;90;NP
+03959002;Charlie Pazdernik;0395;County Commissioner District 5;44;90;NP
+03959002;Randy Donahue;0395;County Commissioner District 5;51;90;NP
+03959002;Corey Theis;0395;County Commissioner District 5;64;90;NP
+03959002;Lisa A. Fobbe;0395;County Commissioner District 5;71;90;NP
+03959002;Greg Krueger;0395;County Commissioner District 5;74;90;NP
+03959002;Kirby Moynagh;0395;County Commissioner District 5;86;90;NP
+03959002;Richard Hemish;0395;County Commissioner District 5;87;90;NP
+03959003;Mike Gamache;0395;County Commissioner District 5;02;90;NP
+03959003;Jamie Lee;0395;County Commissioner District 5;18;90;NP
+03959003;Liz Workman;0395;County Commissioner District 5;19;90;NP
+03959003;Greg Myhre;0395;County Commissioner District 5;28;90;NP
+03959003;Billeye Rabbe;0395;County Commissioner District 5;46;90;NP
+03959004;Yusuf Haji;0395;County Commissioner District 5;19;90;NP
+03959004;Darren Andersen;0395;County Commissioner District 5;54;90;NP
+03959001;Barry Nelson;0395;County Commissioner District 5;03;90;NP
+03959001;Dan Dahlberg;0395;County Commissioner District 5;13;90;NP
+03959001;Marc Prestby;0395;County Commissioner District 5;23;90;NP
+03959001;Stacy Tufto;0395;County Commissioner District 5;37;90;NP
+03959001;Keith Musolf;0395;County Commissioner District 5;69;90;NP
+03959002;Ben Schierer;0395;County Commissioner District 5;56;90;NP
+03959003;Jack Heisler;0395;County Commissioner District 5;03;90;NP
+03959003;Sean Sullivan;0395;County Commissioner District 5;56;90;NP
+03969001;Julie Jeppson;0396;County Commissioner District 6;02;90;NP
+03969001;Heather Edelson;0396;County Commissioner District 6;27;90;NP
+03969001;Tawonda Burks;0396;Special Election for County Commissioner District 6;55;90;NP
+03969002;Jeremy Schroeder;0396;County Commissioner District 6;02;90;NP
+03969002;Marisa Simonetti;0396;County Commissioner District 6;27;90;NP
+03969002;Bob Hopkins;0396;Special Election for County Commissioner District 6;55;90;NP
+03979001;Mandy Meisner;0397;County Commissioner District 7;02;90;NP
+03979001;Mary Hamann-Roland;0397;County Commissioner District 7;19;90;NP
+03979001;Brad Kohler;0397;County Commissioner District 7;27;90;NP
+03979001;Mark Thein;0397;County Commissioner District 7;55;90;NP
+03979001;Sarah K Yang;0397;County Commissioner District 7;62;90;NP
+03979002;Taher Herzallah;0397;County Commissioner District 7;02;90;NP
+03979002;Kevin Anderson;0397;County Commissioner District 7;27;90;NP
+03979003;Kelly Miller;0397;County Commissioner District 7;62;90;NP
+03979001;Michael A Jugovich;0397;County Commissioner District 7;69;90;NP
+04129001;Jennifer DeJournett;0412;County Park Commissioner District 2;27;90;NP
+04149001;Louise M. Segreto;0414;County Park Commissioner District 4;27;90;NP
+04319001;Danielle Holder;0431;Soil and Water Supervisor District 1;02;90;NP
+04319001;Wade Bastian;0431;Soil and Water Supervisor District 1;05;90;NP
+04319001;David Turner;0431;Soil and Water Supervisor District 1;07;90;NP
+04319001;Barbara M. Dahl;0431;Soil and Water Supervisor District 1;09;90;NP
+04319001;Richard Menholt;0431;Soil and Water Supervisor District 1;14;90;NP
+04319001;Alroy Lewis;0431;Soil and Water Supervisor District 1;15;90;NP
+04319001;Gregg Westigard;0431;Soil and Water Supervisor District 1;16;90;NP
+04319001;Leonard Koering;0431;Soil and Water Supervisor District 1;18;90;NP
+04319001;Kevin Chamberlain;0431;Soil and Water Supervisor District 1;19;90;NP
+04319001;Richard Kenneth Alberts;0431;Soil and Water Supervisor District 1;20;90;NP
+04319001;Jeffrey Bell;0431;Soil and Water Supervisor District 1;22;90;NP
+04319001;Casey Madson;0431;Soil and Water Supervisor District 1;24;90;NP
+04319001;Donald Rettinger;0431;Soil and Water Supervisor District 1;29;90;NP
+04319001;Valerie M Anderson;0431;Soil and Water Supervisor District 1;30;90;NP
+04319001;David Hussong;0431;Soil and Water Supervisor District 1;32;90;NP
+04319001;Steve Friedlein;0431;Soil and Water Supervisor District 1;34;90;NP
+04319001;C.J. Peterson;0431;Soil and Water Supervisor District 1;35;90;NP
+04319001;David Abazs;0431;Soil and Water Supervisor District 1;38;90;NP
+04319001;John Sonstegard;0431;Soil and Water Supervisor District 1;39;90;NP
+04319001;Gary Laleman;0431;Soil and Water Supervisor District 1;42;90;NP
+04319001;Terry McCollum;0431;Soil and Water Supervisor District 1;44;90;NP
+04319001;Brent Miller;0431;Soil and Water Supervisor District 1;45;90;NP
+04319001;Larry Cowing;0431;Soil and Water Supervisor District 1;46;90;NP
+04319001;Mark Riverblood;0431;Soil and Water Supervisor District 1;48;90;NP
+04319001;William Faber;0431;Soil and Water Supervisor District 1;49;90;NP
+04319001;Rodney Moe;0431;Soil and Water Supervisor District 1;50;90;NP
+04319001;Timothy J Braun;0431;Soil and Water Supervisor District 1;52;90;NP
+04319001;Jess R. DeKam;0431;Soil and Water Supervisor District 1;53;90;NP
+04319001;Tom Wold;0431;Soil and Water Supervisor District 1;57;90;NP
+04319001;Calvin Spronk;0431;Soil and Water Supervisor District 1;59;90;NP
+04319001;M.R. Koenig;0431;Soil and Water Supervisor District 1;65;90;NP
+04319001;Alexander W. Malecha;0431;Soil and Water Supervisor District 1;66;90;NP
+04319001;Eugene Cragoe;0431;Soil and Water Supervisor District 1;67;90;NP
+04319001;Shelly Binsfeld;0431;Soil and Water Supervisor District 1;71;90;NP
+04319001;Dave Lonergan;0431;Soil and Water Supervisor District 1;75;90;NP
+04319001;Scott Olson;0431;Soil and Water Supervisor District 1;76;90;NP
+04319001;Dennis Zimbrick;0431;Soil and Water Supervisor District 1;78;90;NP
+04319001;Wayne Cords;0431;Soil and Water Supervisor District 1;81;90;NP
+04319001;Matt Lindholm;0431;Soil and Water Supervisor District 1;82;90;NP
+04319001;Ross E. Aigner;0431;Soil and Water Supervisor District 1;84;90;NP
+04319001;Thomas J Remmele;0431;Soil and Water Supervisor District 1;87;90;NP
+04319002;Colleen J Werdien;0431;Soil and Water Supervisor District 1;02;90;NP
+04319002;Bernie Paulson;0431;Soil and Water Supervisor District 1;07;90;NP
+04319002;Michelle Boyechko;0431;Soil and Water Supervisor District 1;09;90;NP
+04319002;Mark Vaughan;0431;Soil and Water Supervisor District 1;19;90;NP
+04319002;Daniel K Campbell;0431;Soil and Water Supervisor District 1;48;90;NP
+04319002;Matthew Detjen;0431;Soil and Water Supervisor District 1;71;90;NP
+04319002;Karen Schik;0431;Soil and Water Supervisor District 1;82;90;NP
+04319001;Craig Fischer;0431;Soil and Water Supervisor District 1;08;90;NP
+04319001;Kevin C Belkholm;0431;Soil and Water Supervisor District 1;33;90;NP
+04319001;Rosemary Weber;0431;Soil and Water Supervisor District 1;37;90;NP
+04319001;Greg Jans;0431;Soil and Water Supervisor District 1;47;90;NP
+04319001;Bruce E. Albright;0431;Soil and Water Supervisor District 1 (East);56;90;NP
+04329001;John W. Shanahan;0432;Soil and Water Supervisor District 2;07;90;NP
+04329001;Marcus Zbinden;0432;Soil and Water Supervisor District 2;10;90;NP
+04329001;Ken LaPorte;0432;Soil and Water Supervisor District 2;11;90;NP
+04329001;Carol J Schoff;0432;Soil and Water Supervisor District 2;14;90;NP
+04329001;Ken Christenson;0432;Soil and Water Supervisor District 2;15;90;NP
+04329001;Cody Duroe;0432;Soil and Water Supervisor District 2;17;90;NP
+04329001;Kendra Sommerfeld;0432;Soil and Water Supervisor District 2;19;90;NP
+04329001;Bruce Freerksen;0432;Soil and Water Supervisor District 2;20;90;NP
+04329001;John Ledermann;0432;Soil and Water Supervisor District 2;21;90;NP
+04329001;Jason T Wetzel;0432;Special Election for Soil and Water Supervisor District 2;23;90;NP
+04329001;Scott Lightly;0432;Soil and Water Supervisor District 2;24;90;NP
+04329001;Darin Hanson;0432;Soil and Water Supervisor District 2;26;90;NP
+04329001;Marcel Noyes;0432;Soil and Water Supervisor District 2;29;90;NP
+04329001;Tom Nelson;0432;Soil and Water Supervisor District 2;31;90;NP
+04329001;Carey Mortenson;0432;Soil and Water Supervisor District 2;35;90;NP
+04329001;George Aitchison;0432;Soil and Water Supervisor District 2;36;90;NP
+04329001;Monica Dohmen;0432;Soil and Water Supervisor District 2;39;90;NP
+04329001;Jeff Paluch;0432;Soil and Water Supervisor District 2;41;90;NP
+04329001;Mike Geray;0432;Soil and Water Supervisor District 2;44;90;NP
+04329001;Dale Price;0432;Soil and Water Supervisor District 2;45;90;NP
+04329001;Timothy Braun;0432;Soil and Water Supervisor District 2;48;90;NP
+04329001;Tom Brutscher;0432;Soil and Water Supervisor District 2;49;90;NP
+04329001;Jay Soltau;0432;Soil and Water Supervisor District 2;50;90;NP
+04329001;Jason Miller;0432;Special Election for Soil and Water Supervisor District 2;51;90;NP
+04329001;Nathan Thier;0432;Soil and Water Supervisor District 2;53;90;NP
+04329001;Michael Cummins;0432;Soil and Water Supervisor District 2;58;90;NP
+04329001;Richard Cunningham;0432;Soil and Water Supervisor District 2;59;90;NP
+04329001;Randall Edward Pederson;0432;Soil and Water Supervisor District 2;61;90;NP
+04329001;Brian Timm;0432;Soil and Water Supervisor District 2;64;90;NP
+04329001;Kevin S. Kokesch;0432;Soil and Water Supervisor District 2;65;90;NP
+04329001;Dante Rand;0432;Soil and Water Supervisor District 2;66;90;NP
+04329001;Rob Casey;0432;Soil and Water Supervisor District 2;70;90;NP
+04329001;Arlyn Lawrenz;0432;Soil and Water Supervisor District 2;73;90;NP
+04329001;David Melby;0432;Soil and Water Supervisor District 2;74;90;NP
+04329001;Wayne W. Wendel;0432;Soil and Water Supervisor District 2;77;90;NP
+04329001;Greg Hoppe;0432;Soil and Water Supervisor District 2;78;90;NP
+04329001;Sharleen Klennert;0432;Soil and Water Supervisor District 2;79;90;NP
+04329001;Thomas M Lindsey;0432;Soil and Water Supervisor District 2;85;90;NP
+04329001;Kris Olson;0432;Soil and Water Supervisor District 2;86;90;NP
+04329001;Jerry Nelson;0432;Soil and Water Supervisor District 2;87;90;NP
+04329002;Brady Fuglie;0432;Soil and Water Supervisor District 2;14;90;NP
+04329002;Laura Zanmiller;0432;Soil and Water Supervisor District 2;19;90;NP
+04329002;Michael Fruechte;0432;Soil and Water Supervisor District 2;59;90;NP
+04329002;Gene Kuntz;0432;Soil and Water Supervisor District 2;66;90;NP
+04329001;Michelle Andresen;0432;Soil and Water Supervisor District 2;03;90;NP
+04329001;Brad Augustin;0432;Soil and Water Supervisor District 2;08;90;NP
+04329001;Rick Cedergren;0432;Soil and Water Supervisor District 2;13;90;NP
+04329001;Danny Larson;0432;Soil and Water Supervisor District 2;37;90;NP
+04329001;Robert J Schiefelbein;0432;Soil and Water Supervisor District 2;47;90;NP
+04329001;Jerry R. Hovi;0432;Soil and Water Supervisor District 2 (North);69;90;NP
+04339001;Ruth Ann Trask;0433;Soil and Water Supervisor District 3;04;90;NP
+04339001;David Dybdahl;0433;Soil and Water Supervisor District 3;06;90;NP
+04339001;Carol Krosch;0433;Soil and Water Supervisor District 3;07;90;NP
+04339001;Katy Botz;0433;Soil and Water Supervisor District 3;11;90;NP
+04339001;Aaron Ahrenholz;0433;Soil and Water Supervisor District 3;12;90;NP
+04339001;Amber Humphrey;0433;Soil and Water Supervisor District 3;16;90;NP
+04339001;Brian Raney;0433;Soil and Water Supervisor District 3;19;90;NP
+04339001;Kathy Tesmer;0433;Soil and Water Supervisor District 3;23;90;NP
+04339001;Vickie Heers;0433;Special Election for Soil and Water Supervisor District 3;24;90;NP
+04339001;John F. Beck;0433;Soil and Water Supervisor District 3;25;90;NP
+04339001;Kenneth Anderson;0433;Soil and Water Supervisor District 3;28;90;NP
+04339001;Heidi Anderson-Thomas;0433;Soil and Water Supervisor District 3;29;90;NP
+04339001;Mitchell McElrath;0433;Soil and Water Supervisor District 3;30;90;NP
+04339001;Perry Loegering;0433;Soil and Water Supervisor District 3;31;90;NP
+04339001;Jeremy Daberkow;0433;Soil and Water Supervisor District 3;32;90;NP
+04339001;Jeffrey Douglas Martinka;0433;Soil and Water Supervisor District 3;34;90;NP
+04339001;Eldon Voigt Jr.;0433;Soil and Water Supervisor District 3;36;90;NP
+04339001;Peter Thelemann;0433;Soil and Water Supervisor District 3;40;90;NP
+04339001;Mason Johnson;0433;Soil and Water Supervisor District 3;42;90;NP
+04339001;Michael L Loncorich;0433;Soil and Water Supervisor District 3;43;90;NP
+04339001;Russell Laue;0433;Soil and Water Supervisor District 3;46;90;NP
+04339001;John Luepke;0433;Soil and Water Supervisor District 3;52;90;NP
+04339001;Lynn Darling;0433;Soil and Water Supervisor District 3;53;90;NP
+04339001;Bruce Tufte;0433;Soil and Water Supervisor District 3;54;90;NP
+04339001;Brenna Doheny;0433;Soil and Water Supervisor District 3;58;90;NP
+04339001;Ken Christensen;0433;Soil and Water Supervisor District 3;59;90;NP
+04339001;Kory Sonstelie;0433;Soil and Water Supervisor District 3 (East);60;90;NP
+04339001;Nathan Whalen;0433;Soil and Water Supervisor District 3;63;90;NP
+04339001;Rick Maurer;0433;Soil and Water Supervisor District 3;64;90;NP
+04339001;Roger Hoff;0433;Soil and Water Supervisor District 3;67;90;NP
+04339001;Larry Goenner;0433;Soil and Water Supervisor District 3;71;90;NP
+04339001;Loren Evenson;0433;Soil and Water Supervisor District 3;72;90;NP
+04339001;Kenneth Schefers;0433;Soil and Water Supervisor District 3;73;90;NP
+04339001;Chester Ross;0433;Soil and Water Supervisor District 3;79;90;NP
+04339001;John Rheinberger;0433;Soil and Water Supervisor District 3;82;90;NP
+04339001;Matthew J. Wolle;0433;Soil and Water Supervisor District 3;83;90;NP
+04339001;Jared Nordick;0433;Soil and Water Supervisor District 3;84;90;NP
+04339001;Lynn Carlson;0433;Soil and Water Supervisor District 3;85;90;NP
+04339002;Sigrid Lindholm;0433;Soil and Water Supervisor District 3;19;90;NP
+04339002;Franklin Dale Curtis;0433;Soil and Water Supervisor District 3;30;90;NP
+04339002;Noren Durheim;0433;Soil and Water Supervisor District 3;83;90;NP
+04339002;Dale Hadler;0433;Soil and Water Supervisor District 3;85;90;NP
+04339003;Bill Rowekamp;0433;Soil and Water Supervisor District 3;85;90;NP
+04339001;Franklin Turnock;0433;Soil and Water Supervisor District 3;01;90;NP
+04339001;Travis J Schauer;0433;Soil and Water Supervisor District 3;03;90;NP
+04339001;Jon Sanford;0433;Soil and Water Supervisor District 3;33;90;NP
+04339001;Michael Croatt;0433;Soil and Water Supervisor District 3;37;90;NP
+04349001;Mary Jo Truchon;0434;Soil and Water Supervisor District 4;02;90;NP
+04349001;Samuel R Christenson;0434;Soil and Water Supervisor District 4;04;90;NP
+04349001;Bruce Brenny;0434;Soil and Water Supervisor District 4;05;90;NP
+04349001;Ronald Reisdorph;0434;Soil and Water Supervisor District 4;06;90;NP
+04349001;Gary E. Peterson;0434;Soil and Water Supervisor District 4;09;90;NP
+04349001;Mike Lynch;0434;Soil and Water Supervisor District 4;10;90;NP
+04349001;David L. Peterson;0434;Soil and Water Supervisor District 4;11;90;NP
+04349001;Tom Muller;0434;Soil and Water Supervisor District 4;17;90;NP
+04349001;JoAnn Weaver;0434;Soil and Water Supervisor District 4;18;90;NP
+04349001;Willis John Dropik;0434;Soil and Water Supervisor District 4;21;90;NP
+04349001;Neal Mensing;0434;Soil and Water Supervisor District 4;22;90;NP
+04349001;Eunice Biel;0434;Soil and Water Supervisor District 4;23;90;NP
+04349001;Edward McNamara;0434;Soil and Water Supervisor District 4;25;90;NP
+04349001;Andrew M. Marks;0434;Soil and Water Supervisor District 4;26;90;NP
+04349001;Glenn Kruse;0434;Soil and Water Supervisor District 4;28;90;NP
+04349001;Allan R. Koczur;0434;Soil and Water Supervisor District 4;30;90;NP
+04349001;Jane Youngkrantz;0434;Soil and Water Supervisor District 4;34;90;NP
+04349001;Barbara Omarzu;0434;Soil and Water Supervisor District 4;38;90;NP
+04349001;Kenneth Mader;0434;Soil and Water Supervisor District 4;40;90;NP
+04349001;John Adamek;0434;Soil and Water Supervisor District 4;43;90;NP
+04349001;Pete Revier;0434;Soil and Water Supervisor District 4;44;90;NP
+04349001;Andre Lasalle;0434;Soil and Water Supervisor District 4;48;90;NP
+04349001;Mona Henkels;0434;Soil and Water Supervisor District 4;51;90;NP
+04349001;Don Hermanson;0434;Soil and Water Supervisor District 4;52;90;NP
+04349001;Erik Rockstad;0434;Soil and Water Supervisor District 4;54;90;NP
+04349001;Joseph Himmer;0434;Soil and Water Supervisor District 4;55;90;NP
+04349001;Linda Hanson;0434;Soil and Water Supervisor District 4;57;90;NP
+04349001;Scott Balstad;0434;Soil and Water Supervisor District 4 (East);60;90;NP
+04349001;Mark LaCrosse;0434;Soil and Water Supervisor District 4;63;90;NP
+04349001;John Larson;0434;Soil and Water Supervisor District 4;66;90;NP
+04349001;Dave Esselink;0434;Soil and Water Supervisor District 4;67;90;NP
+04349001;Wayne R. Grams;0434;Soil and Water Supervisor District 4;72;90;NP
+04349001;Matt Bruyette;0434;Soil and Water Supervisor District 4;73;90;NP
+04349001;Daniel Hansen;0434;Soil and Water Supervisor District 4;74;90;NP
+04349001;Dennis Feuchtenberger;0434;Soil and Water Supervisor District 4;75;90;NP
+04349001;Larry Bebus;0434;Soil and Water Supervisor District 4;77;90;NP
+04349001;Douglas E. Frisch;0434;Soil and Water Supervisor District 4;78;90;NP
+04349001;Thomas "Tom" Schulz;0434;Soil and Water Supervisor District 4;80;90;NP
+04349001;Jordan Bergeman;0434;Soil and Water Supervisor District 4;83;90;NP
+04349001;Kyle Gowin;0434;Soil and Water Supervisor District 4;84;90;NP
+04349001;Chris Uecker;0434;Soil and Water Supervisor District 4;86;90;NP
+04349002;William Clayton;0434;Soil and Water Supervisor District 4;10;90;NP
+04349002;Adam Conrad;0434;Soil and Water Supervisor District 4;66;90;NP
+04349001;Bob Janzen;0434;Soil and Water Supervisor District 4;01;90;NP
+04349001;Mark Wellner;0434;Soil and Water Supervisor District 4;08;90;NP
+04349001;Justin Wilson;0434;Soil and Water Supervisor District 4;13;90;NP
+04349001;Fred H. Behnke Jr;0434;Soil and Water Supervisor District 4;47;90;NP
+04349001;Terry Greenwaldt;0434;Soil and Water Supervisor District 4 (East);56;90;NP
+04349001;Charles Bainter;0434;Soil and Water Supervisor District 4 (North);69;90;NP
+04359001;Kate Luthner;0435;Soil and Water Supervisor District 5;02;90;NP
+04359001;Chuck Rau;0435;Soil and Water Supervisor District 5;05;90;NP
+04359001;Bruce Heikes;0435;Soil and Water Supervisor District 5;09;90;NP
+04359001;Jerry Schwitters;0435;Soil and Water Supervisor District 5;12;90;NP
+04359001;Joel Hildebrandt;0435;Soil and Water Supervisor District 5;14;90;NP
+04359001;John Gunvalson;0435;Soil and Water Supervisor District 5;15;90;NP
+04359001;Jeremy Nerem;0435;Soil and Water Supervisor District 5;17;90;NP
+04359001;Harvey "Jim" Chamberlin;0435;Soil and Water Supervisor District 5;18;90;NP
+04359001;Kenneth Rutten;0435;Soil and Water Supervisor District 5;21;90;NP
+04359001;Travis Willford;0435;Soil and Water Supervisor District 5;23;90;NP
+04359001;Brad Kramer;0435;Soil and Water Supervisor District 5;24;90;NP
+04359001;Christopher J. Hinck;0435;Soil and Water Supervisor District 5;25;90;NP
+04359001;Matt Feldmeier;0435;Soil and Water Supervisor District 5;28;90;NP
+04359001;Larry G. Hansen;0435;Soil and Water Supervisor District 5;32;90;NP
+04359001;Joe Wilebski;0435;Soil and Water Supervisor District 5;35;90;NP
+04359001;Douglas C Haus;0435;Soil and Water Supervisor District 5;38;90;NP
+04359001;Nancy Dunnell;0435;Soil and Water Supervisor District 5;39;90;NP
+04359001;Jim Struck;0435;Soil and Water Supervisor District 5;40;90;NP
+04359001;Ron Bunjer;0435;Soil and Water Supervisor District 5;41;90;NP
+04359001;Justin Hively;0435;Soil and Water Supervisor District 5;42;90;NP
+04359001;Mark Schnobrich;0435;Soil and Water Supervisor District 5;43;90;NP
+04359001;David Hubner;0435;Soil and Water Supervisor District 5;49;90;NP
+04359001;Jon W. Erichson;0435;Soil and Water Supervisor District 5;50;90;NP
+04359001;Karen Hurd;0435;Soil and Water Supervisor District 5;51;90;NP
+04359001;Ronald Thorsrud;0435;Soil and Water Supervisor District 5;54;90;NP
+04359001;Greg Hilgeman;0435;Soil and Water Supervisor District 5;57;90;NP
+04359001;Lawrence P Vettleson;0435;Soil and Water Supervisor District 5 (East);60;90;NP
+04359001;D. Gary Reents;0435;Soil and Water Supervisor District 5;61;90;NP
+04359001;Jimmy Hagge;0435;Soil and Water Supervisor District 5;63;90;NP
+04359001;Landon Olson;0435;Soil and Water Supervisor District 5;68;90;NP
+04359001;Daniel Giles;0435;Soil and Water Supervisor District 5;70;90;NP
+04359001;Joshua Krenz;0435;Soil and Water Supervisor District 5;71;90;NP
+04359001;Robert Bob Nielsen;0435;Soil and Water Supervisor District 5;72;90;NP
+04359001;Bradley Hagen;0435;Soil and Water Supervisor District 5;74;90;NP
+04359001;Troy Goodnough;0435;Soil and Water Supervisor District 5;75;90;NP
+04359001;Mark Weimerskirch;0435;Soil and Water Supervisor District 5;76;90;NP
+04359001;Dag I Knudsen;0435;Soil and Water Supervisor District 5;79;90;NP
+04359001;Bruce Juntunen;0435;Soil and Water Supervisor District 5;80;90;NP
+04359001;Dan Roemhildt;0435;Soil and Water Supervisor District 5;81;90;NP
+04359001;Andrew Ekstrom;0435;Soil and Water Supervisor District 5;83;90;NP
+04359001;Andy Kronebusch;0435;Soil and Water Supervisor District 5;85;90;NP
+04359001;Duane E Dahlman;0435;Soil and Water Supervisor District 5;86;90;NP
+04359001;DeLon Clarksean;0435;Soil and Water Supervisor District 5;87;90;NP
+04359002;Roger Hurd;0435;Soil and Water Supervisor District 5;09;90;NP
+04359002;Ashley Heng;0435;Soil and Water Supervisor District 5;14;90;NP
+04359002;Bruce Ness;0435;Soil and Water Supervisor District 5;24;90;NP
+04359001;Daniel Gravley;0435;Soil and Water Supervisor District 5;01;90;NP
+04359001;Anthony Beck (Tony);0435;Soil and Water Supervisor District 5;03;90;NP
+04359001;Matthew Hardy;0435;Soil and Water Supervisor District 5;13;90;NP
+04359001;Kim Johnson;0435;Soil and Water Supervisor District 5;33;90;NP
+04359001;Steve Inwards;0435;Soil and Water Supervisor District 5 (East);56;90;NP
+04359001;Mark Peterson;0435;Soil and Water Supervisor District 5 (North);69;90;NP
+04369001;John Tollgaard;0436;Soil and Water Supervisor District 1 (South);69;90;NP
+04379001;Derek Peterson;0437;Soil and Water Supervisor District 2 (West);60;90;NP
+04389001;Rod Wenstrom;0438;Soil and Water Supervisor District 3 (West);56;90;NP
+04399001;Christian Pester;0439;Soil and Water Supervisor District 4 (West);60;90;NP
+04399001;John S. Walkup;0439;Soil and Water Supervisor District 4 (West);56;90;NP
+04399001;Paul Fish;0439;Soil and Water Supervisor District 4 (South);69;90;NP
+04409001;Chris Cournia;0440;Soil and Water Supervisor District 5 (West);60;90;NP
+04409001;Wayne W. Rotz;0440;Soil and Water Supervisor District 5 (West);56;90;NP
+70019001;Natalie E. Hudson;7001;Chief Justice - Supreme Court;88;90;NP
+70019002;Stephen A Emery;7001;Chief Justice - Supreme Court;88;90;NP
+70069001;Anne McKeig;7006;Associate Justice - Supreme Court 5;88;90;NP
+70079001;Karl Procaccini;7007;Associate Justice - Supreme Court 6;88;90;NP
+70079002;Matthew R. Hanson;7007;Associate Justice - Supreme Court 6;88;90;NP
+70119001;Jon Schmidt;7011;Judge - Court of Appeals 2;88;90;NP
+70129001;Sarah Wheelock;7012;Judge - Court of Appeals 3;88;90;NP
+70139001;Tracy Smith;7013;Judge - Court of Appeals 4;88;90;NP
+70159001;Renee L. Worke;7015;Judge - Court of Appeals 6;88;90;NP
+70179001;Keala Christian Ede;7017;Judge - Court of Appeals 8;88;90;NP
+70219001;Jonathan R. Woolsey;7021;Judge - Court of Appeals 12;88;90;NP
+70219002;Diane B. Bratvold;7021;Judge - Court of Appeals 12;88;90;NP
+70239001;Elise Larson;7023;Judge - Court of Appeals 14;88;90;NP
+81059001;David L. Knutson;8105;Judge - 1st District Court 6;88;90;NP
+81099001;Paula Duggan Vraa;8109;Judge - 1st District Court 10;88;90;NP
+81139001;Michael Joseph Mayer;8113;Judge - 1st District Court 14;88;90;NP
+81199001;Bryce A.D. Ehrman;8119;Judge - 1st District Court 20;88;90;NP
+81239001;Jamie Cork;8123;Judge - 1st District Court 24;88;90;NP
+81259001;Jody L. Winters;8125;Judge - 1st District Court 26;88;90;NP
+81289001;Jessica Maher;8128;Judge - 1st District Court 29;88;90;NP
+81299001;Douglas C. Bayley;8129;Judge - 1st District Court 30;88;90;NP
+81309001;Richelle M. Wahi;8130;Judge - 1st District Court 31;88;90;NP
+81319001;Kathryn Iverson Landrum;8131;Judge - 1st District Court 32;88;90;NP
+81329001;Tori K. Stewart;8132;Judge - 1st District Court 33;88;90;NP
+81349001;Stacey Sorensen Green;8134;Judge - 1st District Court 35;88;90;NP
+83019001;DeAnne Hilgers;8301;Judge - 2nd District Court 2;88;90;NP
+83029001;Paul Yang;8302;Judge - 2nd District Court 3;88;90;NP
+83029002;Timothy Carey;8302;Judge - 2nd District Court 3;88;90;NP
+83039001;Laura Elizabeth Nelson;8303;Judge - 2nd District Court 4;88;90;NP
+83109001;Adam C. Yang;8310;Judge - 2nd District Court 11;88;90;NP
+83189001;Maria Mitchell;8318;Judge - 2nd District Court 19;88;90;NP
+83199001;P. Paul Yang;8319;Judge - 2nd District Court 20;88;90;NP
+83219001;Jacob Kraus;8321;Judge - 2nd District Court 22;88;90;NP
+83229001;Stephen L. Smith;8322;Judge - 2nd District Court 23;88;90;NP
+83289001;Timothy Mulrooney;8328;Judge - 2nd District Court 29;88;90;NP
+83289002;Winona Yang;8328;Judge - 2nd District Court 29;88;90;NP
+84009001;Christina K. Stevens;8400;Judge - 3rd District Court 1;88;90;NP
+84029001;Christy M. Hormann;8402;Judge - 3rd District Court 3;88;90;NP
+84049001;Ross Leuning;8404;Judge - 3rd District Court 5;88;90;NP
+84079001;Carol M. Hanks;8407;Judge - 3rd District Court 8;88;90;NP
+84099001;Lisa R. Hayne;8409;Judge - 3rd District Court 10;88;90;NP
+84119001;Christine A. Long;8411;Judge - 3rd District Court 12;88;90;NP
+84139001;Natalie S. Martinez;8413;Judge - 3rd District Court 14;88;90;NP
+84189001;Jeremy L. Clinefelter;8418;Judge - 3rd District Court 19;88;90;NP
+84199001;Debra A. Groehler;8419;Judge - 3rd District Court 20;88;90;NP
+84239001;Christa M. Daily;8423;Judge - 3rd District Court 24;88;90;NP
+85019001;Francis Magill;8501;Judge - 4th District Court 2;88;90;NP
+85029001;Thomas J. Conley;8502;Judge - 4th District Court 3;88;90;NP
+85059001;Sydnee N. Woods;8505;Judge - 4th District Court 6;88;90;NP
+85099001;Jean E. Burdorf;8509;Judge - 4th District Court 10;88;90;NP
+85109001;Lisa K. Janzen;8510;Judge - 4th District Court 11;88;90;NP
+85119001;Michael E. Burns;8511;Judge - 4th District Court 12;88;90;NP
+85129001;Melissa Houghtaling;8512;Judge - 4th District Court 13;88;90;NP
+85149001;John L. Lucas;8514;Judge - 4th District Court 15;88;90;NP
+85169001;Shereen Askalani;8516;Judge - 4th District Court 17;88;90;NP
+85219001;Amber Brennan;8521;Judge - 4th District Court 22;88;90;NP
+85239001;Christopher Leckrone;8523;Judge - 4th District Court 24;88;90;NP
+85239002;Matthew Frank;8523;Judge - 4th District Court 24;88;90;NP
+85329001;Sarah E. Hudleston;8532;Judge - 4th District Court 33;88;90;NP
+85399001;Jamie L. Anderson;8539;Judge - 4th District Court 40;88;90;NP
+85439001;Lois Conroy;8543;Judge - 4th District Court 44;88;90;NP
+85479001;Mark J. Kappelhoff;8547;Judge - 4th District Court 48;88;90;NP
+85489001;Nelson Peralta;8548;Judge - 4th District Court 49;88;90;NP
+85559001;Charlene Hatcher;8555;Judge - 4th District Court 56;88;90;NP
+85579001;Christian Sande;8557;Judge - 4th District Court 58;88;90;NP
+85589001;Patrick D. Robben;8558;Judge - 4th District Court 59;88;90;NP
+86069001;Mark E. Betters;8606;Judge - 5th District Court 7;88;90;NP
+86099001;Kristine A. Weeks;8609;Judge - 5th District Court 10;88;90;NP
+86139001;Krista J. Jass;8613;Judge - 5th District Court 14;88;90;NP
+86169001;Michael D. Trushenski;8616;Judge - 5th District Court 17;88;90;NP
+86179001;Andrea J. Lieser;8617;Judge - 5th District Court 18;88;90;NP
+88049001;Michelle M Anderson;8804;Judge - 6th District Court 5;88;90;NP
+88059004;Shawn Reed;8805;Judge - 6th District Court 6;88;90;NP
+88059005;Gunnar B. Johnson;8805;Judge - 6th District Court 6;88;90;NP
+88119001;Nicole L. Hopps;8811;Judge - 6th District Court 12;88;90;NP
+88159001;Jill A. Eichenwald;8815;Judge - 6th District Court 16;88;90;NP
+89009001;Heidi E. Schultz;8900;Judge - 7th District Court 1;88;90;NP
+89049001;Timothy M. Churchwell;8904;Judge - 7th District Court 5;88;90;NP
+89049002;Joel A. Novak;8904;Judge - 7th District Court 5;88;90;NP
+89059001;Gail T. Kulick;8905;Judge - 7th District Court 6;88;90;NP
+89069001;Mary B. Mahler;8906;Judge - 7th District Court 7;88;90;NP
+89099001;Matthew M. Quinn;8909;Judge - 7th District Court 10;88;90;NP
+89159001;Gretchen D. Thilmony;8915;Judge - 7th District Court 16;88;90;NP
+89169001;Sharon G. Benson;8916;Judge - 7th District Court 17;88;90;NP
+89199001;William J. Cashman;8919;Judge - 7th District Court 20;88;90;NP
+89229001;Leah J. duCharme;8922;Judge - 7th District Court 23;88;90;NP
+89289001;Shan C. Wang;8928;Judge - 7th District Court 29;88;90;NP
+90049001;Benjamin R. Wilcox;9004;Judge - 8th District Court 5;88;90;NP
+90059001;Amy J. Doll;9005;Judge - 8th District Court 6;88;90;NP
+90079001;Stephen J. Wentzell;9007;Judge - 8th District Court 8;88;90;NP
+91029001;David F. Hermerding;9102;Judge - 9th District Court 3;88;90;NP
+91069001;John G. Melbye;9106;Judge - 9th District Court 7;88;90;NP
+91089001;Heidi M. Chandler;9108;Judge - 9th District Court 9;88;90;NP
+91099001;Christopher J. Strandlie;9109;Judge - 9th District Court 10;88;90;NP
+91129001;Erik J. Askegaard;9112;Judge - 9th District Court 13;88;90;NP
+91239001;Annie Claesson-Huseby;9123;Judge - 9th District Court 24;88;90;NP
+92029001;Nathan Hansen;9202;Judge - 10th District Court 3;88;90;NP
+92029002;Helen Brosnahan;9202;Judge - 10th District Court 3;88;90;NP
+92099001;John D. Klossner;9209;Judge - 10th District Court 10;88;90;NP
+92119001;Dyanna L. Street;9211;Judge - 10th District Court 12;88;90;NP
+92159001;Todd Schoffelman;9215;Judge - 10th District Court 16;88;90;NP
+92199001;Kari Willis;9219;Judge - 10th District Court 20;88;90;NP
+92209001;John A. Bowen;9220;Judge - 10th District Court 21;88;90;NP
+92249001;Sean C. Gibbs;9224;Judge - 10th District Court 25;88;90;NP
+92259001;Jennifer Stanfield;9225;Judge - 10th District Court 26;88;90;NP
+92309001;Siv Mjanger;9230;Judge - 10th District Court 31;88;90;NP
+92329001;Kristi D. Stanislawski;9232;Judge - 10th District Court 33;88;90;NP
+92339001;Brianne J. Buccicone;9233;Judge - 10th District Court 34;88;90;NP
+92349001;Jason R Steffen;9234;Judge - 10th District Court 35;88;90;NP
+92359001;Bridgid E. Dowdal;9235;Judge - 10th District Court 36;88;90;NP
+92369001;Heather Wynn;9236;Judge - 10th District Court 37;88;90;NP
+92439001;Kevin J. Mueller;9243;Judge - 10th District Court 44;88;90;NP
