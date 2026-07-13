@@ -15,6 +15,7 @@ from integrations.fl_ew.tasks import sync_fl_elections
 from integrations.il_sbe.tasks import sync_il_elections
 from integrations.ia_sos.tasks import sync_ia_elections
 from integrations.ma_sos.tasks import sync_ma_elections
+from integrations.mn_sos.tasks import sync_mn_races
 from integrations.nc_sbe.tasks import sync_nc_elections
 from integrations.nj_elections.tasks import sync_nj_county_urls
 from integrations.oh_sos.tasks import sync_oh_elections
@@ -223,3 +224,10 @@ def sync_oh_sos_trigger(request):
 @require_internal_task_token
 def sync_il_sbe_trigger(request):
     return _trigger("sync_il_sbe", sync_il_elections, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_mn_sos_trigger(request):
+    return _trigger("sync_mn_sos", sync_mn_races, request)
