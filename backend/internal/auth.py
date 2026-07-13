@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def _verify_oidc_token(token: str) -> bool:
-    """Verify a Google OIDC JWT issued by Cloud Scheduler."""
+    """Verify an optional Google OIDC JWT for external scheduler compatibility."""
     audience = getattr(settings, "SCHEDULER_OIDC_AUDIENCE", "")
     expected_sa = getattr(settings, "SCHEDULER_SA_EMAIL", "")
     if not audience:
@@ -44,8 +44,8 @@ def require_internal_task_token(view_func):
     Validate the Authorization: Bearer <token> header.
 
     Accepts either:
-    1. Shared-secret (INTERNAL_TASK_TOKEN) — local dev and manual triggers.
-    2. Google OIDC JWT (SCHEDULER_OIDC_AUDIENCE) — Cloud Scheduler in production.
+    1. Shared-secret (INTERNAL_TASK_TOKEN) — local scheduler and manual triggers.
+    2. Google OIDC JWT (SCHEDULER_OIDC_AUDIENCE) — optional external scheduler compatibility.
     """
     @functools.wraps(view_func)
     def _wrapped(request, *args, **kwargs):

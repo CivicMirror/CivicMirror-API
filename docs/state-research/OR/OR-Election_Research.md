@@ -1,8 +1,8 @@
 # Oregon Election System — Research Notes
 
-**State:** Oregon (OR)  
-**Primary operator:** Oregon Secretary of State, Elections Division  
-**Research updated:** July 13, 2026  
+**State:** Oregon (OR)
+**Primary operator:** Oregon Secretary of State, Elections Division
+**Research updated:** July 13, 2026
 **CivicDeNovo/CivicMirror coverage target:** Federal and state offices are core coverage. Local offices, local measures, precinct reporting, and historical backfill are enhanced coverage.
 
 ---
@@ -12,10 +12,10 @@
 | Stage | Status | Recommended source | Notes |
 |---|---|---|---|
 | Stage 1 — Election Creation | ✅ Available | Oregon SOS Upcoming Elections + election dates | The official site identifies the current statewide election and key dates. Google Civic can remain a secondary source. |
-| Stage 1 — Race Creation | ⚠️ Promising, not yet automated | Open Offices PDF + ORESTAR Candidate Filing Search | The official sources expose open offices, districts, candidate filings, party, filing method, withdrawal dates, and disqualified candidates. |
-| Stage 1 — Ballot Measures | ⚠️ Promising, not yet automated | ORESTAR Local Measures Search | Search supports election year and all 36 counties. Statewide initiative/referral pages should be researched separately. |
-| Stage 2 — Certified Results | ⚠️ Partially available | Oregon SOS SharePoint History index + Oregon Records archive | The history index is machine-readable, but the linked official result documents are primarily record-viewer pages and PDFs. |
-| Stage 2 — Live/Unofficial Results | ❓ Not identified | Further election-night capture required | No documented live JSON/REST results feed was found in the supplied HAR. |
+| Stage 1 — Race Creation | ✅ Implemented for core skeleton/candidates | Open Offices PDF + ORESTAR Candidate Filing Search | The adapter parses open offices and ORESTAR candidate filings. Real-source validation is still required before declaring production completeness. |
+| Stage 1 — Ballot Measures | ⚠️ Local measures implemented; statewide incomplete | ORESTAR Local Measures Search | Local measures ingest is implemented. Statewide initiative/referral pages should be researched separately. |
+| Stage 2 — Certified Results | ⚠️ Partially implemented | Oregon SOS SharePoint History index + Oregon Records archive | SharePoint/history discovery and CSV/TSV/TXT/ZIP/XLSX parsing are implemented. PDF and legacy XLS parsing remain unsupported. |
+| Stage 2 — Live/Unofficial Results | ❌ Statewide feed not available | County election sites only | Oregon counties publish unofficial election-night results in batches, but no persistent, public, centralized SOS live-results dashboard, REST API, or structured statewide feed has been identified. |
 | Turnout / Ballot Returns | ✅ Available, supplemental | Oregon Open Data Socrata dataset `rxzj-n3di` | Daily ballot-return statistics; useful for turnout tracking, but it is not contest-result data. |
 
 ---
@@ -31,6 +31,18 @@ Oregon is more automatable than the original notes suggested, but its useful sou
 5. **Oregon Legislature OData** provides current legislator and legislative-session data, useful for incumbent enrichment but not election results.
 
 A practical Oregon implementation should use multiple small adapters rather than one scraper.
+
+### Live validation notes
+
+Read-only validation on July 13, 2026 found:
+
+- The current-election page splits `General Election` and `November 3, 2026` across separate lines and uses non-breaking spaces; the parser now handles this and ignores non-election deadline dates.
+- The open-offices PDF uses office section headings followed by district rows; the parser now extracts 83 core federal/state races from the live 2026 general PDF.
+- ORESTAR CSRF now requires loading `/orestar/JavaScriptServlet` with `GET`, then fetching the token via `POST` with `FETCH-CSRF-TOKEN: 1`; candidate and local-measure searches parse live pages.
+- ORESTAR candidate pagination currently returns 165 rows with a one-row page overlap; the task de-duplicates filing identities across pages.
+- ORESTAR local-measure pagination currently returns 99 rows across two pages after using `searchButtonName=next`.
+- Socrata ballot-return JSON remains accessible and parseable.
+- Anonymous SharePoint SOAP calls to the SOS history list currently return `401 Unauthorized`; the result adapter now returns a no-data adapter result instead of failing the whole poll when the history index is unavailable. Direct `or_results_url` metadata remains the reliable path for structured result files.
 
 ---
 
@@ -264,7 +276,7 @@ Use a **certified-results document adapter**, not a live-results scraper:
 
 ## Stage 2 limitation
 
-No live or semi-live structured results endpoint was observed. Another capture is required during an active election-results publication window.
+No live or semi-live structured statewide results endpoint was observed. Oregon counties publish unofficial results in batches beginning on election night, and statewide live displays from AP/news organizations appear to aggregate county reports. For CivicMirror's Oregon core path, live results should be treated as out of scope for now. Future enhanced coverage could investigate county-level unofficial result pages individually, but the primary Oregon adapter should focus on SOS certified results and historical documents.
 
 ---
 
@@ -436,19 +448,37 @@ For the next HAR, perform these actions before saving:
 
 ---
 
-# 12. Current Assessment
+# 12. Local Scheduling
+
+The production deployment is local-only and should not rely on GCP or Cloud Scheduler for Oregon ingestion. Run the Oregon sync through the local Django management command from `backend/`:
+
+```bash
+python manage.py trigger_internal_task sync_or_sos
+```
+
+This command enqueues the same Celery task as the internal HTTP endpoint and uses the shared Redis idempotency lock `sync_or_sos`, so it is safe to invoke from cron/systemd on the normal daily cadence. The task fans out from election discovery to the supported Oregon child syncs when the election metadata includes a known ORESTAR election ID.
+
+Example cron entry:
+
+```cron
+15 3 * * * cd /path/to/CivicMirror-API/backend && /path/to/venv/bin/python manage.py trigger_internal_task sync_or_sos
+```
+
+---
+
+# 13. Current Assessment
 
 | Capability | Assessment |
 |---|---|
 | Election creation | Strong |
-| Federal/state race skeleton | Strong |
-| Candidate discovery | Likely strong after ORESTAR form automation |
+| Federal/state race skeleton | Strong; implemented, needs live validation |
+| Candidate discovery | Implemented via ORESTAR, needs live validation |
 | Statewide ballot measures | Incomplete |
-| Local measures | Promising |
-| Certified statewide results | Available as documents; parser required |
-| Live results | Unknown |
+| Local measures | Implemented via ORESTAR, needs live validation |
+| Certified statewide results | Implemented for structured files; PDF parser still required |
+| Live results | No statewide public feed identified; county-level only, future enhanced coverage |
 | Precinct results | Available historically; download path needs capture |
 | Turnout data | Strong supplemental API |
 | Incumbent enrichment | Strong OData source |
 
-**Recommended status:** Oregon should move from “no adapter / unknown” to **research in progress with a viable Stage 1 path and a certified-results Stage 2 path**. Full core coverage should not be declared until ORESTAR candidate ingestion and at least one official result file are successfully parsed end to end.
+**Recommended status:** Oregon should move from “no adapter / unknown” to **adapter implemented, pending live-source validation and remaining PDF/statewide-measure work**. Full core coverage should not be declared until ORESTAR candidate ingestion and at least one official result file are successfully parsed end to end against live Oregon sources.

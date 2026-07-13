@@ -1,6 +1,18 @@
 from django.db import migrations
 
 
+def add_results_url_if_missing(apps, schema_editor):
+    if schema_editor.connection.vendor == "postgresql":
+        schema_editor.execute(
+            "ALTER TABLE elections_election ADD COLUMN IF NOT EXISTS results_url varchar(200) NOT NULL DEFAULT '';"
+        )
+
+
+def drop_results_url_if_present(apps, schema_editor):
+    if schema_editor.connection.vendor == "postgresql":
+        schema_editor.execute("ALTER TABLE elections_election DROP COLUMN IF EXISTS results_url;")
+
+
 class Migration(migrations.Migration):
     """
     Originally added Election.results_url when production had been migrated from
@@ -19,10 +31,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.SeparateDatabaseAndState(
             database_operations=[
-                migrations.RunSQL(
-                    sql="ALTER TABLE elections_election ADD COLUMN IF NOT EXISTS results_url varchar(200) NOT NULL DEFAULT '';",
-                    reverse_sql="ALTER TABLE elections_election DROP COLUMN IF EXISTS results_url;",
-                ),
+                migrations.RunPython(add_results_url_if_missing, reverse_code=drop_results_url_if_present),
             ],
             state_operations=[],
         ),
