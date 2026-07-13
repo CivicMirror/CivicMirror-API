@@ -1,6 +1,33 @@
 from django.db import migrations
 
 
+def drop_legacy_race_columns(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    for column in [
+        "submitter_id",
+        "community_status",
+        "rejection_reason",
+        "reviewed_at",
+        "reviewed_by_id",
+        "submitted_at",
+        "external_race_id",
+    ]:
+        schema_editor.execute(f"ALTER TABLE elections_race DROP COLUMN IF EXISTS {column};")
+
+
+def restore_legacy_race_columns(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute("ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS submitter_id INTEGER;")
+    schema_editor.execute("ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS community_status VARCHAR(50) NOT NULL DEFAULT '';")
+    schema_editor.execute("ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS rejection_reason TEXT NOT NULL DEFAULT '';")
+    schema_editor.execute("ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE;")
+    schema_editor.execute("ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS reviewed_by_id INTEGER;")
+    schema_editor.execute("ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP WITH TIME ZONE;")
+    schema_editor.execute("ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS external_race_id VARCHAR(255);")
+
+
 class Migration(migrations.Migration):
     """
     Drop columns that exist in the production DB but were removed from the Race
@@ -13,24 +40,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql="""
-                ALTER TABLE elections_race DROP COLUMN IF EXISTS submitter_id;
-                ALTER TABLE elections_race DROP COLUMN IF EXISTS community_status;
-                ALTER TABLE elections_race DROP COLUMN IF EXISTS rejection_reason;
-                ALTER TABLE elections_race DROP COLUMN IF EXISTS reviewed_at;
-                ALTER TABLE elections_race DROP COLUMN IF EXISTS reviewed_by_id;
-                ALTER TABLE elections_race DROP COLUMN IF EXISTS submitted_at;
-                ALTER TABLE elections_race DROP COLUMN IF EXISTS external_race_id;
-            """,
-            reverse_sql="""
-                ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS submitter_id INTEGER;
-                ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS community_status VARCHAR(50) NOT NULL DEFAULT '';
-                ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS rejection_reason TEXT NOT NULL DEFAULT '';
-                ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE;
-                ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS reviewed_by_id INTEGER;
-                ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP WITH TIME ZONE;
-                ALTER TABLE elections_race ADD COLUMN IF NOT EXISTS external_race_id VARCHAR(255);
-            """,
-        ),
+        migrations.RunPython(drop_legacy_race_columns, reverse_code=restore_legacy_race_columns),
     ]

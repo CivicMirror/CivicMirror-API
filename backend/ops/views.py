@@ -1,3 +1,4 @@
+from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -57,12 +58,19 @@ class CoverageSyncStatusView(APIView):
     _COMPLETED_STATUSES = (SyncLog.Status.COMPLETED, SyncLog.Status.COMPLETED_WITH_WARNINGS)
 
     def get(self, request):
+        latest_id_for_source = (
+            SyncLog.objects
+            .filter(source=OuterRef("source"), status__in=self._COMPLETED_STATUSES)
+            .exclude(source="")
+            .order_by("-completed_at", "-pk")
+            .values("pk")[:1]
+        )
         latest_per_source = (
             SyncLog.objects
             .filter(status__in=self._COMPLETED_STATUSES)
             .exclude(source="")
-            .order_by("source", "-completed_at")
-            .distinct("source")
+            .filter(pk=Subquery(latest_id_for_source))
+            .order_by("source")
         )
 
         global_sources: dict[str, dict] = {}
