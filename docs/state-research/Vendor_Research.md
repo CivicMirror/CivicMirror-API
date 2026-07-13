@@ -82,6 +82,36 @@ These break the vendor-adapter pattern and require bespoke handling:
 | **Kentucky** | State-built SOS portal (`vrsws.sos.ky.gov/liveresults/`) | Runs alongside Clarity. **Explicit anti-scraping AUP** — do not automate; use OpenElections instead. |
 | **Wisconsin** | WEC Drupal CMS | **No statewide results infrastructure.** Notoriously hard; results live at the county level. |
 
+
+## Added Research 06/13/20226
+**VR Systems Inc.** is an employee-owned elections technology and software provider based in Tallahassee, Florida. Founded in 1992, the company specializes exclusively in public election infrastructure—most notably voter registration management, electronic pollbooks for voter check-in, and election worker training software.
+
+## Supported States
+
+VR Systems currently supports election offices and local jurisdictions across **9 U.S. states**:
+
+* **California**
+* **Florida** *(Headquarters & primary footprint; their software is utilized in 64 of 67 counties)*
+* **Illinois**
+* **Indiana**
+* **New York**
+* **North Carolina** *(Used across more than 20 counties)*
+* **Texas** *(Certified by the Texas Secretary of State for their EViD electronic pollbooks and Voter Focus system)*
+* **Virginia**
+* **West Virginia**
+
+---
+
+## Core Technologies & Services
+
+Because VR Systems operates on a decentralized, county-by-county basis in most states, the exact products utilized vary by local jurisdiction. Their core suite includes:
+
+| Solution | Primary Function |
+| --- | --- |
+| **EViD (Electronic Voter Identification)** | Electronic pollbooks used at voting precincts and early voting centers to check in voters, verify identity, and update registration data in real time. |
+| **Voter Focus** | Comprehensive election management and voter registration software designed to organize the full election cycle, absentee ballot tracking, and precinct lookup. |
+| **VR Employ & ELM** | Online workforce management and collaborative training platforms designed specifically for training and scheduling temporary poll workers and election staff. |
+| **Web & Online Services** | Specialized back-end solutions and secure website maintenance tools built for county election supervisors and citizen communications. |
 ---
 
 ## Adapter-Strategy Implications
