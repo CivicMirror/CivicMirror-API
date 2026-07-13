@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from elections.models import Candidate, Election, ElectionSourceLink, Race
+from elections.models import Candidate, ElectionSourceLink, Race
 from integrations.mn_sos.tasks import sync_mn_races
 
 _FILE_INDEX_HTML = "<html>fake index</html>"
