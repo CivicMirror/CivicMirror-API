@@ -5,8 +5,8 @@
 | Stage | Status | Notes |
 |---|---|---|
 | Stage 1 — Election Creation | ✅ Active | Google Civic API (election id 1776 in DB) |
-| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
-| Stage 2 — Results Ingestion | 🔧 Tier B planned | County-level Clarity confirmed; no state-level aggregator — custom multi-county adapter required |
+| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API (unchanged — NJ Stage 1 was not rebuilt) |
+| Stage 2 — Results Ingestion | ✅ Built, partial coverage | ~16 of 21 counties (Clarity-pattern only). 5 off-platform counties (incl. Bergen and Camden, two of the largest) deferred. `results/adapters/nj.py` |
 
 ---
 
@@ -63,6 +63,37 @@ New Jersey provides election results through the Division of Elections website. 
 **Statewide candidates source:** State publishes PDF candidate lists per race.
 - US Senate primary candidates: `https://www.nj.gov/state/elections/assets/pdf/election-results/2026/2026-official-primary-candidates-us-senate.pdf`
 - Post-election certified results also published as per-county PDFs.
+
+---
+
+## Critical Finding: Office Title and Candidate Name Inconsistency (2026-07-12)
+
+**Live verification across five Clarity counties (Atlantic, Burlington, Essex, Mercer, Ocean) for the same statewide contest (2026 US Senate primary, DEM) revealed that office titles and candidate names are NOT consistent across counties** — a significant challenge for cross-county aggregation.
+
+### Office Title Variance
+The same race is labeled with five different strings across five counties:
+- Atlantic: `DEM U.S. Senator`
+- Burlington: `US Senate (DEM)`
+- Essex: `United States Senator (DEM)`
+- Mercer: `U.S. Senate (DEM)`
+- Ocean: `DEM UNITED STATES SENATE`
+
+### Candidate Name Variance
+The same candidate appears as:
+- `Cory BOOKER` (Atlantic, Mercer)
+- `Cory Booker` (Burlington, Essex)
+- `DEM Cory BOOKER` (Ocean — party prefix embedded in candidate name field, not just office title)
+
+### Impact
+Naive string-equality aggregation across counties would produce up to 5 separate near-duplicate races (and candidate records) for what is genuinely one statewide contest. **This required building a normalization layer** (`results/adapters/nj_normalize.py`) that:
+1. Extracts party tokens (wherever they appear — prefix, suffix, or embedded in name)
+2. Normalizes office titles to canonical keys (`US_SENATE`, `GOVERNOR`, etc.) via pattern matching that tolerates observed variance in abbreviation, punctuation, and case
+3. Normalizes candidate names by stripping party prefixes and standardizing whitespace/case
+4. Groups races by `(canonical_office_key, party)` and aggregates votes by normalized candidate name
+
+This approach mirrors existing precedent in the codebase (`co_sos`'s use of `(office, district, party)` grouping for primary races) and handles non-candidate bookkeeping rows (`Write-in`, `WRITE-IN`, `Personal Choice`) the same way as IL's `Under Votes`/`Over Votes` handling.
+
+**For future work on the 5 deferred off-platform counties:** similar normalization will likely be needed. See `docs/superpowers/specs/2026-07-12-nj-adapter-design.md` for full technical detail on the normalization implementation.
 
 ---
 
