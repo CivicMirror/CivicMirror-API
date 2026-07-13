@@ -26,3 +26,43 @@ def parse_file_index(html: str) -> list[dict]:
         if url and label:
             files.append({"label": label, "url": url})
     return files
+
+
+_RESULT_FIELDS = (
+    "state", "county_id", "precinct_name", "office_id", "office_name",
+    "district", "candidate_order_code", "candidate_name", "suffix",
+    "incumbent_code", "party", "precincts_reporting", "total_precincts",
+    "candidate_votes", "candidate_pct", "total_office_votes",
+)
+
+_CANDIDATE_FIELDS = (
+    "candidate_id", "candidate_name", "office_id", "office_title",
+    "county_id", "order_code", "party",
+)
+
+
+def _parse_semicolon_rows(text: str, field_names: tuple[str, ...]) -> list[dict]:
+    rows = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(";")
+        if len(parts) != len(field_names):
+            continue
+        rows.append(dict(zip(field_names, parts)))
+    return rows
+
+
+def parse_result_file(text: str) -> list[dict]:
+    """
+    Parse a MN SOS results file (16-field positional, semicolon-delimited).
+    Confirmed live: these files are already aggregated to the file's stated
+    granularity (statewide or by-district) — no precinct-summing needed.
+    """
+    return _parse_semicolon_rows(text, _RESULT_FIELDS)
+
+
+def parse_candidate_table(text: str) -> list[dict]:
+    """Parse cand.txt (7-field positional, semicolon-delimited)."""
+    return _parse_semicolon_rows(text, _CANDIDATE_FIELDS)
