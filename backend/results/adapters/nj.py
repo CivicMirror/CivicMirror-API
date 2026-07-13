@@ -100,8 +100,6 @@ class NewJerseyAdapter(ClarityAdapter):
                 logger.warning("nj.adapter.county_version_failed county=%s err=%s", county_name, exc)
                 continue
 
-            current_vers.append(f"{county_name}:{current_ver}")
-
             try:
                 summary_url = f"{base_url}{current_ver}/json/en/summary.json"
                 data_resp = proxy_get(
@@ -110,16 +108,39 @@ class NewJerseyAdapter(ClarityAdapter):
                 )
                 data_resp.raise_for_status()
                 payload = data_resp.json()
+                if isinstance(payload, list):
+                    contests = payload
+                elif isinstance(payload, dict):
+                    contests = payload.get("Contests", payload.get("contests", []))
+                else:
+                    logger.warning(
+                        "nj.adapter.county_summary_bad_payload county=%s type=%s",
+                        county_name, type(payload).__name__,
+                    )
+                    continue
+                county_rows = self._parse_contests(contests, current_ver)
             except (UpstreamBlockedError, requests.RequestException, ValueError) as exc:
                 logger.warning("nj.adapter.county_summary_failed county=%s err=%s", county_name, exc)
                 continue
 
-            contests = payload if isinstance(payload, list) else payload.get("Contests", payload.get("contests", []))
-            county_rows = self._parse_contests(contests, current_ver)
+            # Only now that this county's data has actually been parsed does
+            # its version contribute to the checksum — a county that fetches
+            # a version but then fails to parse must never be baked into a
+            # stable "unchanged" checksum (see Task 7 review, issue 1).
+            current_vers.append(f"{county_name}:{current_ver}")
             source_url = summary_url
 
             for row in county_rows:
                 canonical_key, party = normalize_office(row.office_title or "")
+                is_district_key = canonical_key.startswith("US_HOUSE_")
+                if canonical_key not in _STATEWIDE_OFFICE_KEYS and not is_district_key:
+                    # Unrecognized office (e.g. a county-level row office like
+                    # SHERIFF or COUNTY CLERK) — out of scope for this adapter
+                    # (Federal + State only). Skip entirely rather than risk
+                    # fabricating a cross-county race out of coincidentally
+                    # matching normalized titles (see Task 7 review, issue 2).
+                    continue
+
                 name = normalize_candidate_name(row.candidate_name or "")
                 if name is None:
                     continue  # write-in / bookkeeping row — not aggregated as a candidate total
