@@ -7,7 +7,10 @@ docs/superpowers/specs/2026-07-13-mn-adapter-design.md).
 """
 from __future__ import annotations
 
+import datetime
 import re
+
+from elections.models import Election, Race
 
 IN_SCOPE_LABELS = frozenset({
     "U.S. President Statewide",
@@ -34,10 +37,6 @@ def is_in_scope_file(label: str) -> bool:
 def is_write_in(candidate_order_code: str) -> bool:
     return candidate_order_code == _WRITE_IN_ORDER_CODE
 
-
-import datetime
-
-from elections.models import Election, Race
 
 # Historical POC election: 2024 Minnesota general (confirmed live 2026-07-13).
 # Live discovery of future elections' ersElectionId is out of scope for this build.
