@@ -92,17 +92,26 @@ class MinnesotaAdapter(StateResultsAdapter):
             file_bytes_for_checksum.extend(text.encode("utf-8", errors="ignore"))
             source_url = url
             for row in parse_result_file(text):
-                all_rows.append(ResultRow(
-                    candidate_name=row["candidate_name"] or None,
-                    option_label=None,
-                    vote_count=int(row["candidate_votes"] or 0),
-                    vote_pct=_safe_float(row["candidate_pct"]),
-                    is_winner=None,
-                    result_type="unofficial",
-                    office_title=row["office_name"],
-                    is_write_in_aggregate=is_write_in(row["candidate_order_code"]),
-                    raw=row,
-                ))
+                try:
+                    result_row = ResultRow(
+                        candidate_name=row["candidate_name"] or None,
+                        option_label=None,
+                        vote_count=int(row["candidate_votes"] or 0),
+                        vote_pct=_safe_float(row["candidate_pct"]),
+                        is_winner=None,
+                        result_type="unofficial",
+                        office_title=row["office_name"],
+                        is_write_in_aggregate=is_write_in(row["candidate_order_code"]),
+                        raw=row,
+                    )
+                except (ValueError, TypeError) as exc:
+                    logger.warning(
+                        "mn_sos.adapter.malformed_row_skipped office_id=%s "
+                        "candidate_name=%s err=%s",
+                        row.get("office_id"), row.get("candidate_name"), exc,
+                    )
+                    continue
+                all_rows.append(result_row)
 
         if not all_rows:
             return AdapterResult(

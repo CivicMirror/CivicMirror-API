@@ -95,3 +95,38 @@ def test_fetch_results_reports_unchanged_when_checksum_matches_cache():
 
     assert second.unchanged is True
     assert second.rows == []
+
+
+@pytest.mark.django_db
+def test_fetch_results_skips_malformed_row_but_keeps_valid_rows():
+    election = Election.objects.create(
+        name="2024 Minnesota General Election", election_date="2024-11-05",
+        election_type="general", jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state="MN", source_id="mn_sos_2024_general",
+        source_metadata={"mn_ers_election_id": 170, "mn_date_path": "20241105"},
+    )
+    adapter = MinnesotaAdapter()
+    index_html = _load_fixture("mn_file_index.html")
+
+    # One row with a non-numeric candidate_votes field (malformed) and one
+    # otherwise-valid row, in the same file.
+    malformed_text = (
+        "MN;;;0102;U.S. Senator;;0202;Amy Klobuchar;;;DFL;4103;4103;NOT_A_NUMBER;56.20;3189323\r\n"
+        "MN;;;0102;U.S. Senator;;0104;Royce White;;;R;4103;4103;1291712;40.50;3189323\r\n"
+    )
+
+    def fake_fetch_file(url):
+        return malformed_text if url.endswith("ussenate.txt") else ""
+
+    with patch(
+        "results.adapters.mn.MnSosClient.fetch_file_index", return_value=index_html,
+    ), patch(
+        "results.adapters.mn.MnSosClient.fetch_file", side_effect=fake_fetch_file,
+    ):
+        result = adapter.fetch_results(election.election_date, election.pk)
+
+    assert result.mapping_confidence == "full"
+    names = {r.candidate_name for r in result.rows}
+    assert names == {"Royce White"}
+    royce = next(r for r in result.rows if r.candidate_name == "Royce White")
+    assert royce.vote_count == 1291712
