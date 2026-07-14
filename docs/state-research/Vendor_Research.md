@@ -120,3 +120,7 @@ Because VR Systems operates on a decentralized, county-by-county basis in most s
 2. **Treat Clarity as a scraping target, not an API.** Akamai gating + AUP exposure mean Clarity states should lean on OpenElections / MEDSL for certified backfill where possible.
 3. **Watch the migration wave.** CT (PCC → KNOWiNK) and the broader KNOWiNK onboarding (NE) mean adapters can change vendor under you mid-cycle. Build vendor detection into your pipeline rather than hard-coding per state.
 4. **In-house states each need their own thing.** AZ (XML), NY (Playwright + cert PDFs), KY (OpenElections), WI (county-by-county) share nothing — budget per-state effort for these.
+
+## Added research updated  06/13/2026
+https://www.enhancedvoting.com/   - Found to be powering the GA sos website.
+
