@@ -17,6 +17,7 @@ backend/staticfiles/
 
 # HAR captures (may contain session cookies / tokens)
 *.har
+*.har-*
 
 # Ad-hoc DB inspection scripts
 backend/sqlcheck.py
@@ -31,3 +32,8 @@ package-lock.json
 
 # Local git worktrees
 .worktrees/
+
+# Local assistant/tooling state
+.claude/
+opencode.json
+pyrightconfig.json
