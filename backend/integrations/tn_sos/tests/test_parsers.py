@@ -55,6 +55,7 @@ def test_parse_candidate_workbook_skips_negative_statuses():
     sheet = workbook.active
     sheet.append(["Office", "Candidate Name", "Party", "Status"])
     sheet.append(["Governor", "Qualified Candidate", "Independent", "Qualified"])
+    sheet.append(["Governor", "Qualified Another", "Democratic", "Qualified Candidate"])
     sheet.append(["Governor", "Active Candidate", "Democratic", "Active"])
     sheet.append(["Governor", "Nominee Candidate", "Republican", "Nominee"])
     sheet.append(["Governor", "Withdrawn Candidate", "Independent", "Withdrawn"])
@@ -66,8 +67,7 @@ def test_parse_candidate_workbook_skips_negative_statuses():
 
     assert [record.candidate_name for record in records] == [
         "Qualified Candidate",
-        "Active Candidate",
-        "Nominee Candidate",
+        "Qualified Another",
     ]
 
 

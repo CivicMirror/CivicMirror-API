@@ -67,17 +67,15 @@ _MONTH_DATE_RE = re.compile(
     r"\s+\d{1,2},\s+\d{4}\b"
 )
 _SLASH_DATE_RE = re.compile(r"\b\d{1,2}/\d{1,2}/\d{4}\b")
-_TN_SOS_PAGE_HOST = "sos.tn.gov"
 _TN_SOS_DOCUMENT_HOST = "sos-prod.tnsosgovfiles.com"
 _TN_SOS_DOCUMENT_PATH = "/s3fs-public/document/"
-_POSITIVE_CANDIDATE_STATUSES = {
-    "active",
-    "active candidate",
-    "nominee",
-    "nominated",
-    "nominated candidate",
-    "qualified",
-    "qualified candidate",
+_TN_SOS_RESULT_ARCHIVE_HOSTS = {
+    "sos-tn-gov-files.s3.amazonaws.com",
+    "tnelections.tnsosfiles.com",
+}
+_TN_SOS_RESULT_ARCHIVE_PREFIXES = {
+    "sos-tn-gov-files.s3.amazonaws.com": "/",
+    "tnelections.tnsosfiles.com": "/sharetngov/archived/election/results/",
 }
 
 
@@ -137,17 +135,19 @@ def parse_candidate_workbook_links(html: str) -> list[TnCandidateWorkbookLink]:
     links: list[TnCandidateWorkbookLink] = []
     for anchor in soup.find_all("a", href=True):
         url = urljoin("https://sos.tn.gov", anchor["href"])
-        if _is_official_tn_sos_url(url) and urlparse(url).path.lower().endswith(".xlsx"):
-            container = anchor.find_parent("li")
-            office_group = _clean_text(container.get_text(" ", strip=True) if container else anchor.get_text(" ", strip=True))
-            office_group = re.split(r"\s*:\s*", office_group, maxsplit=1)[0]
-            links.append(
-                TnCandidateWorkbookLink(
-                    office_group=office_group,
-                    filename=urlparse(url).path.rsplit("/", 1)[-1],
-                    url=url,
-                )
+        parsed = urlparse(url)
+        if not _is_official_document_url(parsed, ".xlsx", {_TN_SOS_DOCUMENT_HOST: _TN_SOS_DOCUMENT_PATH}):
+            continue
+        container = anchor.find_parent("li")
+        office_group = _clean_text(container.get_text(" ", strip=True) if container else anchor.get_text(" ", strip=True))
+        office_group = re.split(r"\s*:\s*", office_group, maxsplit=1)[0]
+        links.append(
+            TnCandidateWorkbookLink(
+                office_group=office_group,
+                filename=parsed.path.rsplit("/", 1)[-1],
+                url=url,
             )
+        )
     return links
 
 
@@ -169,7 +169,7 @@ def parse_candidate_workbook(content: bytes, source_url: str) -> list[TnCandidat
                 if not office or not candidate_name:
                     continue
                 status = _first(row, "status", "candidate status")
-                if has_status_field and not _is_positive_candidate_status(status):
+                if has_status_field and not re.search(r"\bqualified\b", status.lower()):
                     continue
                 records.append(
                     TnCandidateRecord(
@@ -194,7 +194,12 @@ def parse_results_index(html: str) -> list[TnResultLink]:
         url = urljoin(RESULTS_INDEX_URL, anchor["href"])
         path = urlparse(url).path
         extension = path.rsplit(".", 1)[-1].lower() if "." in path.rsplit("/", 1)[-1] else ""
-        if not _is_official_tn_sos_url(url) or extension not in {"xlsx", "xls", "pdf", "csv"}:
+        if extension not in {"xlsx", "xls", "pdf", "csv"}:
+            continue
+        parsed = urlparse(url)
+        allowed_prefixes = {_TN_SOS_DOCUMENT_HOST: _TN_SOS_DOCUMENT_PATH}
+        allowed_prefixes.update(_TN_SOS_RESULT_ARCHIVE_PREFIXES)
+        if not _is_official_document_url(parsed, f".{extension}", allowed_prefixes):
             continue
         label = _clean_text(anchor.get_text(" ", strip=True))
         context = _clean_text(anchor.find_parent("li").get_text(" ", strip=True) if anchor.find_parent("li") else label)
@@ -320,19 +325,12 @@ def _normalize_key(value: object) -> str:
     return " ".join(str(value or "").lower().replace("_", " ").split())
 
 
-def _is_official_tn_sos_url(url: str) -> bool:
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.hostname is None:
+def _is_official_document_url(parsed_url, suffix: str, allowed_hosts_and_prefixes: dict[str, str]) -> bool:
+    if parsed_url.scheme != "https" or parsed_url.hostname is None:
         return False
-    hostname = parsed.hostname.lower()
-    if hostname == _TN_SOS_PAGE_HOST:
-        return True
-    return hostname == _TN_SOS_DOCUMENT_HOST and parsed.path.lower().startswith(_TN_SOS_DOCUMENT_PATH)
-
-
-def _is_positive_candidate_status(status: str) -> bool:
-    normalized = " ".join(re.sub(r"[^a-z0-9]+", " ", status.lower()).split())
-    return normalized in _POSITIVE_CANDIDATE_STATUSES
+    hostname = parsed_url.hostname.lower()
+    allowed_prefix = allowed_hosts_and_prefixes.get(hostname)
+    return allowed_prefix is not None and parsed_url.path.lower().startswith(allowed_prefix) and parsed_url.path.lower().endswith(suffix)
 
 
 def _clean_text(value: str) -> str:
