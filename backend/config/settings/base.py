@@ -163,6 +163,7 @@ INSTALLED_APPS += [
     'integrations.wa_votewa',
     'integrations.tx_goelect',
     'integrations.fl_ew',
+    'integrations.ga_sos',
     'integrations.oh_sos',
     'integrations.mn_sos',
     'internal',
