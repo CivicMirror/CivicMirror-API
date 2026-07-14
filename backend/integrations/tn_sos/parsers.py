@@ -67,6 +67,18 @@ _MONTH_DATE_RE = re.compile(
     r"\s+\d{1,2},\s+\d{4}\b"
 )
 _SLASH_DATE_RE = re.compile(r"\b\d{1,2}/\d{1,2}/\d{4}\b")
+_TN_SOS_PAGE_HOST = "sos.tn.gov"
+_TN_SOS_DOCUMENT_HOST = "sos-prod.tnsosgovfiles.com"
+_TN_SOS_DOCUMENT_PATH = "/s3fs-public/document/"
+_POSITIVE_CANDIDATE_STATUSES = {
+    "active",
+    "active candidate",
+    "nominee",
+    "nominated",
+    "nominated candidate",
+    "qualified",
+    "qualified candidate",
+}
 
 
 def document_checksum(content: bytes) -> str:
@@ -125,7 +137,7 @@ def parse_candidate_workbook_links(html: str) -> list[TnCandidateWorkbookLink]:
     links: list[TnCandidateWorkbookLink] = []
     for anchor in soup.find_all("a", href=True):
         url = urljoin("https://sos.tn.gov", anchor["href"])
-        if urlparse(url).path.lower().endswith(".xlsx"):
+        if _is_official_tn_sos_url(url) and urlparse(url).path.lower().endswith(".xlsx"):
             container = anchor.find_parent("li")
             office_group = _clean_text(container.get_text(" ", strip=True) if container else anchor.get_text(" ", strip=True))
             office_group = re.split(r"\s*:\s*", office_group, maxsplit=1)[0]
@@ -149,11 +161,15 @@ def parse_candidate_workbook(content: bytes, source_url: str) -> list[TnCandidat
             if header_index is None:
                 continue
             headers = [_normalize_key(value) for value in rows[header_index]]
+            has_status_field = any(header in {"status", "candidate status"} for header in headers)
             for source_row, values in enumerate(rows[header_index + 1 :], start=header_index + 2):
                 row = _row_values(headers, values)
                 office = _first(row, "office", "office title", "contest")
                 candidate_name = _first(row, "candidate", "candidate name", "name")
                 if not office or not candidate_name:
+                    continue
+                status = _first(row, "status", "candidate status")
+                if has_status_field and not _is_positive_candidate_status(status):
                     continue
                 records.append(
                     TnCandidateRecord(
@@ -161,7 +177,7 @@ def parse_candidate_workbook(content: bytes, source_url: str) -> list[TnCandidat
                         district=_first(row, "district"),
                         candidate_name=candidate_name,
                         party=_first(row, "party", "party name"),
-                        status=_first(row, "status", "candidate status"),
+                        status=status,
                         source_url=source_url,
                         source_row=source_row,
                     )
@@ -178,7 +194,7 @@ def parse_results_index(html: str) -> list[TnResultLink]:
         url = urljoin(RESULTS_INDEX_URL, anchor["href"])
         path = urlparse(url).path
         extension = path.rsplit(".", 1)[-1].lower() if "." in path.rsplit("/", 1)[-1] else ""
-        if extension not in {"xlsx", "xls", "pdf", "csv"}:
+        if not _is_official_tn_sos_url(url) or extension not in {"xlsx", "xls", "pdf", "csv"}:
             continue
         label = _clean_text(anchor.get_text(" ", strip=True))
         context = _clean_text(anchor.find_parent("li").get_text(" ", strip=True) if anchor.find_parent("li") else label)
@@ -302,6 +318,21 @@ def _result_level(value: str) -> str:
 
 def _normalize_key(value: object) -> str:
     return " ".join(str(value or "").lower().replace("_", " ").split())
+
+
+def _is_official_tn_sos_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname is None:
+        return False
+    hostname = parsed.hostname.lower()
+    if hostname == _TN_SOS_PAGE_HOST:
+        return True
+    return hostname == _TN_SOS_DOCUMENT_HOST and parsed.path.lower().startswith(_TN_SOS_DOCUMENT_PATH)
+
+
+def _is_positive_candidate_status(status: str) -> bool:
+    normalized = " ".join(re.sub(r"[^a-z0-9]+", " ", status.lower()).split())
+    return normalized in _POSITIVE_CANDIDATE_STATUSES
 
 
 def _clean_text(value: str) -> str:

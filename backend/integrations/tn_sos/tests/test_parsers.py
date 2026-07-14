@@ -1,4 +1,7 @@
+import io
 from pathlib import Path
+
+from openpyxl import Workbook
 
 from integrations.tn_sos.parsers import (
     parse_calendar,
@@ -30,6 +33,12 @@ def test_parse_candidate_workbook_links_prefers_xlsx_office_files():
     assert all(link.url.endswith(".xlsx") for link in links)
 
 
+def test_parse_candidate_workbook_links_rejects_external_workbook_url():
+    html = '<a href="https://example.com/candidates.xlsx">Excel</a>'
+
+    assert parse_candidate_workbook_links(html) == []
+
+
 def test_parse_candidate_workbook_returns_qualified_candidates():
     records = parse_candidate_workbook(
         (FIXTURES / "candidates_us_senate_2026.xlsx").read_bytes(),
@@ -41,12 +50,39 @@ def test_parse_candidate_workbook_returns_qualified_candidates():
     assert records[0].party == "Republican"
 
 
+def test_parse_candidate_workbook_skips_negative_statuses():
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Office", "Candidate Name", "Party", "Status"])
+    sheet.append(["Governor", "Qualified Candidate", "Independent", "Qualified"])
+    sheet.append(["Governor", "Active Candidate", "Democratic", "Active"])
+    sheet.append(["Governor", "Nominee Candidate", "Republican", "Nominee"])
+    sheet.append(["Governor", "Withdrawn Candidate", "Independent", "Withdrawn"])
+    sheet.append(["Governor", "Disqualified Candidate", "Independent", "Disqualified"])
+    content = io.BytesIO()
+    workbook.save(content)
+
+    records = parse_candidate_workbook(content.getvalue(), "https://sos.tn.gov/elections/candidates.xlsx")
+
+    assert [record.candidate_name for record in records] == [
+        "Qualified Candidate",
+        "Active Candidate",
+        "Nominee Candidate",
+    ]
+
+
 def test_parse_results_index_finds_recent_precinct_spreadsheets():
     links = parse_results_index((FIXTURES / "results_index_sample.html").read_text())
 
     urls = {link.url for link in links}
     assert any("20251202AllbyPrecinct.xlsx" in url for url in urls)
     assert any("20241105AllbyPrecinct.xlsx" in url for url in urls)
+
+
+def test_parse_results_index_rejects_external_result_url():
+    html = '<a href="https://example.com/results.xlsx">Results by Precinct</a>'
+
+    assert parse_results_index(html) == []
 
 
 def test_parse_precinct_xlsx_returns_result_records():
