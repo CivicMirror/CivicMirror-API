@@ -1,11 +1,13 @@
 from django.core.cache import cache
 from django.core.management.base import BaseCommand, CommandError
 
+from integrations.mi_sos.tasks import sync_mi_elections
 from integrations.or_sos.tasks import sync_or_elections
 from internal.task_locks import TASK_LOCKS, current_window, lock_key
 from internal.tasks import release_task_lock
 
 LOCAL_TASKS = {
+    "sync_mi_sos": sync_mi_elections,
     "sync_or_sos": sync_or_elections,
 }
 
