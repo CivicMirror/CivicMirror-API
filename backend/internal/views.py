@@ -12,6 +12,7 @@ from integrations.co_sos.tasks import sync_co_elections
 from integrations.election_calendar.tasks import seed_2026_elections
 from integrations.fec.tasks import sync_fec_candidates
 from integrations.fl_ew.tasks import sync_fl_elections
+from integrations.ga_sos.tasks import sync_ga_elections
 from integrations.ia_sos.tasks import sync_ia_elections
 from integrations.il_sbe.tasks import sync_il_elections
 from integrations.ky_sos.tasks import sync_ky_sos
@@ -192,6 +193,13 @@ def sync_nj_elections_trigger(request):
 @require_internal_task_token
 def sync_az_sos_trigger(request):
     return _trigger("sync_az_sos", sync_az_elections, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_ga_sos_trigger(request):
+    return _trigger("sync_ga_sos", sync_ga_elections, request)
 
 
 @csrf_exempt

@@ -19,6 +19,10 @@ backend/staticfiles/
 *.har
 *.har-*
 
+# State research source artifacts kept local; use compact fixtures in tests.
+docs/state-research/GA/1920-Present-Voter-Turnout-History.xlsx
+docs/state-research/GA/export-06162026GeneralPrimaryRunoff.json
+
 # Ad-hoc DB inspection scripts
 backend/sqlcheck.py
 
