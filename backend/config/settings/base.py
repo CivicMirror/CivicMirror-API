@@ -166,6 +166,7 @@ INSTALLED_APPS += [
     'integrations.ga_sos',
     'integrations.oh_sos',
     'integrations.mn_sos',
+    'integrations.ky_sos',
     'integrations.tn_sos',
     'integrations.mi_sos',
     'internal',
