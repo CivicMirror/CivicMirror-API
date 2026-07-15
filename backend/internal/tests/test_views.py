@@ -331,3 +331,18 @@ def test_sync_or_sos_idempotency(client, internal_token):
     assert second.status_code == 202
     assert second.json()["status"] == "already_running"
     mock_task.apply_async.assert_called_once()
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_mi_sos_valid_token(client, internal_token):
+    with patch("internal.views.sync_mi_elections") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "mi-901"
+        mock_task.apply_async.return_value = mock_result
+        response = client.post(
+            "/internal/tasks/sync-mi-sos/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert response.status_code == 202
+    assert response.json()["task_id"] == "mi-901"

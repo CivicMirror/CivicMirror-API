@@ -67,8 +67,12 @@ def normalize_contest_name(office: str, district: str) -> str:
     if m:
         dist_num = m.group(1)
 
+    if "LIEUTENANT GOVERNOR" in off:
+        return "Lieutenant Governor"
     if "GOVERNOR" in off:
         return "Governor"
+    elif "REPRESENTATIVE IN CONGRESS" in off:
+        return f"U.S. House - District {dist_num}" if dist_num else "U.S. House"
     elif "REPRESENTATIVE IN THE GENERAL ASSEMBLY" in off:
         return f"State House - District {dist_num}" if dist_num else "State House"
     elif "SENATOR IN THE GENERAL ASSEMBLY" in off:
@@ -89,6 +93,6 @@ def geography_scope(office_title: str) -> str:
     title = office_title.lower()
     if "state house" in title or "state senate" in title:
         return "state_legislative_district"
-    if "u.s. house" in title:
+    if "u.s. house" in title or "representative in congress" in title:
         return "congressional_district"
     return "statewide"
