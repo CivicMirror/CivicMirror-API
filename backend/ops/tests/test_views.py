@@ -2,7 +2,9 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+from django.db import connection
 from django.test import Client
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from ops.models import SyncLog
@@ -107,6 +109,25 @@ def test_only_latest_completed_entry_per_source_returned(client):
     _make_log("wv_sos", records_updated=2, completed_at=now)
     response = client.get("/api/coverage/sync-status/")
     assert response.json()["by_state"]["WV"]["wv_sos"]["records_updated"] == 2
+
+
+@pytest.mark.django_db
+def test_sync_status_uses_non_correlated_latest_source_query(client):
+    """The public coverage page calls this on load, so avoid the old correlated
+    subquery shape that timed out against production-sized SyncLog tables.
+    """
+    now = timezone.now()
+    for idx in range(3):
+        _make_log("wv_sos", completed_at=now - timedelta(minutes=idx))
+        _make_log("sc_enr", completed_at=now - timedelta(minutes=idx))
+
+    with CaptureQueriesContext(connection) as queries:
+        response = client.get("/api/coverage/sync-status/")
+
+    assert response.status_code == 200
+    synclog_queries = [query["sql"] for query in queries if "ops_synclog" in query["sql"]]
+    assert len(synclog_queries) == 1
+    assert "SELECT U0" not in synclog_queries[0]
 
 
 @pytest.mark.django_db
