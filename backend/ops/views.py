@@ -1,4 +1,3 @@
-from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -58,25 +57,33 @@ class CoverageSyncStatusView(APIView):
     _COMPLETED_STATUSES = (SyncLog.Status.COMPLETED, SyncLog.Status.COMPLETED_WITH_WARNINGS)
 
     def get(self, request):
-        latest_id_for_source = (
-            SyncLog.objects
-            .filter(source=OuterRef("source"), status__in=self._COMPLETED_STATUSES)
-            .exclude(source="")
-            .order_by("-completed_at", "-pk")
-            .values("pk")[:1]
-        )
-        latest_per_source = (
+        latest_logs = []
+        seen_sources = set()
+        completed_logs_by_source_recency = (
             SyncLog.objects
             .filter(status__in=self._COMPLETED_STATUSES)
             .exclude(source="")
-            .filter(pk=Subquery(latest_id_for_source))
-            .order_by("source")
+            .only(
+                "source",
+                "completed_at",
+                "status",
+                "records_created",
+                "records_updated",
+                "records_skipped",
+            )
+            .order_by("source", "-completed_at", "-pk")
         )
+
+        for log in completed_logs_by_source_recency:
+            if log.source in seen_sources:
+                continue
+            seen_sources.add(log.source)
+            latest_logs.append(log)
 
         global_sources: dict[str, dict] = {}
         by_state: dict[str, dict[str, dict]] = {}
 
-        for log in latest_per_source:
+        for log in latest_logs:
             if log.source in _GLOBAL_SOURCES:
                 global_sources[log.source] = _serialize_log(log)
                 continue
