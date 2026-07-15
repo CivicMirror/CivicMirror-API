@@ -23,7 +23,7 @@ from ops.models import SyncLog
 
 from .client import KentuckySosClient
 from .exceptions import KySosRetryableError
-from .mappers import IN_SCOPE_OFFICE_IDS, map_candidate, map_election, map_race
+from .mappers import IN_SCOPE_OFFICE_IDS, OFFICE_LABELS, map_candidate, map_election, map_race
 from .parsers import parse_candidate_rows, parse_current_election, parse_office_directory
 
 logger = logging.getLogger(__name__)
@@ -89,7 +89,11 @@ def sync_ky_sos(self):
                 updated_count += int(not cand_created)
 
         withdrawn_html = client.fetch_withdrawn()
+        in_scope_office_labels = set(OFFICE_LABELS.values())
         for row in parse_candidate_rows(withdrawn_html):
+            if row["office"] not in in_scope_office_labels:
+                continue
+
             race_defaults = map_race(row["office"], row["district"])
             race_identity = {
                 "office_title": race_defaults.pop("office_title"),

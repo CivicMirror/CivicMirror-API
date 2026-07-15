@@ -62,6 +62,71 @@ def test_sync_ky_sos_creates_election_races_and_candidates():
     assert result["created"] > 0
 
 
+_WITHDRAWN_OUT_OF_SCOPE_HTML = """
+<html><body>
+<div class="cf-office-body">
+    <table style="width: 100%;" cellpadding="0" cellspacing="0">
+        <tr style="background-color: #b7dfe9; font-weight: bold;">
+            <td>Name</td>
+            <td>POBox Address</td>
+            <td>Office</td>
+            <td>District/Division</td>
+            <td>Party</td>
+        </tr>
+        <tr class="boldleft">
+            <td><a href="Default.aspx?cand=99999">Jane Q. Justice</a></td>
+            <td><a class="email-link" href="mailto:jane@example.com">jane@example.com</a></td>
+            <td>Justice of the Supreme Court</td>
+            <td><a href="Default.aspx?office=14&amp;district=1">1st</a></td>
+            <td>Nonpartisan</td>
+        </tr>
+    </table>
+</div>
+</body></html>
+"""
+
+
+@pytest.mark.django_db
+def test_sync_ky_sos_skips_out_of_scope_withdrawn_rows():
+    directory_html = _load_fixture("office_directory.html")
+
+    with patch(
+        "integrations.ky_sos.tasks.KentuckySosClient.fetch_directory",
+        return_value=directory_html,
+    ), patch(
+        "integrations.ky_sos.tasks.KentuckySosClient.fetch_office",
+        return_value="<html></html>",
+    ), patch(
+        "integrations.ky_sos.tasks.KentuckySosClient.fetch_withdrawn",
+        return_value=_WITHDRAWN_OUT_OF_SCOPE_HTML,
+    ):
+        sync_ky_sos()
+
+    assert not Candidate.objects.filter(name="Jane Q. Justice").exists()
+    assert not Race.objects.filter(office_title__icontains="Justice of the Supreme Court").exists()
+
+
+@pytest.mark.django_db
+def test_sync_ky_sos_still_ingests_in_scope_withdrawn_rows():
+    directory_html = _load_fixture("office_directory.html")
+    withdrawn_html = _load_fixture("withdrawn.html")
+
+    with patch(
+        "integrations.ky_sos.tasks.KentuckySosClient.fetch_directory",
+        return_value=directory_html,
+    ), patch(
+        "integrations.ky_sos.tasks.KentuckySosClient.fetch_office",
+        return_value="<html></html>",
+    ), patch(
+        "integrations.ky_sos.tasks.KentuckySosClient.fetch_withdrawn",
+        return_value=withdrawn_html,
+    ):
+        sync_ky_sos()
+
+    withdrawn_candidate = Candidate.objects.get(name="Alisha Dawn Chaffin")
+    assert withdrawn_candidate.candidate_status == Candidate.CandidateStatus.WITHDRAWN
+
+
 @pytest.mark.django_db
 def test_sync_ky_sos_is_idempotent_on_rerun():
     directory_html = _load_fixture("office_directory.html")
