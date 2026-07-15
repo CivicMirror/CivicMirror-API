@@ -77,15 +77,16 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **NJ** | New Jersey | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (multi-county Clarity, ~16/21 counties) | Near Core (partial) |
 | **MN** | Minnesota | ⚠️ POC election upsert | ✅ Complete for federal/state result-file scope | ✅ Complete (MN SOS flat files) | Near Core (partial) |
 | **OR** | Oregon | ✅ Complete for current statewide election | ✅ Complete for core skeleton/candidates | ⚠️ Partial (structured certified files; no live statewide feed) | Near Core (partial) |
+| **GA** | Georgia | ✅ Complete | ✅ Complete | ✅ Complete (Enhanced Voting API) | Full Core |
+| **MI** | Michigan | ✅ Complete | ✅ Complete | ✅ Complete (MVIC) | Full Core |
+| **PA** | Pennsylvania | ✅ Complete | ✅ Complete | ✅ Complete (electionreturns.pa.gov) | Full Core |
+| **KY** | Kentucky | ✅ Complete | ✅ Complete | ❌ Not implemented | Stage 1 Coverage |
 | **IA** | Iowa | ✅ Complete | ✅ Complete | ⚠️ Adapter built, needs production wiring | Near Core |
 | **AR** | Arkansas | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (TotalVote ENR) | Results Coverage Only |
 | **CT** | Connecticut | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (PCC EMS) | Results Coverage Only |
 | **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | Clarity sweep (20 states) | ✅ Available (Civic API) | ⚠️ Untested | ✅ Adapter available (Clarity) | Results Coverage Only |
 | **OH** | Ohio | ✅ Available (Civic API) | ⚠️ Untested | ⚠️ Pending CF solver deploy (Clarity ENR) | Near Core (adapter built, CF solver required) |
-| **GA** | Georgia | ✅ Ready to build | ✅ Ready to build | ✅ Ready to build (Enhanced Voting API) | Research Complete — Buildable |
-| **TN** | Tennessee | ✅ Available (Civic API) | ⚠️ Untested | ❓ Live dashboard endpoint discovery needed | Research Needed |
-| **MI** | Michigan | ✅ Available (Civic API) | ⚠️ Untested | ❌ Blocked (API offline) | Blocked |
-| **PA** | Pennsylvania | ✅ Available (Civic API) | ⚠️ Untested | ❌ Blocked (no public API) | Blocked |
+| **TN** | Tennessee | ✅ Available (Civic API); parser/client scaffold exists | ⚠️ Untested | ❓ Live dashboard endpoint discovery needed | Research/Build Scaffold |
 | All others | — | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Federal Only |
 
 ---
@@ -101,8 +102,11 @@ Stage 1 and Stage 2 complete for Federal and State offices. Election discovery, 
 - Arizona (AZ) — AZ SOS XML feed
 - Colorado (CO) — CO SOS adapter
 - Florida (FL) — FL Election Watch
+- Georgia (GA) — Enhanced Voting API
 - Illinois (IL) — IL SBE CSV adapter
 - Massachusetts (MA) — MA SOS adapter
+- Michigan (MI) — MVIC + BOE candidate listings
+- Pennsylvania (PA) — PA SOS candidate lists + electionreturns.pa.gov
 - South Carolina (SC) — SC VREMS + Clarity
 - Texas (TX) — GoElect ENR
 - Virginia (VA) — VA ELECT ENR
@@ -115,6 +119,7 @@ Stage 2 results adapter is complete and active. Stage 1 race creation relies on 
 
 - California (CA) — results adapter built; race creation depends on Civic API
 - Iowa (IA) — Stage 1 complete; Stage 2 adapter built but production wiring incomplete
+- Kentucky (KY) — Stage 1 SOS election/race/candidate ingestion complete; results ingestion remains open
 - Minnesota (MN) — results adapter built for SOS semicolon-delimited flat files; `sync_mn_races` seeds the scoped federal/state race/candidate set from the same official files. Election discovery is still a POC/upsert path, not a full election-manifest adapter.
 - New Jersey (NJ) — results adapter built (multi-county Clarity sweep, ~16 of 21 counties); 5 off-platform counties (Bergen, Camden, Sussex, Warren, Hunterdon) deferred. Includes office/candidate name normalization to handle cross-county inconsistency. See `docs/state-research/NJ/NJ-Election_Research.md`.
 - New York (NY) — results adapter built (Flateau DB); race creation depends on Civic API
@@ -129,18 +134,16 @@ Stage 2 results adapter available. No dedicated Stage 1 adapter — elections an
 - Connecticut (CT) — PCC EMS
 - Clarity sweep states (AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY) — requires `results_url` set per election in Django admin
 
-### Research Complete — Buildable (no adapter yet)
+### Research/Build Scaffold
 
-Stage 1/Stage 2 adapter is buildable from researched source details, but not yet implemented.
+Research or parser/client scaffolding exists, but a scheduled Stage 1 ingestion task and/or Stage 2 results adapter is not yet implemented.
 
-- Georgia (GA) — Enhanced Voting API at `results.sos.ga.gov`; same vendor family as VA/WA. Build next after confirming Cloud Run/local access and current election slug/list endpoint behavior.
+- Tennessee (TN) — SOS calendar/candidate/results parsers and client scaffold exist; scheduled Stage 1 ingestion and results adapter still need to be built.
 
 ### Blocked
 
 No adapter and no clear near-term path:
 
-- Michigan (MI) — `michiganelections.io` returning 503; monitor for recovery
-- Pennsylvania (PA) — no public programmatic source for state results; Socrata `data.pa.gov` has only mail ballot data
 - **Ohio (OH)** — Stage 1 adapter built (`integrations/oh_sos/`) using CFDISCLOSURE `ACT_CAN_LIST.CSV` (765 candidates, daily). Stage 2 uses Clarity ENR (`liveresults.boe.ohio.gov`, added to `CLARITY_PROXY_HOSTS`). Both sources require the CF solver microservice (`cloudflare/cf-solver/`) deployed as a Cloud Run service with `CF_SOLVER_URL` + `CF_SOLVER_SECRET` set. CF bypass confirmed working (nodriver+xvfb, 2026-06-28). Task: `sync-oh-sos`. Federal races via Civic API (15-address config). See `docs/state-research/OH/OH-Election_Research.md`.
 
 ### Federal Only (no adapter)
