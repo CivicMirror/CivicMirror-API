@@ -90,12 +90,15 @@ def test_party_abbrev():
 
 def test_normalize_contest_name():
     assert normalize_contest_name("GOVERNOR ", "Statewide") == "Governor"
+    assert normalize_contest_name("LIEUTENANT GOVERNOR", "Statewide") == "Lieutenant Governor"
+    assert normalize_contest_name("REPRESENTATIVE IN CONGRESS", "13th Congressional District") == "U.S. House - District 13"
     assert normalize_contest_name("REPRESENTATIVE IN THE GENERAL ASSEMBLY", "55th Legislative District") == "State House - District 55"
-    assert normalize_contest_name("SENATOR IN THE GENERAL ASSEMBLY", "37th Legislative District") == "State Senate - District 37"
+    assert normalize_contest_name("SENATOR IN THE GENERAL ASSEMBLY", "37th Senatorial District") == "State Senate - District 37"
     assert normalize_contest_name("LOCAL OFFICE", "District 1") == "LOCAL OFFICE - District 1"
 
 
 def test_geography_scope():
     assert geography_scope("Governor") == "statewide"
+    assert geography_scope("U.S. House - District 13") == "congressional_district"
     assert geography_scope("State House - District 55") == "state_legislative_district"
     assert geography_scope("State Senate - District 37") == "state_legislative_district"
