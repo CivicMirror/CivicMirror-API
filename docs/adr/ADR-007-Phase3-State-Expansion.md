@@ -73,7 +73,7 @@ A version string confirms Clarity. Only create the adapter after confirmation. N
 
 A Tier A results adapter has immediate value even without a full SOS adapter — `poll_pending_results` fires nightly and will pick up results for any election already in the DB (from Civic API). Ship Tier A adapters before waiting for Tier B work.
 
-## Outcomes (updated 2026-06-17)
+## Outcomes (updated 2026-07-15)
 
 ### Completed adapters
 
@@ -90,6 +90,10 @@ A Tier A results adapter has immediate value even without a full SOS adapter —
 | **NJ** | B (custom) | `results/adapters/nj.py` + `integrations/nj_elections/` | 2026-07-13 | Near Core (partial) | Multi-county Clarity fan-out for ~16/21 counties; off-platform counties deferred; county URL enrichment via `sync-nj-elections` |
 | **MN** | B | `results/adapters/mn.py` + `integrations/mn_sos/` | 2026-07-13 | Near Core (partial) | SOS semicolon-delimited result files; checksum change detection; scoped federal/state race/candidate sync via `sync-mn-sos`; election discovery still POC/upsert |
 | **OR** | B | `results/adapters/oregon.py` + `integrations/or_sos/` | 2026-07-13 | Near Core (partial) | Oregon SOS + ORESTAR Stage 1 sources; structured certified result document parser; no centralized live statewide results feed and PDF/legacy XLS still unsupported |
+| **GA** | B (custom) | `results/adapters/ga.py` + `integrations/ga_sos/` | 2026-07-15 | Full Core | Georgia SOS Enhanced Voting API; Stage 1 discovers elections/races/candidates and Stage 2 polls official results |
+| **MI** | B (custom) | `results/adapters/mi.py` + `integrations/mi_sos/` | 2026-07-15 | Full Core | BOE candidate listings for Stage 1; MVIC results adapter with bulk-file and HTML fallback paths |
+| **PA** | B (custom) | `results/adapters/pa.py` + `integrations/pa_sos/` | 2026-07-15 | Full Core | PA SOS candidate-list Stage 1 plus `electionreturns.pa.gov` results adapter |
+| **KY** | Stage 1 | `integrations/ky_sos/` | 2026-07-15 | Stage 1 Coverage | Kentucky SOS race/candidate ingestion for federal/state offices; certified recap and live results ingestion remain future work |
 
 **AR** validated the "Tier B without a full SOS adapter" pattern — the TotalVote REST API is richer than Clarity and eliminates the need for election-by-election `results_url` config. AR elections/races still come from Civic API (Stage 1 only).
 
