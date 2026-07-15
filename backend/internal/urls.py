@@ -30,4 +30,5 @@ urlpatterns = [
     path("tasks/sync-mi-sos/", views.sync_mi_sos_trigger, name="internal-sync-mi-sos"),
     path("tasks/sync-or-sos/", views.sync_or_sos_trigger, name="internal-sync-or-sos"),
     path("tasks/sync-ky-sos/", views.sync_ky_sos_trigger, name="internal-sync-ky-sos"),
+    path("tasks/sync-tn-sos/", views.sync_tn_sos_trigger, name="internal-sync-tn-sos"),
 ]
