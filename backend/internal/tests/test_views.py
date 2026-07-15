@@ -168,6 +168,21 @@ def test_poll_results_valid_token(client, internal_token):
 
 @pytest.mark.django_db
 @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_pa_sos_valid_token(client, internal_token):
+    with patch("internal.views.sync_pa_elections") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "pa-task"
+        mock_task.apply_async.return_value = mock_result
+        response = client.post(
+            "/internal/tasks/sync-pa-sos/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert response.status_code == 202
+    assert response.json()["task_id"] == "pa-task"
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
 def test_sync_openstates_valid_token(client, internal_token):
     with patch("internal.views.sync_openstates_all_states") as mock_task:
         mock_result = MagicMock()

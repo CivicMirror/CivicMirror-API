@@ -109,11 +109,11 @@ Ordered by primary date.
 - Research doc: `docs/state-research/WA/WA-Election_Research.md`
 - Core Coverage: **Full Core**
 
-### MI — Michigan (August 4 primary)
+### MI — Michigan (August 4 primary) ✅ Complete
 
-- REST API at `michiganelections.io` — currently returning 503 (offline as of 2026-05-23)
-- Monitor for recovery; `/positions`, `/proposals` endpoints give races
-- Build Tier B when API is back online
+- **Implemented:** BOE candidate listings for Stage 1 plus MVIC official results ingestion.
+- Stage 1 (`sync_mi_elections`): seeds Michigan primary/general elections, races, and candidates from BOE listings.
+- Stage 2 (`mi.py`): polls MVIC bulk tab-delimited results with county HTML fallback.
 - Research doc: `docs/state-research/MI/MI-Election_Research.md`
 
 ### FL — Florida (August 18 primary) ✅ Complete
@@ -135,13 +135,15 @@ Build or finalize for the November 3, 2026 general election:
 |---|---|---|---|
 | **TX** | CivixApps GoElect ENR | ✅ Complete (2026-06-17) | Public JSON API, AWS S3-backed; base64-encoded fields; sequential ID probe for election discovery; `sync-tx-goelect` at 05:00 UTC; Full Core Coverage |
 | **NC** | NCSBE S3 precinct ZIP | ✅ Adapter built | `nc.py` shipped early; weekly updates; high value; race creation depends on Civic API |
-| **GA** | Partial Clarity + state portal | ⏳ Research needed | Verify Clarity scope first |
+| **GA** | Georgia SOS Enhanced Voting API | ✅ Complete (2026-07-15) | Stage 1 election/race/candidate sync via `sync-ga-sos`; Stage 2 `ga.py`; Full Core Coverage |
 | **OH** | XLSX downloads (DATA Act 2023) | ⏳ Research needed | Daily county snapshots from 88 counties |
-| **PA** | Socrata `data.pa.gov` | 🔴 Blocked | Awaiting 2026 data publication; mail ballot only currently |
+| **PA** | PA SOS + `electionreturns.pa.gov` | ✅ Complete (2026-07-15) | Stage 1 candidate-list sync via `sync-pa-sos`; Stage 2 `pa.py`; Full Core Coverage |
 | **IL** | `elections.il.gov` Vote Total Search | ⏳ Research needed | 1998–present |
 | **CT** | ~~Socrata `data.ct.gov`~~ PCC EMS `ctemspublic.tgstg.net` | ✅ Adapter shipped (PR #11, 2026-06-01) | TotalVote transition expected pre-Nov 2026; repoint `source_metadata` to `totalvote_election_id` when live |
 | **MN** | Downloads + interactive dashboard | ⏳ Research needed | `sos.mn.gov` |
 | **OR** | Downloads | ⏳ Research needed | High ballot-measure activity |
+| **KY** | Kentucky SOS | ✅ Stage 1 complete (2026-07-15) | `sync-ky-sos` seeds elections/races/candidates; results ingestion still future work |
+| **TN** | Tennessee SOS / ENR | 🧱 Scaffolded | Parser/client scaffolding exists; scheduled Stage 1 task and results adapter still future work |
 
 ---
 
