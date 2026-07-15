@@ -142,6 +142,7 @@ Build or finalize for the November 3, 2026 general election:
 | **CT** | ~~Socrata `data.ct.gov`~~ PCC EMS `ctemspublic.tgstg.net` | ✅ Adapter shipped (PR #11, 2026-06-01) | TotalVote transition expected pre-Nov 2026; repoint `source_metadata` to `totalvote_election_id` when live |
 | **MN** | Downloads + interactive dashboard | ⏳ Research needed | `sos.mn.gov` |
 | **OR** | Downloads | ⏳ Research needed | High ballot-measure activity |
+| **TN** | Tennessee SOS calendar + qualified-candidate XLSX | ✅ Stage 1 + certified results (2026-07-15) | `sync-tn-sos` seeds elections/races/candidates; `tn.py` ingests certified precinct XLSX; live election-night dashboard deferred pending active-election transport capture |
 
 ---
 

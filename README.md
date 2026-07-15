@@ -64,7 +64,7 @@ Use this table to identify the next best integration target. States with multipl
 | **RI** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **SC** | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **SD** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **TN** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **TN** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **TX** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **UT** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **VA** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
@@ -97,7 +97,7 @@ States closest to a full ✅ row based on available public data:
 | State | Opportunity | Source |
 |---|---|---|
 | **GA** | Enhanced Voting API, same family as VA/WA | Georgia SOS results API |
-| **TN** | Live election-night dashboard needs endpoint discovery | Tennessee SOS / ENR |
+| **TN** | Stage 1 + certified results shipped; live election-night dashboard still needs endpoint discovery | Tennessee SOS / ENR |
 | **OH** | Adapter built; needs CF solver deployment/wiring | Ohio SOS + Clarity ENR |
 | **NC** | Existing adapter; Stage 1 race creation hardening | NC SBE FTP site |
 
