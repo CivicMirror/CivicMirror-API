@@ -14,6 +14,7 @@ from integrations.fec.tasks import sync_fec_candidates
 from integrations.fl_ew.tasks import sync_fl_elections
 from integrations.ia_sos.tasks import sync_ia_elections
 from integrations.il_sbe.tasks import sync_il_elections
+from integrations.ky_sos.tasks import sync_ky_sos
 from integrations.ma_sos.tasks import sync_ma_elections
 from integrations.mn_sos.tasks import sync_mn_races
 from integrations.nc_sbe.tasks import sync_nc_elections
@@ -239,3 +240,10 @@ def sync_mn_sos_trigger(request):
 @require_internal_task_token
 def sync_or_sos_trigger(request):
     return _trigger("sync_or_sos", sync_or_elections, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_ky_sos_trigger(request):
+    return _trigger("sync_ky_sos", sync_ky_sos, request)
