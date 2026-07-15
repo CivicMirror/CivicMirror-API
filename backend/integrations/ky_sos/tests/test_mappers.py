@@ -3,7 +3,6 @@ import datetime
 import pytest
 
 from elections.models import Candidate, Election, Race
-
 from integrations.ky_sos.exceptions import KySosError
 from integrations.ky_sos.mappers import (
     IN_SCOPE_OFFICE_IDS,
