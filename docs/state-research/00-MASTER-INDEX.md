@@ -86,7 +86,7 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **CT** | Connecticut | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (PCC EMS) | Results Coverage Only |
 | **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | Clarity sweep (20 states) | ✅ Available (Civic API) | ⚠️ Untested | ✅ Adapter available (Clarity) | Results Coverage Only |
 | **OH** | Ohio | ✅ Available (Civic API) | ⚠️ Untested | ⚠️ Pending CF solver deploy (Clarity ENR) | Near Core (adapter built, CF solver required) |
-| **TN** | Tennessee | ✅ Available (Civic API); parser/client scaffold exists | ⚠️ Untested | ❓ Live dashboard endpoint discovery needed | Research/Build Scaffold |
+| **TN** | Tennessee | ✅ Complete | ✅ Complete | ⚠️ Certified XLSX adapter; live dashboard pending active-election transport capture | Near Core (partial) |
 | All others | — | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Federal Only |
 
 ---

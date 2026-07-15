@@ -64,7 +64,7 @@ Use this table to identify the next best integration target. States with multipl
 | **RI** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **SC** | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **SD** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **TN** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **TN** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **TX** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **UT** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **VA** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
@@ -97,7 +97,7 @@ States closest to a full ✅ row based on available public data:
 | State | Opportunity | Source |
 |---|---|---|
 | **KY** | Add certified recap/live results ingestion to existing SOS race/candidate adapter | Kentucky SOS recaps / election-night portal |
-| **TN** | Promote parser/client scaffold into a scheduled Stage 1 adapter; live dashboard endpoint discovery remains open | Tennessee SOS / ENR |
+| **TN** | Stage 1 + certified results shipped; live election-night dashboard still needs endpoint discovery | Tennessee SOS / ENR |
 | **OH** | Adapter built; needs CF solver deployment/wiring | Ohio SOS + Clarity ENR |
 | **NC** | Existing adapter; Stage 1 race creation hardening | NC SBE FTP site |
 
