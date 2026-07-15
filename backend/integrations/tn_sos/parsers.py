@@ -62,6 +62,13 @@ class TnResultRecord:
     source_url: str
 
 
+# Denylist, not a "qualified"-only allowlist: during filing season the live
+# workbooks mark viable candidates "Signatures Approved" and nobody carries a
+# "Qualified" status yet, so an allowlist filters entire workbooks to zero.
+_NEGATIVE_STATUS_RE = re.compile(
+    r"withdraw|withdrew|disqualif|deceased|reject|denied|not approved|insufficient",
+    re.IGNORECASE,
+)
 _MONTH_DATE_RE = re.compile(
     r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December)"
     r"\s+\d{1,2},\s+\d{4}\b"
@@ -169,7 +176,7 @@ def parse_candidate_workbook(content: bytes, source_url: str) -> list[TnCandidat
                 if not office or not candidate_name:
                     continue
                 status = _first(row, "status", "candidate status")
-                if has_status_field and not re.search(r"\bqualified\b", status.lower()):
+                if has_status_field and _NEGATIVE_STATUS_RE.search(status):
                     continue
                 records.append(
                     TnCandidateRecord(

@@ -26,7 +26,7 @@ from ops.models import SyncLog
 
 from .client import TnSosClient
 from .exceptions import TnSosRetryableError
-from .mappers import map_candidate, map_election, map_race
+from .mappers import is_in_scope_office, map_candidate, map_election, map_race
 from .parsers import (
     document_checksum,
     parse_calendar,
@@ -140,6 +140,8 @@ def sync_tn_candidates(self, election_pk: int | None = None):
             workbooks_meta.append({"filename": link.filename, "url": final_url, "checksum": checksum})
 
             for record in parse_candidate_workbook(content, final_url):
+                if not is_in_scope_office(record.office):
+                    continue
                 race_defaults = map_race(election_obj, record)
                 race_identity = {
                     "office_title": race_defaults.pop("office_title"),

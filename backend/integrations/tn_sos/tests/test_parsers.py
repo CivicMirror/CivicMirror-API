@@ -51,15 +51,21 @@ def test_parse_candidate_workbook_returns_qualified_candidates():
 
 
 def test_parse_candidate_workbook_skips_negative_statuses():
+    """Statuses are a denylist, not a qualified-only allowlist: live TN
+    workbooks say "Signatures Approved" during filing season and nobody is
+    marked Qualified yet (2026-07-15 production finding)."""
     workbook = Workbook()
     sheet = workbook.active
     sheet.append(["Office", "Candidate Name", "Party", "Status"])
     sheet.append(["Governor", "Qualified Candidate", "Independent", "Qualified"])
-    sheet.append(["Governor", "Qualified Another", "Democratic", "Qualified Candidate"])
+    sheet.append(["Governor", "Approved Candidate", "Republican", "Signatures Approved"])
     sheet.append(["Governor", "Active Candidate", "Democratic", "Active"])
     sheet.append(["Governor", "Nominee Candidate", "Republican", "Nominee"])
     sheet.append(["Governor", "Withdrawn Candidate", "Independent", "Withdrawn"])
+    sheet.append(["Governor", "Withdrew Candidate", "Independent", "Withdrew 3/1/2026"])
     sheet.append(["Governor", "Disqualified Candidate", "Independent", "Disqualified"])
+    sheet.append(["Governor", "Rejected Candidate", "Independent", "Signatures Not Approved"])
+    sheet.append(["Governor", "Deceased Candidate", "Independent", "Deceased"])
     content = io.BytesIO()
     workbook.save(content)
 
@@ -67,7 +73,9 @@ def test_parse_candidate_workbook_skips_negative_statuses():
 
     assert [record.candidate_name for record in records] == [
         "Qualified Candidate",
-        "Qualified Another",
+        "Approved Candidate",
+        "Active Candidate",
+        "Nominee Candidate",
     ]
 
 
