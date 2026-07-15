@@ -2,8 +2,22 @@ from datetime import date
 from types import SimpleNamespace
 
 from elections.models import Candidate, Election, Race
-from integrations.tn_sos.mappers import map_candidate, map_election, map_race, normalized_office_title
+from integrations.tn_sos.mappers import (
+    is_in_scope_office,
+    map_candidate,
+    map_election,
+    map_race,
+    normalized_office_title,
+)
 from integrations.tn_sos.parsers import TnCandidateRecord, TnElectionRow
+
+
+def test_party_executive_committee_offices_are_out_of_scope():
+    assert not is_in_scope_office("State Executive Committeeman District 1")
+    assert not is_in_scope_office("State Executive Committeewoman District 1")
+    assert is_in_scope_office("United States Senate")
+    assert is_in_scope_office("Governor")
+    assert is_in_scope_office("Tennessee House of Representatives District 52")
 
 
 def test_map_statewide_election_uses_tn_identity():

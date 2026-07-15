@@ -93,6 +93,36 @@ def test_sync_tn_candidates_deduplicates_candidates_on_rerun():
 
 
 @pytest.mark.django_db
+def test_sync_tn_candidates_skips_party_executive_committee_offices():
+    import io
+
+    from openpyxl import Workbook
+
+    election = _make_tn_election()
+    list_html = (FIXTURES / "candidate_lists_2026.html").read_text()
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Office", "Candidate", "Party", "Status"])
+    sheet.append(["State Executive Committeeman District 1", "Party Person", "Republican", "Signatures Approved"])
+    sheet.append(["Governor", "Jane Candidate", "Republican", "Signatures Approved"])
+    content = io.BytesIO()
+    workbook.save(content)
+
+    with patch(
+        "integrations.tn_sos.tasks.TnSosClient.get_candidate_list_html",
+        return_value=list_html,
+    ), patch(
+        "integrations.tn_sos.tasks.TnSosClient.download_file",
+        return_value=(content.getvalue(), "https://sos-prod.tnsosgovfiles.com/s3fs-public/document/TNGOPSEC_Filed_2026-03-24.xlsx"),
+    ):
+        sync_tn_candidates(election_pk=election.pk)
+
+    assert not Race.objects.filter(office_title__icontains="Executive Committee").exists()
+    assert Race.objects.filter(election=election, office_title="Governor").exists()
+
+
+@pytest.mark.django_db
 def test_sync_tn_result_index_stores_matching_result_links():
     election = _make_tn_election(
         election_date=date(2025, 12, 2),
