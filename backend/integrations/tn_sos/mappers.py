@@ -10,6 +10,15 @@ from .parsers import TnCandidateRecord, TnElectionRow
 
 _FEDERAL_OFFICE_MARKERS = ("united states", "u.s.", "us senate", "us house")
 _STATEWIDE_OFFICES = ("governor",)
+# Party executive-committee seats appear in the SOS candidate lists but are
+# party offices, not public federal/state offices — out of scope like KY's
+# judicial/county groups.
+_OUT_OF_SCOPE_OFFICE_MARKERS = ("state executive committee",)
+
+
+def is_in_scope_office(office: str) -> bool:
+    normalized = office.lower()
+    return not any(marker in normalized for marker in _OUT_OF_SCOPE_OFFICE_MARKERS)
 
 
 def infer_election_status(election_date) -> str:
