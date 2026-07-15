@@ -28,6 +28,7 @@ class ResultsConfig(AppConfig):
             oregon,
             pa,
             sc,
+            tn,
             tx,
             va,
             wa,
