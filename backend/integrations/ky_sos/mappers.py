@@ -8,6 +8,8 @@ import datetime
 
 from elections.models import Election, Race
 
+from .exceptions import KySosError
+
 IN_SCOPE_OFFICE_IDS = frozenset({3, 4, 11, 12})
 
 # office_id -> expected office label text (sanity/lookup only; office_title
@@ -18,6 +20,8 @@ OFFICE_LABELS = {
     11: "State Senator",
     12: "State Representative",
 }
+
+assert IN_SCOPE_OFFICE_IDS == set(OFFICE_LABELS), "IN_SCOPE_OFFICE_IDS and OFFICE_LABELS keys must match"
 
 _STATEWIDE_OFFICES = frozenset({"US Senator"})
 
@@ -46,6 +50,9 @@ def map_election(election_label: str) -> dict:
     Election") to Election model field values. Only "General Election" labels
     are supported — this adapter doesn't sweep primary-cycle filings.
     """
+    if "General Election" not in election_label:
+        raise KySosError(f"map_election only supports General Election labels, got: {election_label!r}")
+
     year = int(election_label.split()[0])
     election_date = ky_general_election_date(year)
     return {

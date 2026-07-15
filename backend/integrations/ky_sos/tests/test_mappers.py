@@ -1,7 +1,10 @@
 import datetime
 
+import pytest
+
 from elections.models import Candidate, Election, Race
 
+from integrations.ky_sos.exceptions import KySosError
 from integrations.ky_sos.mappers import (
     IN_SCOPE_OFFICE_IDS,
     ky_general_election_date,
@@ -30,6 +33,11 @@ def test_map_election_general_election():
     assert result["election_type"] == "general"
     assert result["jurisdiction_level"] == Election.JurisdictionLevel.STATE
     assert result["state"] == "KY"
+
+
+def test_map_election_rejects_non_general_label():
+    with pytest.raises(KySosError):
+        map_election("2026 Primary Election")
 
 
 def test_map_race_statewide_office_no_district():
