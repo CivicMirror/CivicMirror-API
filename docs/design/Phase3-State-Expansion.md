@@ -143,7 +143,7 @@ Build or finalize for the November 3, 2026 general election:
 | **MN** | Downloads + interactive dashboard | ⏳ Research needed | `sos.mn.gov` |
 | **OR** | Downloads | ⏳ Research needed | High ballot-measure activity |
 | **KY** | Kentucky SOS | ✅ Stage 1 complete (2026-07-15) | `sync-ky-sos` seeds elections/races/candidates; results ingestion still future work |
-| **TN** | Tennessee SOS / ENR | 🧱 Scaffolded | Parser/client scaffolding exists; scheduled Stage 1 task and results adapter still future work |
+| **TN** | Tennessee SOS calendar + qualified-candidate XLSX | ✅ Stage 1 + certified results (2026-07-15) | `sync-tn-sos` seeds elections/races/candidates; `tn.py` ingests certified precinct XLSX; live election-night dashboard deferred pending active-election transport capture |
 
 ---
 
