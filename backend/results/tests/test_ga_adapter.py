@@ -117,10 +117,24 @@ def test_fetch_results_no_slug():
     assert "enr_slug" in result.notes
 
 
+def test_fetch_results_no_slug_does_not_guess_from_date():
+    adapter = GeorgiaAdapter()
+    mock_election = MagicMock()
+    mock_election.source_metadata = {}
+
+    with patch("elections.models.Election.objects") as mock_mgr, \
+         patch("results.adapters.enhanced_voting.requests.get") as mock_get:
+        mock_mgr.get.return_value = mock_election
+        result = adapter.fetch_results("2026-11-03", election_id=99)
+
+    assert result.mapping_confidence == "none"
+    mock_get.assert_not_called()
+
+
 def test_fetch_results_uses_ga_base_url():
     adapter = GeorgiaAdapter()
     mock_election = MagicMock()
-    mock_election.source_metadata = {"enr_slug": "11032026General"}
+    mock_election.source_metadata = {"enr_slug": "06162026GeneralPrimaryRunoff"}
     mock_election.pk = 1
 
     meta_payload = {"asOf": "2026-11-03T23:00:00Z", "isOfficialResults": False}
@@ -144,7 +158,7 @@ def test_fetch_results_uses_ga_base_url():
     # Confirm requests hit results.sos.ga.gov, not app.enhancedvoting.com
     calls = [c.args[0] for c in mock_get.call_args_list]
     assert all("results.sos.ga.gov" in url for url in calls)
-    assert any("11032026General/data" in url for url in calls)
+    assert any("06162026GeneralPrimaryRunoff/data" in url for url in calls)
 
     assert result.mapping_confidence == "full"
     assert len(result.rows) == 2
@@ -154,7 +168,7 @@ def test_fetch_results_uses_ga_base_url():
 def test_fetch_results_version_unchanged():
     adapter = GeorgiaAdapter()
     mock_election = MagicMock()
-    mock_election.source_metadata = {"enr_slug": "11032026General"}
+    mock_election.source_metadata = {"enr_slug": "06162026GeneralPrimaryRunoff"}
     mock_election.pk = 1
 
     meta_payload = {"asOf": "2026-11-03T23:00:00Z", "isOfficialResults": False}

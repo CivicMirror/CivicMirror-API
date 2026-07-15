@@ -1,0 +1,5814 @@
+{
+  "bannerUrl": "09378a07-e6cf-4f66-be7c-ca4aa534f99a/BannerImage_e053a245-e1c1-434e-b5e8-ee4ae82de691.jpg",
+  "bannerUrlLeft": null,
+  "bannerUrlLeftAltText": null,
+  "bannerUrlRight": null,
+  "bannerUrlRightAltText": null,
+  "childLocalities": [
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "D58E790A-A271-4225-8CD6-A1ED0AA829B1",
+      "mapFeatureId": "Appling",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Appling County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "appling-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "6E098A97-B550-4227-8ED4-08552CCCAC20",
+      "mapFeatureId": "Atkinson",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Atkinson County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "atkinson-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "D8AA2660-66DA-4C20-A3EB-D33CEE953385",
+      "mapFeatureId": "Bacon",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Bacon County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "bacon-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "A6A3086C-8D1F-46B8-B6AA-95E0A38362B1",
+      "mapFeatureId": "Baker",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Baker County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "baker-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "A0E462EC-CA2D-4670-B4BF-5187DCEA3D26",
+      "mapFeatureId": "Baldwin",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Baldwin County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "baldwin-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "CA8212C9-1BE1-47F1-8D96-A22B52DE6546",
+      "mapFeatureId": "Banks",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Banks County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "banks-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "99F2C848-FE88-4B80-8EF8-F5B13A3586D7",
+      "mapFeatureId": "Barrow",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Barrow County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "barrow-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "E5B0C5AC-FB9A-468A-B8FE-0B7451622CA2",
+      "mapFeatureId": "Bartow",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Bartow County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "bartow-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "8A66E99B-24E3-483E-9444-1A582F518FAF",
+      "mapFeatureId": "Ben Hill",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Ben Hill County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "ben-hill-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "4F7B5872-E4D6-4327-90B3-2CB7FCC5E435",
+      "mapFeatureId": "Berrien",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Berrien County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "berrien-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "85611CA6-DB36-4410-9BCD-60900D8CA052",
+      "mapFeatureId": "Bibb",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Bibb County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "bibb-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "CDB7AE6C-B5FE-43B0-B57E-DE6E5CBC4D24",
+      "mapFeatureId": "Bleckley",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Bleckley County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "bleckley-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "151D3641-9B29-4EE4-B350-E84091D0AFE3",
+      "mapFeatureId": "Brantley",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Brantley County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "brantley-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "0C7AFB81-66D9-40B6-888F-72833AD1FB75",
+      "mapFeatureId": "Brooks",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Brooks County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "brooks-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "63F4C1D4-6A42-49EE-83D1-EE45A6A9D0C4",
+      "mapFeatureId": "Bryan",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Bryan County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "bryan-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "D3095B79-1686-4759-98F6-3719E2AEBB98",
+      "mapFeatureId": "Bulloch",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Bulloch County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "bulloch-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "A308CFFC-6928-4397-B18A-2DE6B69357DA",
+      "mapFeatureId": "Burke",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Burke County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "burke-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "1AF74CCF-9CAF-4897-9F4D-6328B343DF70",
+      "mapFeatureId": "Butts",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Butts County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "butts-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "795CAC99-3EF8-4E45-9708-FD5827166986",
+      "mapFeatureId": "Calhoun",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Calhoun County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "calhoun-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "7642C880-B076-484D-B15B-8EBAFB61231C",
+      "mapFeatureId": "Camden",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Camden County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "camden-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "C9DFF029-5CF4-4FD0-A50B-B46AD76D30D4",
+      "mapFeatureId": "Candler",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Candler County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "candler-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "3CF26960-B1D2-4D78-A262-6A0AAFCF0665",
+      "mapFeatureId": "Carroll",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Carroll County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "carroll-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "C3096273-0089-43E9-B297-3B07E686179C",
+      "mapFeatureId": "Catoosa",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Catoosa County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "catoosa-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "47B33C4F-7089-4809-A8A4-79E103F5943A",
+      "mapFeatureId": "Charlton",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Charlton County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "charlton-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "F4CE35E9-D8F2-46B3-897C-CEC68A0371A1",
+      "mapFeatureId": "Chatham",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Chatham County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "chatham-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "534BE6BD-7824-4758-BD9D-ECF5AC76E88D",
+      "mapFeatureId": "Chattahoochee",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Chattahoochee County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "chattahoochee-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "A29F9788-C8B2-4025-91AC-286F77FA9D75",
+      "mapFeatureId": "Chattooga",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Chattooga County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "chattooga-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "1CBB63BD-FA6A-4D09-91B7-9249FD4E537A",
+      "mapFeatureId": "Cherokee",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Cherokee County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "cherokee-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "D24A0956-7780-4FA0-A97A-B4A01000D1ED",
+      "mapFeatureId": "Clarke",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Clarke County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "clarke-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "4A4C5E24-0E26-4CAD-80C2-160BC29DB475",
+      "mapFeatureId": "Clay",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Clay County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "clay-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "7DAF14BF-669E-4A33-BB04-262C69C0CB1D",
+      "mapFeatureId": "Clayton",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Clayton County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "clayton-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "EB14F9B0-703B-4C08-BB3E-5009610DC790",
+      "mapFeatureId": "Clinch",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Clinch County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "clinch-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "C28C8CEC-BC38-4B03-AAF3-7131958D35FB",
+      "mapFeatureId": "Cobb",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Cobb County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "cobb-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "DFDC2399-2FAF-45DB-A730-4FEBEF87B55B",
+      "mapFeatureId": "Coffee",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Coffee County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "coffee-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "07A1D55F-8D6A-4A5D-9208-9464CC55B011",
+      "mapFeatureId": "Colquitt",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Colquitt County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "colquitt-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "3AA654DB-7AC9-4576-8A88-77BD56DBA7F7",
+      "mapFeatureId": "Columbia",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Columbia County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "columbia-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "F2A6BF29-18A2-4FE2-BF7B-43D4E4C0B4DF",
+      "mapFeatureId": "Cook",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Cook County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "cook-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "2B0B0B72-B621-461B-9AB2-934C24CB6792",
+      "mapFeatureId": "Coweta",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Coweta County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "coweta-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "A66264C5-265B-4DA3-AA76-E759C316976E",
+      "mapFeatureId": "Crawford",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Crawford County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "crawford-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "9423831E-6B7B-4B21-8117-62F14F2D9B30",
+      "mapFeatureId": "Crisp",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Crisp County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "crisp-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "243EEE49-B22A-4FCD-A823-CC8E55F93027",
+      "mapFeatureId": "Dade",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Dade County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "dade-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "BD890E9C-CA9D-4CCD-BAD0-26EE4C4E5197",
+      "mapFeatureId": "Dawson",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Dawson County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "dawson-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "8602408D-4B85-490F-9601-940B16612CEA",
+      "mapFeatureId": "Decatur",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Decatur County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "decatur-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "6911DEA4-3A52-4AD8-B4DE-B4EBF56C8D85",
+      "mapFeatureId": "DeKalb",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "DeKalb County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "dekalb-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "4AF653CF-46E1-4BCB-A39F-720E9B541F8F",
+      "mapFeatureId": "Dodge",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Dodge County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "dodge-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "F3364455-F985-4A6D-BE4B-BD21EE393DCB",
+      "mapFeatureId": "Dooly",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Dooly County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "dooly-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "A6F76ED5-845E-4FC7-945F-A77D27CA3AC0",
+      "mapFeatureId": "Dougherty",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Dougherty County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "dougherty-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "F9A21CCD-EEE6-41ED-AB16-93A0185B59B7",
+      "mapFeatureId": "Douglas",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Douglas County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "douglas-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "B5769C1D-9383-485F-B275-372A16204588",
+      "mapFeatureId": "Early",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Early County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "early-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "3B55B0F8-672F-407F-9EC5-EC57A8F1A23D",
+      "mapFeatureId": "Echols",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Echols County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "echols-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "9B7E6327-B4FA-4B3A-BC41-21EEABA95644",
+      "mapFeatureId": "Effingham",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Effingham County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "effingham-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "2DCB157C-BF14-4F3A-A4CD-1942E4AC3FC9",
+      "mapFeatureId": "Elbert",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Elbert County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "elbert-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "889EADB6-A335-420C-9922-0A2B22FC37DD",
+      "mapFeatureId": "Emanuel",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Emanuel County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "emanuel-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "4829F9E3-47BC-454F-B33E-64B13BF7E767",
+      "mapFeatureId": "Evans",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Evans County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "evans-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "E4BA2574-D3A4-480B-9ECF-B49C4280E3F4",
+      "mapFeatureId": "Fannin",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Fannin County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "fannin-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "39690CD7-8380-479F-93F8-C41C0B7855B7",
+      "mapFeatureId": "Fayette",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Fayette County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "fayette-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "B48A0B09-DF65-4CDC-9B21-CB4FC40392C0",
+      "mapFeatureId": "Floyd",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Floyd County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "floyd-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "1717DF47-C56B-435E-816C-BA3F0159E441",
+      "mapFeatureId": "Forsyth",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Forsyth County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "forsyth-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "F57AEC2C-31DC-4E78-B007-B65A15C9445B",
+      "mapFeatureId": "Franklin",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Franklin County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "franklin-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "EA1814CB-4423-439E-B273-131E9A8356A6",
+      "mapFeatureId": "Fulton",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Fulton County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "fulton-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "8D49BA9D-9113-422B-8E51-6DF824D2A3FE",
+      "mapFeatureId": "Gilmer",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Gilmer County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "gilmer-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "5084687F-8160-4439-B903-D4E6EC4EECCA",
+      "mapFeatureId": "Glascock",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Glascock County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "glascock-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "F3B34C33-1D27-4B9C-8176-5FF2158BA0AF",
+      "mapFeatureId": "Glynn",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Glynn County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "glynn-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "AEA43135-90D4-4F74-A48B-A79DEC485EDC",
+      "mapFeatureId": "Gordon",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Gordon County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "gordon-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "22B87221-A607-4171-8901-B832EDB291C6",
+      "mapFeatureId": "Grady",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Grady County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "grady-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "5C7ECCA4-F331-4346-AF9D-56834B66BAF2",
+      "mapFeatureId": "Greene",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Greene County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "greene-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "CC909DFD-FE48-42F6-84FD-62E0578F146B",
+      "mapFeatureId": "Gwinnett",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Gwinnett County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "gwinnett-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "ADB14C51-041A-4040-A4D2-D6148AA6B2A6",
+      "mapFeatureId": "Habersham",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Habersham County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "habersham-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "E48A22A9-DAD8-46BF-A2D7-8627B20800AA",
+      "mapFeatureId": "Hall",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Hall County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "hall-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "C9827B02-EFC8-4B15-BEAF-E1A81AC8609A",
+      "mapFeatureId": "Hancock",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Hancock County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "hancock-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "638D30D4-477B-4336-910C-952264F87B02",
+      "mapFeatureId": "Haralson",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Haralson County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "haralson-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "8BA259E8-4122-4252-B36E-89F1F57234BC",
+      "mapFeatureId": "Harris",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Harris County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "harris-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "7EA3BECC-097E-47F2-96FD-4E252384B76C",
+      "mapFeatureId": "Hart",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Hart County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "hart-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "6C9EC5F8-48F5-4584-8460-A3643FBEDC6B",
+      "mapFeatureId": "Heard",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Heard County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "heard-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "496916CF-9DF1-4F42-93F5-F28E3AB9B357",
+      "mapFeatureId": "Henry",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Henry County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "henry-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "C9278AA5-ACBE-47B6-97AB-082132264144",
+      "mapFeatureId": "Houston",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Houston County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "houston-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "5E5308AC-EAD6-4E43-BB0C-23C237567914",
+      "mapFeatureId": "Irwin",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Irwin County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "irwin-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "16FEC923-370C-45AD-ABC6-B966BA5ED366",
+      "mapFeatureId": "Jackson",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Jackson County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "jackson-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "83B7D4F3-FDB5-4124-88CF-FE7100CA9948",
+      "mapFeatureId": "Jasper",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Jasper County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "jasper-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "99715E46-F76E-4130-80C4-78D333ABB37D",
+      "mapFeatureId": "Jeff Davis",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Jeff Davis County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "jeff-davis-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "F7F2ED68-95AE-4C7D-A875-C185D2122ECF",
+      "mapFeatureId": "Jefferson",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Jefferson County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "jefferson-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "365C8C59-F4B0-4EB7-AD26-67270903448E",
+      "mapFeatureId": "Jenkins",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Jenkins County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "jenkins-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "E7CDF8ED-7D84-4B95-A558-AC363306FB26",
+      "mapFeatureId": "Johnson",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Johnson County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "johnson-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "10FE6AE4-423F-4452-8078-1EA9221B2429",
+      "mapFeatureId": "Jones",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Jones County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "jones-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "E19C5769-EEC5-4127-A883-058DDCC4E977",
+      "mapFeatureId": "Lamar",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Lamar County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "lamar-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "8C979640-DF10-4E0C-AFD5-C79B18531CD9",
+      "mapFeatureId": "Lanier",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Lanier County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "lanier-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "2D7664A6-25E7-4779-A3BC-2A61B4496281",
+      "mapFeatureId": "Laurens",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Laurens County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "laurens-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "6A8356FD-460C-4D3C-BC60-55FAD9E05E76",
+      "mapFeatureId": "Lee",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Lee County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "lee-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "C47A9984-E44C-48F5-B98D-7E24E0BA3994",
+      "mapFeatureId": "Liberty",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Liberty County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "liberty-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "59793F0E-DBFC-4829-8FA3-0B2137C8BA3B",
+      "mapFeatureId": "Lincoln",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Lincoln County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "lincoln-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "7223A5C7-4FC8-48D6-B126-4330069F19B0",
+      "mapFeatureId": "Long",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Long County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "long-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "2FA1EC9C-3B40-4423-9DBE-3967321EE822",
+      "mapFeatureId": "Lowndes",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Lowndes County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "lowndes-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "C20FE7B1-C33B-44AB-B2C3-31F07611A003",
+      "mapFeatureId": "Lumpkin",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Lumpkin County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "lumpkin-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "BA9EAFD7-3A18-4F24-ADAC-A56EB8FBD725",
+      "mapFeatureId": "Macon",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Macon County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "macon-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "4DC20990-1AB2-4A40-BA9A-177DF1D06675",
+      "mapFeatureId": "Madison",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Madison County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "madison-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "6E4FB88E-4F7E-4DBE-BA42-FAED1699F86C",
+      "mapFeatureId": "Marion",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Marion County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "marion-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "AE53CA7B-2462-4736-9CB4-DF497D2CAB7F",
+      "mapFeatureId": "McDuffie",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "McDuffie County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "mcduffie-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "CD2B1E7B-8D13-4CDB-8C56-100096C85561",
+      "mapFeatureId": "McIntosh",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "McIntosh County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "mcintosh-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "0E54AFD4-E51A-408B-B0D6-B8BF2D4AFEFB",
+      "mapFeatureId": "Meriwether",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Meriwether County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "meriwether-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "BFDAB7B1-1682-4486-9452-99A275B6E805",
+      "mapFeatureId": "Miller",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Miller County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "miller-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "5A0506E1-1425-4EC4-98B7-E2B05884B47C",
+      "mapFeatureId": "Mitchell",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Mitchell County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "mitchell-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "1B8EB975-2E0A-4F15-9E71-F029EBA77894",
+      "mapFeatureId": "Monroe",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Monroe County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "monroe-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "4C47511D-1D65-4C5A-ABBB-F1046BBAA924",
+      "mapFeatureId": "Montgomery",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Montgomery County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "montgomery-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "EED9FF8F-1604-4727-A2A2-9986642445D0",
+      "mapFeatureId": "Morgan",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Morgan County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "morgan-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "C80AB4D1-2203-424C-8D91-C34ED2ED1C30",
+      "mapFeatureId": "Murray",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Murray County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "murray-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "A71E5D5F-BD86-4332-A1AC-6FC14545368D",
+      "mapFeatureId": "Muscogee",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Muscogee County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "muscogee-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "0DF49C1E-22D2-4237-BD5D-92085A24A46C",
+      "mapFeatureId": "Newton",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Newton County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "newton-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "C8BC0C38-D043-47DF-A631-CABBCE4C9588",
+      "mapFeatureId": "Oconee",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Oconee County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "oconee-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "55DAB5A3-2D7D-40E7-A840-C3A785274F7C",
+      "mapFeatureId": "Oglethorpe",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Oglethorpe County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "oglethorpe-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "595E9EB2-10CA-4E4B-9160-BE6B27F3AA12",
+      "mapFeatureId": "Paulding",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Paulding County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "paulding-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "36350FDD-3D94-4D80-ADA5-1D188E0D39C2",
+      "mapFeatureId": "Peach",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Peach County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "peach-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "07843266-D7A1-44E8-8658-7670CFBC3924",
+      "mapFeatureId": "Pickens",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Pickens County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "pickens-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "4E7844DA-E7B6-402F-8A4C-2C4BF6A9A54A",
+      "mapFeatureId": "Pierce",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Pierce County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "pierce-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "0FDD2807-31C1-4013-9F8E-8765108801A9",
+      "mapFeatureId": "Pike",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Pike County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "pike-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "A6AE70FF-AEB9-471C-9B1F-25DE14E6A3DB",
+      "mapFeatureId": "Polk",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Polk County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "polk-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "1788470E-BC76-4BDA-A9B4-D71B9F1B597A",
+      "mapFeatureId": "Pulaski",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Pulaski County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "pulaski-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "3948AABE-0AA2-4517-B92E-0F8016AE137E",
+      "mapFeatureId": "Putnam",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Putnam County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "putnam-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "F63628FC-57C5-49E4-9114-3DD401D55190",
+      "mapFeatureId": "Quitman",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Quitman County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "quitman-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "1F526C54-B073-4BA7-9DBF-F566707B9732",
+      "mapFeatureId": "Rabun",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Rabun County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "rabun-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "85F1CF63-44C5-403A-8E15-CC3A7077F8A8",
+      "mapFeatureId": "Randolph",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Randolph County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "randolph-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "712F2391-DAED-4D45-BD30-16182421A660",
+      "mapFeatureId": "Richmond",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Richmond County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "richmond-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "D4EC3B24-2822-4990-8A44-71D13B5FA0FA",
+      "mapFeatureId": "Rockdale",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Rockdale County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "rockdale-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "34CA5552-8064-483D-BEC1-A1A47E04666F",
+      "mapFeatureId": "Schley",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Schley County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "schley-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "14D87BD5-9802-43AB-B38D-5A7E26900486",
+      "mapFeatureId": "Screven",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Screven County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "screven-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "10EE997A-00E2-49D0-A030-8B33D8100B6D",
+      "mapFeatureId": "Seminole",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Seminole County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "seminole-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "C7470180-D375-4F5C-AEC7-A3FB909F1328",
+      "mapFeatureId": "Spalding",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Spalding County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "spalding-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "FD33BF85-E944-43D7-8481-DBF38D51FBC1",
+      "mapFeatureId": "Stephens",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Stephens County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "stephens-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "9A95E074-B1F1-4F7E-89B3-D47974D200F7",
+      "mapFeatureId": "Stewart",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Stewart County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "stewart-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "C6780B6E-0D28-42F4-B882-4E3F0D5507F1",
+      "mapFeatureId": "Sumter",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Sumter County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "sumter-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "6F536CAC-FD0B-44E9-B746-E8AD0D8E95CF",
+      "mapFeatureId": "Talbot",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Talbot County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "talbot-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "0E85F582-1784-4C9C-8F67-9A5938212682",
+      "mapFeatureId": "Taliaferro",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Taliaferro County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "taliaferro-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "57F503B3-4A1C-4F64-97FD-9A9AF346B252",
+      "mapFeatureId": "Tattnall",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Tattnall County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "tattnall-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "B1E48969-C68B-4935-9E37-A7ABD55CF9F3",
+      "mapFeatureId": "Taylor",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Taylor County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "taylor-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "18B9FD62-B60F-4B66-904A-79ECA539FC82",
+      "mapFeatureId": "Telfair",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Telfair County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "telfair-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "E8F9CE0E-3FB1-44E7-977B-C5B5731CD31B",
+      "mapFeatureId": "Terrell",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Terrell County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "terrell-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "0F3D3519-03EB-4D6B-8529-153017E87F19",
+      "mapFeatureId": "Thomas",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Thomas County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "thomas-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "83EC869C-8FD7-42E6-8126-D396FEAF5B7E",
+      "mapFeatureId": "Tift",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Tift County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "tift-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "40D8A781-C344-4783-81D8-9681A1D4AB29",
+      "mapFeatureId": "Toombs",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Toombs County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "toombs-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "8DAE84B0-A0B3-4978-B77F-384FB3D1CAF4",
+      "mapFeatureId": "Towns",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Towns County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "towns-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "27DDA187-92CE-4E2F-8471-ED05E25D01FA",
+      "mapFeatureId": "Treutlen",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Treutlen County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "treutlen-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "78279BFD-4AD9-483F-98F8-F712F25F052D",
+      "mapFeatureId": "Troup",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Troup County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "troup-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "BEE64750-18FA-4894-A13D-4ED641DBC09B",
+      "mapFeatureId": "Turner",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Turner County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "turner-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "C6086C9D-801B-4575-9F72-64A67D29F238",
+      "mapFeatureId": "Twiggs",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Twiggs County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "twiggs-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "72EE25AB-7EAE-4738-92B8-181B28712E90",
+      "mapFeatureId": "Union",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Union County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "union-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "241D829C-5EED-44BE-B17E-9BD0E64F3BFF",
+      "mapFeatureId": "Upson",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Upson County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "upson-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "3AFCAFA2-2FA5-4F94-A7B8-3627F7D8E034",
+      "mapFeatureId": "Walker",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Walker County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "walker-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "BE2F78E4-CACD-4783-A5F6-D9BB3959AAB7",
+      "mapFeatureId": "Walton",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Walton County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "walton-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "D29FDE58-8C96-4BBE-9898-68B915AC37CA",
+      "mapFeatureId": "Ware",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Ware County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "ware-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "F48A7EB5-253D-4F35-ACE1-1C10754B7E61",
+      "mapFeatureId": "Warren",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Warren County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "warren-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "A758318C-AAFE-4190-B16B-641D33A8DC2A",
+      "mapFeatureId": "Washington",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Washington County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "washington-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "1F8CC0FF-E4AF-4046-8758-77FC53C59BB4",
+      "mapFeatureId": "Wayne",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Wayne County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "wayne-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "4F2C7956-F0FC-48E3-8FF5-BACC474287A8",
+      "mapFeatureId": "Webster",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Webster County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "webster-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "82EBC882-AC8B-4A4C-AD3E-C5101A076DE6",
+      "mapFeatureId": "Wheeler",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Wheeler County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "wheeler-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "EFD40878-8006-473F-AE14-FE341518E950",
+      "mapFeatureId": "White",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "White County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "white-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "CC53103C-C876-4054-B877-B9D0050EC941",
+      "mapFeatureId": "Whitfield",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Whitfield County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "whitfield-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "E3BFE04A-20AF-4103-972E-98C643CF5B11",
+      "mapFeatureId": "Wilcox",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Wilcox County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "wilcox-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "BA51C7C0-1131-4383-85A4-D9AB94F1B1EB",
+      "mapFeatureId": "Wilkes",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Wilkes County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "wilkes-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "1F4CF7B9-911C-4C13-9021-FE8002EC4F77",
+      "mapFeatureId": "Wilkinson",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Wilkinson County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "wilkinson-county-ga",
+      "turnoutPercent": null
+    },
+    {
+      "hasCountGroupStatus": true,
+      "hasPrecinctStatus": true,
+      "id": "009E76C9-BE7B-4F15-863B-9E52FF8D3F9E",
+      "mapFeatureId": "Worth",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Worth County"
+        }
+      ],
+      "percentReporting": 1.0,
+      "precinctsReporting": 1.0,
+      "shortName": "worth-county-ga",
+      "turnoutPercent": null
+    }
+  ],
+  "clientTexts": [
+    {
+      "id": "active-voters-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Active Voters"
+        }
+      ]
+    },
+    {
+      "id": "as-of",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "As of"
+        }
+      ]
+    },
+    {
+      "id": "back-to-election",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Back to election results"
+        }
+      ]
+    },
+    {
+      "id": "back-to-state",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Back to state results"
+        }
+      ]
+    },
+    {
+      "id": "ballots-cast-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Ballots Cast"
+        }
+      ]
+    },
+    {
+      "id": "candidate-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Candidate"
+        }
+      ]
+    },
+    {
+      "id": "candidate-table-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Candidate"
+        }
+      ]
+    },
+    {
+      "id": "change-locality",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Change County"
+        }
+      ]
+    },
+    {
+      "id": "collapse-toggle-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Collapse"
+        }
+      ]
+    },
+    {
+      "id": "contest-group-menu-opener-text",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Filter Contest Group View"
+        }
+      ]
+    },
+    {
+      "id": "contest-group-menu-selected-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "{0} contest levels selected"
+        }
+      ]
+    },
+    {
+      "id": "contest-group-other-heading",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Other Contests"
+        }
+      ]
+    },
+    {
+      "id": "count-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Count"
+        }
+      ]
+    },
+    {
+      "id": "cross-endorsed-candidate-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Cross-Endorsed Candidate"
+        }
+      ]
+    },
+    {
+      "id": "cross-endorsed-info-text",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Multiple parties may nominate the same candidate, allowing voters to choose the party that best matches their value. The candidate's vote total is the sum of the votes received for each party."
+        }
+      ]
+    },
+    {
+      "id": "download-reports-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Download Reports"
+        }
+      ]
+    },
+    {
+      "id": "eg-back-to-lookup",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Back to lookup"
+        }
+      ]
+    },
+    {
+      "id": "eg-ballot-selections",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Ballot Selections"
+        }
+      ]
+    },
+    {
+      "id": "eg-ballot-selections-encrypted",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Selections are encrypted"
+        }
+      ]
+    },
+    {
+      "id": "eg-click-result-to-see-status",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Click on a result to see the ballot status."
+        }
+      ]
+    },
+    {
+      "id": "eg-click-to-view-all-codes",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Click here to view all codes."
+        }
+      ]
+    },
+    {
+      "id": "eg-code",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Code"
+        }
+      ]
+    },
+    {
+      "id": "eg-code-not-found-1",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Could not find a confirmation code beginning with"
+        }
+      ]
+    },
+    {
+      "id": "eg-code-not-found-2",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Displaying similar codes"
+        }
+      ]
+    },
+    {
+      "id": "eg-code-not-found-detailed",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "This code <span class=\"important-text\">was not found</span>."
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-is-test",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "This is a TEST ballot."
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-approved",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Approved"
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-approved-explanation",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Ballot has been accepted and will be included in the count."
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-challenged",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Challenged"
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-challenged-explanation",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "This ballot was challenged and <span class=\"important-text\">was not included</span> in the final count."
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-counted",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Counted"
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-counted-explanation",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Ballot was included in the count."
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-denied",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Denied"
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-denied-explanation",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Ballot had a problem and was not accepted. Please contact your election administrator."
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-notcounted",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Not Counted"
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-notcounted-explanation",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Ballot was not included in the final count."
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-spoiled",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Spoiled"
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-spoiled-explanation",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "This ballot was recorded as spoiled and was not included in the final count."
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-submitted",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Submitted"
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-submitted-explanation",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Ballot has been received by the election office."
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-unknown",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Unknown"
+        }
+      ]
+    },
+    {
+      "id": "eg-confirmation-code-status-unknown-explanation",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Ballot status is unknown."
+        }
+      ]
+    },
+    {
+      "id": "eg-display-results-1",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Displaying"
+        }
+      ]
+    },
+    {
+      "id": "eg-display-results-2",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "result"
+        }
+      ]
+    },
+    {
+      "id": "eg-display-results-2-plural",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "results"
+        }
+      ]
+    },
+    {
+      "id": "eg-display-results-3",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "for"
+        }
+      ]
+    },
+    {
+      "id": "eg-electionguard-link",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "This election uses <a href=\"https://docs.egvote.us\">ElectionGuard</a> for end-to-end verifiability."
+        }
+      ]
+    },
+    {
+      "id": "eg-election-not-ready",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "This election is not over yet. Please check back after the election has closed."
+        }
+      ]
+    },
+    {
+      "id": "eg-election-record-download",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Download the full electronic election record."
+        }
+      ]
+    },
+    {
+      "id": "eg-explanation-1",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "This election uses"
+        }
+      ]
+    },
+    {
+      "id": "eg-explanation-2",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "for end-to-end verifiability."
+        }
+      ]
+    },
+    {
+      "id": "eg-lookup-instructions",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Enter your confirmation code to verify the status of your ballot in the results of the election. If you have a code and do not find it, please contact your local election officials."
+        }
+      ]
+    },
+    {
+      "id": "eg-lookup-title",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Ballot Lookup"
+        }
+      ]
+    },
+    {
+      "id": "eg-mitre",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Click here for information about this claim and how you can verify the tally yourself."
+        }
+      ]
+    },
+    {
+      "id": "eg-no-matching-codes",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "No matching results"
+        }
+      ]
+    },
+    {
+      "id": "eg-retry-code-1",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Please try scanning your QR code again, or"
+        }
+      ]
+    },
+    {
+      "id": "eg-retry-code-2",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "click here to manually enter your code."
+        }
+      ]
+    },
+    {
+      "id": "eg-tally-independently-verified",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "The tally of the ballots in this election has been independently verified to be correctly counted."
+        }
+      ]
+    },
+    {
+      "id": "eg-timestamp",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Timestamp"
+        }
+      ]
+    },
+    {
+      "id": "election-reporting-status",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Election Reporting Status"
+        }
+      ]
+    },
+    {
+      "id": "election-statistics",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Election Statistics"
+        }
+      ]
+    },
+    {
+      "id": "eliminated-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Eliminated"
+        }
+      ]
+    },
+    {
+      "id": "expand-toggle-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Expand"
+        }
+      ]
+    },
+    {
+      "id": "filter-by-jurisdiction-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Filter by Jurisdiction"
+        }
+      ]
+    },
+    {
+      "id": "filtered-results-empty-massage",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "No matching items for your current Filter(s) and Search"
+        }
+      ]
+    },
+    {
+      "id": "followed-results-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "My Followed Results"
+        }
+      ]
+    },
+    {
+      "id": "follow-toggle-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Follow"
+        }
+      ]
+    },
+    {
+      "id": "footer-site-name",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Election Night Reporting"
+        }
+      ]
+    },
+    {
+      "id": "inactive-voters-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Inactive Voters"
+        }
+      ]
+    },
+    {
+      "id": "incoming-ballots-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Incoming Ballots"
+        }
+      ]
+    },
+    {
+      "id": "incoming-ballot-status-table-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Incoming Ballot Status"
+        }
+      ]
+    },
+    {
+      "id": "last-updated",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Last Updated"
+        }
+      ]
+    },
+    {
+      "id": "localities-reporting",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Localities reporting"
+        }
+      ]
+    },
+    {
+      "id": "locality-name-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "County Name"
+        }
+      ]
+    },
+    {
+      "id": "locality-results-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "COUNTY RESULTS"
+        }
+      ]
+    },
+    {
+      "id": "media-export-link-text",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Media Export"
+        }
+      ]
+    },
+    {
+      "id": "not-all-precinct-groups-reported",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Detailed results for one or more voting method may not be published at this time. These results are represented by a dash (-) instead of a number."
+        }
+      ]
+    },
+    {
+      "id": "official-results",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "OFFICIAL RESULTS"
+        }
+      ]
+    },
+    {
+      "id": "page-title-local-detailed",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Results by Precinct"
+        }
+      ]
+    },
+    {
+      "id": "page-title-local-reporting-status",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Election Statistics"
+        }
+      ]
+    },
+    {
+      "id": "page-title-local-reports",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Reports"
+        }
+      ]
+    },
+    {
+      "id": "page-title-local-statistics",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Precinct Reporting Statuses"
+        }
+      ]
+    },
+    {
+      "id": "page-title-local-summary",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Election Results"
+        }
+      ]
+    },
+    {
+      "id": "page-title-local-voters",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Voters by Precinct"
+        }
+      ]
+    },
+    {
+      "id": "page-title-state-close-races",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Close Races"
+        }
+      ]
+    },
+    {
+      "id": "page-title-state-detailed",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Results by County"
+        }
+      ]
+    },
+    {
+      "id": "page-title-state-reporting-status",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Reporting Status by County"
+        }
+      ]
+    },
+    {
+      "id": "page-title-state-reports",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Reports"
+        }
+      ]
+    },
+    {
+      "id": "page-title-state-statistics",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "State Election Statistics"
+        }
+      ]
+    },
+    {
+      "id": "page-title-state-summary",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "State Election Results"
+        }
+      ]
+    },
+    {
+      "id": "page-title-state-voters",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Voters by County"
+        }
+      ]
+    },
+    {
+      "id": "percentage-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Percentage"
+        }
+      ]
+    },
+    {
+      "id": "percent-turnout-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "% Turnout"
+        }
+      ]
+    },
+    {
+      "id": "polling-place-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Polling Place"
+        }
+      ]
+    },
+    {
+      "id": "polling-places-reporting-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Polling Places reporting"
+        }
+      ]
+    },
+    {
+      "id": "polling-place-status-link-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "View status for each polling place"
+        }
+      ]
+    },
+    {
+      "id": "polling-place-status-page-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Polling Place Reporting Statuses"
+        }
+      ]
+    },
+    {
+      "id": "polling-place-status-table-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Status"
+        }
+      ]
+    },
+    {
+      "id": "polling-place-tabulators-remaining-table-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Tabulators Remaining"
+        }
+      ]
+    },
+    {
+      "id": "polling-place-total-tabulators-table-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Total Tabulators"
+        }
+      ]
+    },
+    {
+      "id": "powered-by",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "powered by"
+        }
+      ]
+    },
+    {
+      "id": "precinct-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Precinct"
+        }
+      ]
+    },
+    {
+      "id": "precinct-reporting-status-table-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Precinct Reporting Status"
+        }
+      ]
+    },
+    {
+      "id": "precinct-results-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "PRECINCT RESULTS"
+        }
+      ]
+    },
+    {
+      "id": "precinct-results-hidden",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Some results have been hidden in cases where not enough ballots were cast to ensure voter privacy or if the results have not been published for a voting method. These results are represented by a dash (-) instead of a number."
+        }
+      ]
+    },
+    {
+      "id": "precinct-results-protected",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Some results have been hidden in cases where not enough ballots were cast to ensure voter privacy. These results are represented by a dash (-) instead of a number."
+        }
+      ]
+    },
+    {
+      "id": "precincts-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Precincts"
+        }
+      ]
+    },
+    {
+      "id": "precincts-reporting",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Localities reporting"
+        }
+      ]
+    },
+    {
+      "id": "precincts-reporting-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Precincts reporting"
+        }
+      ]
+    },
+    {
+      "id": "precincts-results-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "PRECINCT"
+        }
+      ]
+    },
+    {
+      "id": "precinct-status-link-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "View status for each precinct"
+        }
+      ]
+    },
+    {
+      "id": "precinct-status-page-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Precinct Reporting Statuses"
+        }
+      ]
+    },
+    {
+      "id": "precinct-status-table-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Status"
+        }
+      ]
+    },
+    {
+      "id": "qualified-write-in-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Adjudicated Write-Ins"
+        }
+      ]
+    },
+    {
+      "id": "ranked-choice-contest-tag",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Ranked Choice Contest"
+        }
+      ]
+    },
+    {
+      "id": "ranked-choice-in-progress-disclaimer-body",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Below results display the first choice votes for the ranked choice contest. Final tabulation rounds and winner(s) will be displayed once all ballots have been received and counted,  and may take up to 7 days."
+        }
+      ]
+    },
+    {
+      "id": "ranked-choice-in-progress-disclaimer-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Disclaimer: Round 1 Results"
+        }
+      ]
+    },
+    {
+      "id": "ranked-choice-learn-more-link-text",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Learn more about ranked choice voting"
+        }
+      ]
+    },
+    {
+      "id": "referendum-response-table-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Response"
+        }
+      ]
+    },
+    {
+      "id": "registered-voters-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Registered Voters"
+        }
+      ]
+    },
+    {
+      "id": "reporting-status-election-night-complete",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Election Night Complete"
+        }
+      ]
+    },
+    {
+      "id": "reporting-status-fully-reported",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Fully Reported"
+        }
+      ]
+    },
+    {
+      "id": "reporting-status-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Reporting Status"
+        }
+      ]
+    },
+    {
+      "id": "reporting-status-not-participating",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Not Participating"
+        }
+      ]
+    },
+    {
+      "id": "reporting-status-not-reported",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Not Reported"
+        }
+      ]
+    },
+    {
+      "id": "reporting-status-partially-reported",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Partially Reported"
+        }
+      ]
+    },
+    {
+      "id": "reporting-status-unknown",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Not Reported"
+        }
+      ]
+    },
+    {
+      "id": "reports-page-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Reports"
+        }
+      ]
+    },
+    {
+      "id": "reports-page-title",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Results Reports"
+        }
+      ]
+    },
+    {
+      "id": "reports-page-title-note",
+      "languageTexts": []
+    },
+    {
+      "id": "results-map-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "RESULTS MAP"
+        }
+      ]
+    },
+    {
+      "id": "round-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Round"
+        }
+      ]
+    },
+    {
+      "id": "scroll-to-top-tooltip",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Scroll to top"
+        }
+      ]
+    },
+    {
+      "id": "search-precinct-textbox-placeholder",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Search for the precinct you are interested in"
+        }
+      ]
+    },
+    {
+      "id": "search-textbox-placeholder",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Search for the contest or candidate name you are interested in"
+        }
+      ]
+    },
+    {
+      "id": "see-all-county-results",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "See All County Results"
+        }
+      ]
+    },
+    {
+      "id": "see-all-state-results",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "See All State Results"
+        }
+      ]
+    },
+    {
+      "id": "see-ballot-item-locality-details",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "View results by County"
+        }
+      ]
+    },
+    {
+      "id": "see-ballot-item-precinct-details",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "View results by precinct"
+        }
+      ]
+    },
+    {
+      "id": "select-language",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Select Language"
+        }
+      ]
+    },
+    {
+      "id": "statistics-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Statistics"
+        }
+      ]
+    },
+    {
+      "id": "total-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Total"
+        }
+      ]
+    },
+    {
+      "id": "totals-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Totals"
+        }
+      ]
+    },
+    {
+      "id": "total-votes-table-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Total Votes"
+        }
+      ]
+    },
+    {
+      "id": "unfollow-toggle-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Unfollow"
+        }
+      ]
+    },
+    {
+      "id": "unofficial-results",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "UNOFFICIAL RESULTS"
+        }
+      ]
+    },
+    {
+      "id": "update-frequency",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "This page auto-refreshes and is updated in real-time."
+        }
+      ]
+    },
+    {
+      "id": "view-contests-by-locality",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Go to County Page"
+        }
+      ]
+    },
+    {
+      "id": "view-cross-county-totals-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "View Totals"
+        }
+      ]
+    },
+    {
+      "id": "vote-method-toggle-all-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Vote Method"
+        }
+      ]
+    },
+    {
+      "id": "vote-method-toggle-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Vote Method"
+        }
+      ]
+    },
+    {
+      "id": "voter-registration-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Voter Registration"
+        }
+      ]
+    },
+    {
+      "id": "voters-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Voters"
+        }
+      ]
+    },
+    {
+      "id": "voter-turnout-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Voter Turnout"
+        }
+      ]
+    },
+    {
+      "id": "votes-header",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Votes"
+        }
+      ]
+    },
+    {
+      "id": "winner-label",
+      "languageTexts": [
+        {
+          "languageId": "en",
+          "text": "Winner"
+        }
+      ]
+    }
+  ],
+  "elections": [
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 16, 2025"
+        }
+      ],
+      "electionDate": "2025-12-16",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 16, 2025 \u2013 SD 35 Special Election Runoff"
+        }
+      ],
+      "publicElectionId": "12162025SD35SpecialElectionRunoff"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "June 9, 2026"
+        }
+      ],
+      "electionDate": "2026-06-09",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "June 9th, 2026 Special Election Runoff"
+        }
+      ],
+      "publicElectionId": "06092026SpecialElectionRunoff"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "March 5, 2013"
+        }
+      ],
+      "electionDate": "2013-03-05",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "March 5, 2013 - Runoff Election "
+        }
+      ],
+      "publicElectionId": "2013MarRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 5, 2013"
+        }
+      ],
+      "electionDate": "2013-11-05",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 5, 2013 - Special Election "
+        }
+      ],
+      "publicElectionId": "2013NovSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 10, 2017"
+        }
+      ],
+      "electionDate": "2017-01-10",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 10, 2017 - Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2017JanSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "February 3, 2015"
+        }
+      ],
+      "electionDate": "2015-02-03",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "February 3, 2015, Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2015FebSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "February 4, 2014"
+        }
+      ],
+      "electionDate": "2014-02-04",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "February 4, 2014, Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2014FebSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 1, 2015"
+        }
+      ],
+      "electionDate": "2015-12-01",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 1, 2015 - Special Election "
+        }
+      ],
+      "publicElectionId": "2015DecSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 3, 2013"
+        }
+      ],
+      "electionDate": "2013-12-03",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 3, 2013 - Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2013DecSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 7, 2014"
+        }
+      ],
+      "electionDate": "2014-01-07",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 7, 2014 Special Election "
+        }
+      ],
+      "publicElectionId": "2014JanSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "August 11, 2015"
+        }
+      ],
+      "electionDate": "2015-08-11",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "August 11, 2015 - Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2015AugSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 4, 2012"
+        }
+      ],
+      "electionDate": "2012-12-04",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 4, 2012 - General Election Runoff "
+        }
+      ],
+      "publicElectionId": "2012DecGenRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "April 26, 2016"
+        }
+      ],
+      "electionDate": "2016-04-26",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "April 26, 2016 Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2016AprSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "May 2, 2017"
+        }
+      ],
+      "electionDate": "2017-05-02",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "May 16, 2017 - Special Runoff "
+        }
+      ],
+      "publicElectionId": "2017MaySpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "February 16, 2016"
+        }
+      ],
+      "electionDate": "2016-02-16",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "February 16, 2016 - Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2016FebSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 9, 2018"
+        }
+      ],
+      "electionDate": "2018-01-09",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 9, 2018 - Special Election "
+        }
+      ],
+      "publicElectionId": "2018JanSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "June 16, 2015"
+        }
+      ],
+      "electionDate": "2015-06-16",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "June 16, 2015 Special Election "
+        }
+      ],
+      "publicElectionId": "2015JunSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "July 14, 2015"
+        }
+      ],
+      "electionDate": "2015-07-14",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "July 14, 2015 - Special Election "
+        }
+      ],
+      "publicElectionId": "2015JulSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 13, 2016"
+        }
+      ],
+      "electionDate": "2016-12-13",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 13, 2016 - Special Election "
+        }
+      ],
+      "publicElectionId": "2016DecSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 8, 2013"
+        }
+      ],
+      "electionDate": "2013-01-08",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 8, 2013 - Special Election "
+        }
+      ],
+      "publicElectionId": "2013JanSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "April 9, 2019"
+        }
+      ],
+      "electionDate": "2019-04-09",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "April 9, 2019 HD 28 Special Primary "
+        }
+      ],
+      "publicElectionId": "2019AprHD28SpecPri"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 19, 2016"
+        }
+      ],
+      "electionDate": "2016-01-19",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 19, 2016 - Special Election "
+        }
+      ],
+      "publicElectionId": "2016JanSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "October 1, 2019"
+        }
+      ],
+      "electionDate": "2019-10-01",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "October 1, 2019 HD 71 Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2019OctHD71SpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 3, 2019"
+        }
+      ],
+      "electionDate": "2019-12-03",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 3, 2019 HD 152 Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2019DecHD152SpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 8, 2019"
+        }
+      ],
+      "electionDate": "2019-01-08",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 8, 2019 Special Election "
+        }
+      ],
+      "publicElectionId": "2019JanSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 1, 2020"
+        }
+      ],
+      "electionDate": "2020-12-01",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 1, 2020 Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2020DecSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "September 3, 2019"
+        }
+      ],
+      "electionDate": "2019-09-03",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "September 3, 2019 HD 71 Special Election "
+        }
+      ],
+      "publicElectionId": "2019SepHD71Spec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "February 13, 2018"
+        }
+      ],
+      "electionDate": "2018-02-13",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "February 13, 2018 - Special Election "
+        }
+      ],
+      "publicElectionId": "2018FebSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "July 14, 2015"
+        }
+      ],
+      "electionDate": "2015-07-14",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "July 14, 2015, Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2015JulSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "March 12, 2019"
+        }
+      ],
+      "electionDate": "2019-03-12",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "March 12, 2019 Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2019MarSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "February 12, 2019"
+        }
+      ],
+      "electionDate": "2019-02-12",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "February 12, 2019 Special Election "
+        }
+      ],
+      "publicElectionId": "2019FebSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 2, 2021"
+        }
+      ],
+      "electionDate": "2021-11-02",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 2, 2021 - General Election "
+        }
+      ],
+      "publicElectionId": "2021NovGen"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "February 5, 2019"
+        }
+      ],
+      "electionDate": "2019-02-05",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "February 5, 2019 Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2019FebSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "July 13, 2021"
+        }
+      ],
+      "electionDate": "2021-07-13",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "July 13, 2021 - Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2021JulSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "March 9, 2021"
+        }
+      ],
+      "electionDate": "2021-03-09",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "March 9, 2021 - Special Primary Election Runoff "
+        }
+      ],
+      "publicElectionId": "2021MarSpecPriRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "April 18, 2017"
+        }
+      ],
+      "electionDate": "2017-04-18",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "April 18, 2017 - Special Election "
+        }
+      ],
+      "publicElectionId": "2017AprSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 28, 2020"
+        }
+      ],
+      "electionDate": "2020-01-28",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 28, 2020 HD 171 Special Election "
+        }
+      ],
+      "publicElectionId": "2020JanHD171Spec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 1, 2020"
+        }
+      ],
+      "electionDate": "2020-12-01",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 1st 2020 State Runoff "
+        }
+      ],
+      "publicElectionId": "2020DecStateRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "March 29, 2016"
+        }
+      ],
+      "electionDate": "2016-03-29",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "March 29, 2016 Special Election "
+        }
+      ],
+      "publicElectionId": "2016MarSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 5, 2019"
+        }
+      ],
+      "electionDate": "2019-11-05",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 5, 2019 HD 152 Special Election "
+        }
+      ],
+      "publicElectionId": "2019NovHD152Spec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 1, 2015"
+        }
+      ],
+      "electionDate": "2015-12-01",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 1, 2015 - Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2015DecSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 3, 2023"
+        }
+      ],
+      "electionDate": "2023-01-03",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 3, 2023 GA House District 7 - Special Election "
+        }
+      ],
+      "publicElectionId": "2023JanHD7Spec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 18, 2018"
+        }
+      ],
+      "electionDate": "2018-12-18",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 18, 2018 HD 14 Special Republican Primary "
+        }
+      ],
+      "publicElectionId": "2018DecHD14SpecRepPri"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 7, 2017"
+        }
+      ],
+      "electionDate": "2017-11-07",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 7, 2017 - Special Election "
+        }
+      ],
+      "publicElectionId": "2017NovSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 5, 2017"
+        }
+      ],
+      "electionDate": "2017-12-05",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 5, 2017 - Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2017DecSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "March 3, 2020"
+        }
+      ],
+      "electionDate": "2020-03-03",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "March 3, 2020 SD 13 Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2020MarSD13SpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "August 26, 2025"
+        }
+      ],
+      "electionDate": "2025-08-26",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Recount - August 26, 2025 - Special Election - State Senate District 21"
+        }
+      ],
+      "publicElectionId": "SpecialElection82625Recount"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "March 12, 2024"
+        }
+      ],
+      "electionDate": "2024-03-12",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "March 12, 2024 - House District 125 Runoff"
+        }
+      ],
+      "publicElectionId": "2024MarHD125Run"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 6, 2026"
+        }
+      ],
+      "electionDate": "2026-01-06",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 6, 2026 \u2013 HD 23 Special Election Runoff"
+        }
+      ],
+      "publicElectionId": "Jan6HD23SERunoff"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "April 9, 2024"
+        }
+      ],
+      "electionDate": "2024-04-09",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "April 9, 2024 - House District 139 Special Election "
+        }
+      ],
+      "publicElectionId": "2024AprHD139Spec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "February 28, 2023"
+        }
+      ],
+      "electionDate": "2023-02-28",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "February 28, 2023 GA House District 119 - Runoff Election "
+        }
+      ],
+      "publicElectionId": "2023FebHD119Run"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 3, 2024"
+        }
+      ],
+      "electionDate": "2024-12-03",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "State House of Representatives District 105 Recount"
+        }
+      ],
+      "publicElectionId": "2024HD105Recount"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "April 7, 2026"
+        }
+      ],
+      "electionDate": "2026-04-07",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "April 7, 2026 \u2013 Special Election "
+        }
+      ],
+      "publicElectionId": "40726SpecialElection"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "April 5, 2022"
+        }
+      ],
+      "electionDate": "2022-04-05",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "April 5th, 2022 - Special Election "
+        }
+      ],
+      "publicElectionId": "2022AprSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "June 20, 2017"
+        }
+      ],
+      "electionDate": "2017-06-20",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "June 20, 2017 - Special Runoff "
+        }
+      ],
+      "publicElectionId": "2017JunSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 6, 2015"
+        }
+      ],
+      "electionDate": "2015-01-06",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 6, 2015 Special Election "
+        }
+      ],
+      "publicElectionId": "2015JanSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "May 16, 2023"
+        }
+      ],
+      "electionDate": "2023-05-16",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "May 16, 2023 - House District 68 - Special Election "
+        }
+      ],
+      "publicElectionId": "2023MayHD68Spec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "June 13, 2023"
+        }
+      ],
+      "electionDate": "2023-06-13",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "June 13th, 2023 - House District 68 Runoff Election "
+        }
+      ],
+      "publicElectionId": "2023JunHD68Run"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "June 15, 2021"
+        }
+      ],
+      "electionDate": "2021-06-15",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "June 15, 2021- Special Election "
+        }
+      ],
+      "publicElectionId": "2021JunSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "May 3, 2022"
+        }
+      ],
+      "electionDate": "2022-05-03",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "May 3rd, 2022 Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2022MaySpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "September 23, 2025"
+        }
+      ],
+      "electionDate": "2025-09-23",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "September 23, 2025 - Special Election - State Senate District 21 Runoff"
+        }
+      ],
+      "publicElectionId": "SpecialElectionDistrict21Runoff92325"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 4, 2018"
+        }
+      ],
+      "electionDate": "2018-12-04",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 4, 2018 HD 28 Special Republican Primary "
+        }
+      ],
+      "publicElectionId": "2018DecHD28SpecRepPri"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 20, 2022"
+        }
+      ],
+      "electionDate": "2022-12-20",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 20, 2022 GA House District 129 - Special Election"
+        }
+      ],
+      "publicElectionId": "2022DecHD129Spec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 2, 2025"
+        }
+      ],
+      "electionDate": "2025-12-02",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 2nd, 2025 - Runoffs"
+        }
+      ],
+      "publicElectionId": "December2nd2025Runoffs"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "August 26, 2025"
+        }
+      ],
+      "electionDate": "2025-08-26",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "August 26, 2025 - Special Election - State Senate District 21"
+        }
+      ],
+      "publicElectionId": "SpecialElection2625"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "February 5, 2013"
+        }
+      ],
+      "electionDate": "2013-02-05",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "February 5, 2013 - Special & Runoff Elections "
+        }
+      ],
+      "publicElectionId": "2013FebSpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 18, 2025"
+        }
+      ],
+      "electionDate": "2025-11-18",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 18, 2025 \u2013 SD 35 Special Election"
+        }
+      ],
+      "publicElectionId": "November18-2025-SD35SpecialElection"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 3, 2015"
+        }
+      ],
+      "electionDate": "2015-11-03",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 3, 2015 - Special Election "
+        }
+      ],
+      "publicElectionId": "2015NovSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "May 12, 2026"
+        }
+      ],
+      "electionDate": "2026-05-12",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "May 12, 2026 \u2013 Special Election "
+        }
+      ],
+      "publicElectionId": "51226SpecialElection"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 9, 2025"
+        }
+      ],
+      "electionDate": "2025-12-09",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 9th, 2025 - Special Election State House 23 and 121"
+        }
+      ],
+      "publicElectionId": "December9th2025SpecialElectoinStateHouse23and121"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "June 10, 2022"
+        }
+      ],
+      "electionDate": "2022-06-10",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "May 24, 2022 - US Congressional District 10 (Dem) Primary Recount "
+        }
+      ],
+      "publicElectionId": "2022MayCD10DemPriRec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "February 4, 2020"
+        }
+      ],
+      "electionDate": "2020-02-04",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "February 4, 2020 SD 13 Special Election "
+        }
+      ],
+      "publicElectionId": "2020FebSD13Spec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 6, 2022"
+        }
+      ],
+      "electionDate": "2022-12-06",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 6, 2022 - General Election Runoff "
+        }
+      ],
+      "publicElectionId": "2022DecGenRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "July 22, 2014"
+        }
+      ],
+      "electionDate": "2014-07-22",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "July 22, 2014 - Gen Primary NP General Runoff Recount "
+        }
+      ],
+      "publicElectionId": "2014JulGenPriRunRec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 20, 2026"
+        }
+      ],
+      "electionDate": "2026-01-20",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 20, 2026 - Special Election"
+        }
+      ],
+      "publicElectionId": "January20SpecialElection"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "July 26, 2016"
+        }
+      ],
+      "electionDate": "2016-07-26",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "July 26, 2016 General Primary Runoff "
+        }
+      ],
+      "publicElectionId": "2016JulGenPriRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "May 7, 2024"
+        }
+      ],
+      "electionDate": "2024-05-07",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "May 7, 2024 - House District 139 Special Election Runoff "
+        }
+      ],
+      "publicElectionId": "2024MayHD139SpecRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "March 10, 2026"
+        }
+      ],
+      "electionDate": "2026-03-10",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "March 10, 2026 \u2013 Special Election"
+        }
+      ],
+      "publicElectionId": "March102026SpecialElection"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 16, 2020"
+        }
+      ],
+      "electionDate": "2020-11-16",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 3rd, 2020 - General Election Recount "
+        }
+      ],
+      "publicElectionId": "2020NovGenRec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "February 17, 2026"
+        }
+      ],
+      "electionDate": "2026-02-17",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "February 17, 2026 - Special Election Runoff"
+        }
+      ],
+      "publicElectionId": "Feb1726StateSenateDistrict18"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "July 15, 2025"
+        }
+      ],
+      "electionDate": "2025-07-15",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Special Primary Public Service Commissioner (PSC) / Special Election Runoff"
+        }
+      ],
+      "publicElectionId": "2025PSCPrimaryRunoff"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "February 9, 2021"
+        }
+      ],
+      "electionDate": "2021-02-09",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "February 9, 2021- Special Election "
+        }
+      ],
+      "publicElectionId": "2021FebSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "March 21, 2023"
+        }
+      ],
+      "electionDate": "2023-03-21",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "March 21, 2023 - House District 75 - Special Election"
+        }
+      ],
+      "publicElectionId": "2023MarHD75Spec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 31, 2023"
+        }
+      ],
+      "electionDate": "2023-01-31",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 31, 2023 - Special Election"
+        }
+      ],
+      "publicElectionId": "2023JanSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "May 19, 2026"
+        }
+      ],
+      "electionDate": "2026-05-19",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "RECOUNT - May 19th, 2026 PSC District 3-REP"
+        }
+      ],
+      "publicElectionId": "RECOUNTPSCDistrict3"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "February 13, 2024"
+        }
+      ],
+      "electionDate": "2024-02-13",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "February 13, 2024 Special Election "
+        }
+      ],
+      "publicElectionId": "2024FebSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "August 11, 2020"
+        }
+      ],
+      "electionDate": "2020-08-11",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "August 11, 2020 - General Primary \u2013 Nonpartisan General Election Runoff "
+        }
+      ],
+      "publicElectionId": "2020AugGenPri"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "December 4, 2018"
+        }
+      ],
+      "electionDate": "2018-12-04",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "December 4, 2018 General Election Runoff "
+        }
+      ],
+      "publicElectionId": "2018DecGenRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "June 17, 2025"
+        }
+      ],
+      "electionDate": "2025-06-17",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "Special Primary Public Service Commissioner (PSC) / Special Election"
+        }
+      ],
+      "publicElectionId": "2025PSCPrimary"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "July 22, 2014"
+        }
+      ],
+      "electionDate": "2014-07-22",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "July 22, 2014 - Gen Primary NP General Runoff "
+        }
+      ],
+      "publicElectionId": "2014JulGenPriRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "June 18, 2024"
+        }
+      ],
+      "electionDate": "2024-06-18",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "June 18, 2024 - General Primary / Nonpartisan General Election Runoff "
+        }
+      ],
+      "publicElectionId": "2024JunPriRunoff"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 4, 2025"
+        }
+      ],
+      "electionDate": "2025-11-04",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 4, 2025 - Municipal General / Special Election (PSC)"
+        }
+      ],
+      "publicElectionId": "MunicipalGeneralSpecialElectionPSC11042025"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "January 5, 2021"
+        }
+      ],
+      "electionDate": "2021-01-05",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "January 5, 2021 Federal Runoff "
+        }
+      ],
+      "publicElectionId": "2021JanFedRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "July 24, 2018"
+        }
+      ],
+      "electionDate": "2018-07-24",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "July 24, 2018 General Primary Runoff Election "
+        }
+      ],
+      "publicElectionId": "2018JulGenPriRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "March 24, 2020"
+        }
+      ],
+      "electionDate": "2020-03-24",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "March 24, 2020 Presidential Preference Primary "
+        }
+      ],
+      "publicElectionId": "2020MarPPP"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "June 21, 2022"
+        }
+      ],
+      "electionDate": "2022-06-21",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "June 21, 2022 - General Primary -Nonpartisan General Election Runoff "
+        }
+      ],
+      "publicElectionId": "2022JunGenPriRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "March 12, 2024"
+        }
+      ],
+      "electionDate": "2024-03-12",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "March 12, 2024 Presidential Preference Primary "
+        }
+      ],
+      "publicElectionId": "2024MarPPP"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "August 21, 2012"
+        }
+      ],
+      "electionDate": "2012-08-21",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "August 21, 2012 - General Primary Runoff "
+        }
+      ],
+      "publicElectionId": "2012AugGenPriRun"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "March 1, 2016"
+        }
+      ],
+      "electionDate": "2016-03-01",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "March 1, 2016 - Presidential Preference Primary "
+        }
+      ],
+      "publicElectionId": "2016MarPPP"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 8, 2016"
+        }
+      ],
+      "electionDate": "2016-11-08",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 8, 2016 - General Election "
+        }
+      ],
+      "publicElectionId": "2016NovGen"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 6, 2012"
+        }
+      ],
+      "electionDate": "2012-11-06",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 6, 2012 - General Election "
+        }
+      ],
+      "publicElectionId": "2012NovGen"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "June 16, 2026"
+        }
+      ],
+      "electionDate": "2026-06-16",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "June 16th, 2026 General Primary Runoff"
+        }
+      ],
+      "publicElectionId": "06162026GeneralPrimaryRunoff"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 4, 2014"
+        }
+      ],
+      "electionDate": "2014-11-04",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 4, 2014 - General Election "
+        }
+      ],
+      "publicElectionId": "2014NovGen"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 6, 2018"
+        }
+      ],
+      "electionDate": "2018-11-06",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 6, 2018 - General Election "
+        }
+      ],
+      "publicElectionId": "2018NovGen"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "May 24, 2016"
+        }
+      ],
+      "electionDate": "2016-05-24",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "May 24, 2016 General Primary "
+        }
+      ],
+      "publicElectionId": "2016MayGenPri"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 5, 2024"
+        }
+      ],
+      "electionDate": "2024-11-05",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November General Election"
+        }
+      ],
+      "publicElectionId": "2024NovGen"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "May 21, 2024"
+        }
+      ],
+      "electionDate": "2024-05-21",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "May 21, 2024 - General Primary - Nonpartisan Election"
+        }
+      ],
+      "publicElectionId": "2024MayGenPri"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "July 31, 2012"
+        }
+      ],
+      "electionDate": "2012-07-31",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "July 31, 2012 - General Primary/General Nonpartisan/Special Election "
+        }
+      ],
+      "publicElectionId": "2012JulGenPriSpec"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "May 20, 2014"
+        }
+      ],
+      "electionDate": "2014-05-20",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "May 20, 2014 - Gen Primary NP General "
+        }
+      ],
+      "publicElectionId": "2014MayGenPri"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 8, 2022"
+        }
+      ],
+      "electionDate": "2022-11-08",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 8, 2022 - General/Special Election"
+        }
+      ],
+      "publicElectionId": "2022NovGen"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "November 3, 2020"
+        }
+      ],
+      "electionDate": "2020-11-03",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "November 3,2020-General Election "
+        }
+      ],
+      "publicElectionId": "2020NovGen"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "June 9, 2020"
+        }
+      ],
+      "electionDate": "2020-06-09",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "June 9th, 2020 - Presidential Preference Primary \u2013 General Primary \u2013 Nonpartisan General Election \u2013 Special Election "
+        }
+      ],
+      "publicElectionId": "2020AugPPP"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "May 22, 2018"
+        }
+      ],
+      "electionDate": "2018-05-22",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "May 22, 2018 General Primary Election "
+        }
+      ],
+      "publicElectionId": "2018GenPri"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "May 24, 2022"
+        }
+      ],
+      "electionDate": "2022-05-24",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "May 24, 2022 - General Primary -Nonpartisan General Election "
+        }
+      ],
+      "publicElectionId": "2022MayGenPri"
+    },
+    {
+      "dateText": [
+        {
+          "languageId": "en",
+          "text": "May 19, 2026"
+        }
+      ],
+      "electionDate": "2026-05-19",
+      "name": [
+        {
+          "languageId": "en",
+          "text": "May 19, 2026 - General Primary"
+        }
+      ],
+      "publicElectionId": "GeneralPrimary51926"
+    }
+  ],
+  "footerLinkText": null,
+  "footerLinkUrl": null,
+  "headerScript": null,
+  "historicalElectionsUrl": null,
+  "id": "09378a07-e6cf-4f66-be7c-ca4aa534f99a",
+  "isParent": true,
+  "languages": [],
+  "mediaExportPath": null,
+  "name": [
+    {
+      "languageId": "en",
+      "text": "Georgia"
+    }
+  ],
+  "parent": null,
+  "rankedChoiceInfoUrl": null,
+  "shortName": "Georgia",
+  "themes": null
+}
