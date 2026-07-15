@@ -165,6 +165,7 @@ INSTALLED_APPS += [
     'integrations.fl_ew',
     'integrations.oh_sos',
     'integrations.mn_sos',
+    'integrations.tn_sos',
     'integrations.mi_sos',
     'internal',
     'api',
