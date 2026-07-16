@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from integrations.mn_sos.client import MnSosClient
-from integrations.mn_sos.exceptions import MnSosRetryableError
+from integrations.mn_sos.exceptions import MnSosError, MnSosRetryableError
 
 
 def test_file_url_builds_host_datepath_filename():
@@ -32,6 +32,23 @@ def test_file_exists_retries_then_raises_on_persistent_5xx():
     with patch.object(client._session, "head", return_value=MagicMock(status_code=503)):
         with pytest.raises(MnSosRetryableError):
             client.file_exists("20241105", "USPres.txt")
+
+
+def test_file_exists_follows_redirects():
+    client = MnSosClient()
+    with patch.object(client._session, "head", return_value=MagicMock(status_code=200)) as head:
+        client.file_exists("20241105", "USPres.txt")
+    assert head.call_args.kwargs["allow_redirects"] is True
+
+
+def test_file_exists_raises_immediately_on_unexpected_status():
+    # A non-200/404/retryable status (e.g. 401) must raise at once, not loop to
+    # a misleading "retries exhausted". raise_for_status alone would miss 3xx.
+    client = MnSosClient(max_retries=3)
+    with patch.object(client._session, "head", return_value=MagicMock(status_code=401)) as head:
+        with pytest.raises(MnSosError):
+            client.file_exists("20241105", "USPres.txt")
+    assert head.call_count == 1
 
 
 def test_fetch_file_index_passes_ers_election_id_param():
