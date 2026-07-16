@@ -22,8 +22,8 @@ from elections.models import Candidate
 from ops.models import SyncLog
 
 from .client import MnSosClient
-from .discovery import discover_in_scope_files
-from .exceptions import MnSosRetryableError
+from .discovery import probe_in_scope_files
+from .exceptions import MnSosError, MnSosRetryableError
 from .mappers import format_office_title, map_candidate, map_election, map_race
 from .parsers import parse_candidate_table, parse_result_file
 
@@ -57,9 +57,11 @@ def sync_mn_races(self):
         )
 
         meta = election_obj.source_metadata or {}
-        ers_election_id = meta.get("mn_ers_election_id")
+        date_path = meta.get("mn_date_path")
+        if not date_path:
+            raise MnSosError(f"MN election {source_id} is missing mn_date_path metadata")
 
-        in_scope_files = discover_in_scope_files(client, ers_election_id)
+        in_scope_files = probe_in_scope_files(client, date_path)
 
         in_scope_office_ids: set[str] = set()
         office_titles_by_id: dict[str, str] = {}
@@ -87,7 +89,7 @@ def sync_mn_races(self):
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return {"created": 0, "updated": 0}
 
-        cand_text = client.fetch_candidate_table(meta["mn_date_path"])
+        cand_text = client.fetch_candidate_table(date_path)
         candidate_rows = [
             row for row in parse_candidate_table(cand_text)
             if row["office_id"] in in_scope_office_ids

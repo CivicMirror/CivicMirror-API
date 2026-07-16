@@ -62,7 +62,7 @@ def test_fetch_results_parses_in_scope_files_only():
         return ""
 
     with patch(
-        "results.adapters.mn.discover_in_scope_files",
+        "results.adapters.mn.probe_in_scope_files",
         return_value=_load_index_in_scope_files(),
     ), patch(
         "results.adapters.mn.MnSosClient.fetch_file", side_effect=fake_fetch_file,
@@ -93,7 +93,7 @@ def test_fetch_results_reports_unchanged_when_checksum_matches_cache():
         return ussenate_text if url.endswith("ussenate.txt") else ""
 
     with patch(
-        "results.adapters.mn.discover_in_scope_files",
+        "results.adapters.mn.probe_in_scope_files",
         return_value=_load_index_in_scope_files(),
     ), patch(
         "results.adapters.mn.MnSosClient.fetch_file", side_effect=fake_fetch_file,
@@ -127,7 +127,7 @@ def test_fetch_results_skips_malformed_row_but_keeps_valid_rows():
         return malformed_text if url.endswith("ussenate.txt") else ""
 
     with patch(
-        "results.adapters.mn.discover_in_scope_files",
+        "results.adapters.mn.probe_in_scope_files",
         return_value=_load_index_in_scope_files(),
     ), patch(
         "results.adapters.mn.MnSosClient.fetch_file", side_effect=fake_fetch_file,
@@ -197,7 +197,7 @@ def test_fetch_results_appends_district_to_office_title_when_needed():
         return "ussenate" if url.endswith("ussenate.txt") else "stsenate"
 
     with patch(
-        "results.adapters.mn.discover_in_scope_files",
+        "results.adapters.mn.probe_in_scope_files",
         return_value=[
             {"label": "U.S. Senator Statewide", "url": "https://x/ussenate.txt"},
             {"label": "State Senator by District", "url": "https://x/stsenate.txt"},
