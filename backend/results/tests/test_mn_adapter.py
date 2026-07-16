@@ -5,6 +5,8 @@ import pytest
 from django.core.cache import cache
 
 from elections.models import Election
+from integrations.mn_sos.mappers import is_in_scope_file
+from integrations.mn_sos.parsers import parse_file_index
 from results.adapters.mn import MinnesotaAdapter
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -13,6 +15,13 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 def _load_fixture(name: str) -> str:
     with open(os.path.join(FIXTURES_DIR, name), encoding="utf-8") as f:
         return f.read()
+
+
+def _load_index_in_scope_files() -> list[dict]:
+    """In-scope files parsed from the captured index fixture — what
+    discover_in_scope_files returns for the live-index happy path."""
+    html = _load_fixture("mn_file_index.html")
+    return [f for f in parse_file_index(html) if is_in_scope_file(f["label"])]
 
 
 @pytest.fixture(autouse=True)
@@ -45,7 +54,6 @@ def test_fetch_results_parses_in_scope_files_only():
     )
     adapter = MinnesotaAdapter()
 
-    index_html = _load_fixture("mn_file_index.html")
     ussenate_text = _load_fixture("mn_ussenate.txt")
 
     def fake_fetch_file(url):
@@ -54,7 +62,8 @@ def test_fetch_results_parses_in_scope_files_only():
         return ""
 
     with patch(
-        "results.adapters.mn.MnSosClient.fetch_file_index", return_value=index_html,
+        "results.adapters.mn.discover_in_scope_files",
+        return_value=_load_index_in_scope_files(),
     ), patch(
         "results.adapters.mn.MnSosClient.fetch_file", side_effect=fake_fetch_file,
     ):
@@ -78,14 +87,14 @@ def test_fetch_results_reports_unchanged_when_checksum_matches_cache():
         source_metadata={"mn_ers_election_id": 170, "mn_date_path": "20241105"},
     )
     adapter = MinnesotaAdapter()
-    index_html = _load_fixture("mn_file_index.html")
     ussenate_text = _load_fixture("mn_ussenate.txt")
 
     def fake_fetch_file(url):
         return ussenate_text if url.endswith("ussenate.txt") else ""
 
     with patch(
-        "results.adapters.mn.MnSosClient.fetch_file_index", return_value=index_html,
+        "results.adapters.mn.discover_in_scope_files",
+        return_value=_load_index_in_scope_files(),
     ), patch(
         "results.adapters.mn.MnSosClient.fetch_file", side_effect=fake_fetch_file,
     ):
@@ -106,7 +115,6 @@ def test_fetch_results_skips_malformed_row_but_keeps_valid_rows():
         source_metadata={"mn_ers_election_id": 170, "mn_date_path": "20241105"},
     )
     adapter = MinnesotaAdapter()
-    index_html = _load_fixture("mn_file_index.html")
 
     # One row with a non-numeric candidate_votes field (malformed) and one
     # otherwise-valid row, in the same file.
@@ -119,7 +127,8 @@ def test_fetch_results_skips_malformed_row_but_keeps_valid_rows():
         return malformed_text if url.endswith("ussenate.txt") else ""
 
     with patch(
-        "results.adapters.mn.MnSosClient.fetch_file_index", return_value=index_html,
+        "results.adapters.mn.discover_in_scope_files",
+        return_value=_load_index_in_scope_files(),
     ), patch(
         "results.adapters.mn.MnSosClient.fetch_file", side_effect=fake_fetch_file,
     ):
@@ -141,7 +150,6 @@ def test_fetch_results_appends_district_to_office_title_when_needed():
         source_metadata={"mn_ers_election_id": 170, "mn_date_path": "20241105"},
     )
     adapter = MinnesotaAdapter()
-    index_html = _load_fixture("mn_file_index.html")
 
     ussenate_rows = [
         {
@@ -189,9 +197,7 @@ def test_fetch_results_appends_district_to_office_title_when_needed():
         return "ussenate" if url.endswith("ussenate.txt") else "stsenate"
 
     with patch(
-        "results.adapters.mn.MnSosClient.fetch_file_index", return_value=index_html,
-    ), patch(
-        "results.adapters.mn.parse_file_index",
+        "results.adapters.mn.discover_in_scope_files",
         return_value=[
             {"label": "U.S. Senator Statewide", "url": "https://x/ussenate.txt"},
             {"label": "State Senator by District", "url": "https://x/stsenate.txt"},

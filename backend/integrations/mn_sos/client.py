@@ -30,6 +30,17 @@ _HEADERS = {
 
 _RETRYABLE_STATUSES = {403, 429, 500, 502, 503, 504}
 
+# Radware sometimes answers the file-index page with an HTTP 200 CAPTCHA
+# challenge instead of the real index (confirmed live 2026-07-16: ~15 KB body,
+# title "Radware Captcha Page", zero download links). We key on the title only:
+# the *legitimate* index page also contains "validate.perfdrive.com" (in its
+# stormcaster telemetry config), so that string cannot distinguish the two.
+_CAPTCHA_MARKER = "radware captcha"
+
+
+def _looks_like_captcha(html: str) -> bool:
+    return _CAPTCHA_MARKER in html.lower()
+
 
 class MnSosClient:
     def __init__(self, timeout: int = 30, max_retries: int = 3):
@@ -60,8 +71,19 @@ class MnSosClient:
         raise MnSosRetryableError("MN SOS request retries exhausted")
 
     def fetch_file_index(self, ers_election_id: int) -> str:
-        """GET the "Downloadable Text Files" index page for one election."""
-        return self._get(_FILE_INDEX_URL, params={"ersElectionId": ers_election_id}).text
+        """
+        GET the "Downloadable Text Files" index page for one election.
+
+        Raises MnSosRetryableError when Radware returns its CAPTCHA challenge
+        (which comes back as HTTP 200, so a status check alone would let the
+        challenge HTML through to the parser as a false empty result).
+        """
+        html = self._get(_FILE_INDEX_URL, params={"ersElectionId": ers_election_id}).text
+        if _looks_like_captcha(html):
+            raise MnSosRetryableError(
+                f"MN SOS served a Radware CAPTCHA for file index ersElectionId={ers_election_id}"
+            )
+        return html
 
     def fetch_file(self, url: str) -> str:
         """GET a result file or cand.txt directly by its full URL."""

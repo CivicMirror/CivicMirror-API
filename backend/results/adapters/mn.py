@@ -22,8 +22,9 @@ import logging
 from django.core.cache import cache
 
 from integrations.mn_sos.client import MnSosClient
-from integrations.mn_sos.mappers import format_office_title, is_in_scope_file, is_write_in
-from integrations.mn_sos.parsers import parse_file_index, parse_result_file
+from integrations.mn_sos.discovery import discover_in_scope_files
+from integrations.mn_sos.mappers import format_office_title, is_write_in
+from integrations.mn_sos.parsers import parse_result_file
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
 from .registry import register
@@ -69,8 +70,7 @@ class MinnesotaAdapter(StateResultsAdapter):
             )
 
         client = MnSosClient()
-        index_html = client.fetch_file_index(ers_election_id)
-        in_scope_files = [f for f in parse_file_index(index_html) if is_in_scope_file(f["label"])]
+        in_scope_files = discover_in_scope_files(client, ers_election_id)
 
         if not in_scope_files:
             return AdapterResult(
