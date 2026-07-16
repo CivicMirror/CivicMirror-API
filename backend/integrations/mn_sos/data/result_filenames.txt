@@ -1,0 +1,32 @@
+# MN SOS result-file dictionary.
+#
+# One filename per line, grouped by scope. The code probes each name against
+# the unprotected file host (electionresultsfiles.sos.mn.gov/{date_path}/) and
+# keeps the ones that return 200 — the set that exists IS that election's
+# manifest. Filenames have been stable across 2020-2025; add a newly-observed
+# file here (a one-line edit, no code change) if the SOS ever introduces one.
+#
+# Blank lines and text after '#' are ignored. Casing must match the host
+# exactly (e.g. USPres.txt vs ussenate.txt).
+
+# Federal + State offices — the current ingest scope. These are the aggregated
+# statewide / by-district files only (not the by-county / by-precinct variants).
+[federal-state]
+USPres.txt                 # U.S. President, statewide
+ussenate.txt               # U.S. Senator, statewide
+ushouse.txt                # U.S. Representative, by district
+stsenate.txt               # State Senator, by district
+LegislativeByDistrict.txt  # State Representative, by district
+judicial.txt               # Supreme Court + Court of Appeals
+
+# County / municipal / school / hospital — seeded for a future scope expansion
+# (see the parent Phase 3 tracker). Present but NOT yet ingested.
+[local]
+cntyRaces.txt              # County races
+cntyRaceQuestions.txt      # County races + questions
+CityQuestions.txt          # Municipal questions
+local.txt                  # Municipal + hospital district races/questions
+hospital.txt               # Hospital district races
+sdrace.txt                 # School board races
+SchoolQuestions.txt        # School referendum/bond questions
+SDRaceQuestions.txt        # School board races + questions

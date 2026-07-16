@@ -44,7 +44,7 @@ _CANDIDATE_ROWS = [
 @pytest.mark.django_db
 def test_sync_mn_races_creates_election_race_and_in_scope_candidate_only():
     with patch(
-        "integrations.mn_sos.tasks.discover_in_scope_files",
+        "integrations.mn_sos.tasks.probe_in_scope_files",
         return_value=_IN_SCOPE_FILES,
     ), patch(
         "integrations.mn_sos.tasks.MnSosClient.fetch_file",
@@ -77,7 +77,7 @@ def test_sync_mn_races_creates_election_race_and_in_scope_candidate_only():
 @pytest.mark.django_db
 def test_sync_mn_races_marks_disappeared_candidate_withdrawn():
     with patch(
-        "integrations.mn_sos.tasks.discover_in_scope_files",
+        "integrations.mn_sos.tasks.probe_in_scope_files",
         return_value=_IN_SCOPE_FILES,
     ), patch(
         "integrations.mn_sos.tasks.MnSosClient.fetch_file",
@@ -98,7 +98,7 @@ def test_sync_mn_races_marks_disappeared_candidate_withdrawn():
     Candidate.objects.create(race=race, name="Someone Who Withdrew", party="DFL")
 
     with patch(
-        "integrations.mn_sos.tasks.discover_in_scope_files",
+        "integrations.mn_sos.tasks.probe_in_scope_files",
         return_value=_IN_SCOPE_FILES,
     ), patch(
         "integrations.mn_sos.tasks.MnSosClient.fetch_file",
@@ -157,7 +157,7 @@ def test_sync_mn_races_skips_withdrawal_check_on_partial_fetch_failure():
     # Run 1: both result files fetch successfully, seeding a RUNNING candidate
     # for each of two distinct offices (U.S. Senator and State Senator).
     with patch(
-        "integrations.mn_sos.tasks.discover_in_scope_files",
+        "integrations.mn_sos.tasks.probe_in_scope_files",
         return_value=_TWO_IN_SCOPE_FILES,
     ), patch(
         "integrations.mn_sos.tasks.MnSosClient.fetch_file",
@@ -188,7 +188,7 @@ def test_sync_mn_races_skips_withdrawal_check_on_partial_fetch_failure():
         return "fake text for " + url
 
     with patch(
-        "integrations.mn_sos.tasks.discover_in_scope_files",
+        "integrations.mn_sos.tasks.probe_in_scope_files",
         return_value=_TWO_IN_SCOPE_FILES,
     ), patch(
         "integrations.mn_sos.tasks.MnSosClient.fetch_file",
