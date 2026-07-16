@@ -22,9 +22,10 @@ from elections.models import Candidate
 from ops.models import SyncLog
 
 from .client import MnSosClient
+from .discovery import discover_in_scope_files
 from .exceptions import MnSosRetryableError
-from .mappers import format_office_title, is_in_scope_file, map_candidate, map_election, map_race
-from .parsers import parse_candidate_table, parse_file_index, parse_result_file
+from .mappers import format_office_title, map_candidate, map_election, map_race
+from .parsers import parse_candidate_table, parse_result_file
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +59,7 @@ def sync_mn_races(self):
         meta = election_obj.source_metadata or {}
         ers_election_id = meta.get("mn_ers_election_id")
 
-        index_html = client.fetch_file_index(ers_election_id)
-        all_files = parse_file_index(index_html)
-        in_scope_files = [f for f in all_files if is_in_scope_file(f["label"])]
+        in_scope_files = discover_in_scope_files(client, ers_election_id)
 
         in_scope_office_ids: set[str] = set()
         office_titles_by_id: dict[str, str] = {}
