@@ -38,6 +38,18 @@ def is_write_in(candidate_order_code: str) -> bool:
     return candidate_order_code == _WRITE_IN_ORDER_CODE
 
 
+def format_office_title(office_name: str, district: str) -> str:
+    office_name = (office_name or "").strip()
+    district = (district or "").strip()
+    if not office_name:
+        return district
+    if not district:
+        return office_name
+    if district in office_name or "district" in office_name.lower():
+        return office_name
+    return f"{office_name} District {district}"
+
+
 # Historical POC election: 2024 Minnesota general (confirmed live 2026-07-13).
 # Live discovery of future elections' ersElectionId is out of scope for this build.
 _POC_ERS_ELECTION_ID = 170

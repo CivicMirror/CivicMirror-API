@@ -130,3 +130,79 @@ def test_fetch_results_skips_malformed_row_but_keeps_valid_rows():
     assert names == {"Royce White"}
     royce = next(r for r in result.rows if r.candidate_name == "Royce White")
     assert royce.vote_count == 1291712
+
+
+@pytest.mark.django_db
+def test_fetch_results_appends_district_to_office_title_when_needed():
+    election = Election.objects.create(
+        name="2024 Minnesota General Election", election_date="2024-11-05",
+        election_type="general", jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state="MN", source_id="mn_sos_2024_general",
+        source_metadata={"mn_ers_election_id": 170, "mn_date_path": "20241105"},
+    )
+    adapter = MinnesotaAdapter()
+    index_html = _load_fixture("mn_file_index.html")
+
+    ussenate_rows = [
+        {
+            "state": "MN",
+            "county_id": "",
+            "precinct_name": "",
+            "office_id": "0102",
+            "office_name": "U.S. Senator",
+            "district": "",
+            "candidate_order_code": "0202",
+            "candidate_name": "Amy Klobuchar",
+            "suffix": "",
+            "incumbent_code": "",
+            "party": "DFL",
+            "precincts_reporting": "4103",
+            "total_precincts": "4103",
+            "candidate_votes": "1792441",
+            "candidate_pct": "56.20",
+            "total_office_votes": "3189323",
+        },
+    ]
+
+    district_rows = [
+        {
+            "state": "MN",
+            "county_id": "",
+            "precinct_name": "",
+            "office_id": "0201",
+            "office_name": "State Senator",
+            "district": "1",
+            "candidate_order_code": "0301",
+            "candidate_name": "Jane Statehouse",
+            "suffix": "",
+            "incumbent_code": "",
+            "party": "DFL",
+            "precincts_reporting": "10",
+            "total_precincts": "10",
+            "candidate_votes": "5000",
+            "candidate_pct": "60.00",
+            "total_office_votes": "8333",
+        },
+    ]
+
+    def fake_fetch_file(url):
+        return "ussenate" if url.endswith("ussenate.txt") else "stsenate"
+
+    with patch(
+        "results.adapters.mn.MnSosClient.fetch_file_index", return_value=index_html,
+    ), patch(
+        "results.adapters.mn.parse_file_index",
+        return_value=[
+            {"label": "U.S. Senator Statewide", "url": "https://x/ussenate.txt"},
+            {"label": "State Senator by District", "url": "https://x/stsenate.txt"},
+        ],
+    ), patch(
+        "results.adapters.mn.MnSosClient.fetch_file", side_effect=fake_fetch_file,
+    ), patch(
+        "results.adapters.mn.parse_result_file",
+        side_effect=[ussenate_rows, district_rows],
+    ):
+        result = adapter.fetch_results(election.election_date, election.pk)
+
+    titles = {row.office_title for row in result.rows}
+    assert "State Senator District 1" in titles
