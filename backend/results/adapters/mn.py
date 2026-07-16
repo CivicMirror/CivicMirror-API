@@ -22,7 +22,7 @@ import logging
 from django.core.cache import cache
 
 from integrations.mn_sos.client import MnSosClient
-from integrations.mn_sos.discovery import discover_in_scope_files
+from integrations.mn_sos.discovery import probe_in_scope_files
 from integrations.mn_sos.mappers import format_office_title, is_write_in
 from integrations.mn_sos.parsers import parse_result_file
 
@@ -62,15 +62,15 @@ class MinnesotaAdapter(StateResultsAdapter):
             )
 
         meta = election.source_metadata or {}
-        ers_election_id = meta.get("mn_ers_election_id")
-        if not ers_election_id:
+        date_path = meta.get("mn_date_path")
+        if not date_path:
             return AdapterResult(
                 rows=[], source_url="", mapping_confidence="none",
-                notes=f"No mn_ers_election_id metadata for election {election.source_id}",
+                notes=f"No mn_date_path metadata for election {election.source_id}",
             )
 
         client = MnSosClient()
-        in_scope_files = discover_in_scope_files(client, ers_election_id)
+        in_scope_files = probe_in_scope_files(client, date_path)
 
         if not in_scope_files:
             return AdapterResult(
