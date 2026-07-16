@@ -32,6 +32,19 @@ def test_fetch_file_gets_the_given_url_directly():
     )
 
 
+def test_fetch_candidate_table_uses_date_path():
+    client = MnSosClient()
+    mock_response = MagicMock(status_code=200, text="01020202;Amy Klobuchar;...")
+
+    with patch.object(client._session, "get", return_value=mock_response) as mock_get:
+        result = client.fetch_candidate_table("20241105")
+
+    assert result == "01020202;Amy Klobuchar;..."
+    mock_get.assert_called_once_with(
+        "https://electionresultsfiles.sos.mn.gov/20241105/cand.txt", timeout=30
+    )
+
+
 def test_fetch_file_retries_then_raises_on_persistent_5xx():
     client = MnSosClient(max_retries=1)
     mock_response = MagicMock(status_code=503, text="")

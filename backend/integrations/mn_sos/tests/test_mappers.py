@@ -1,7 +1,14 @@
 import datetime
 
 from elections.models import Election, Race
-from integrations.mn_sos.mappers import is_in_scope_file, is_write_in, map_candidate, map_election, map_race
+from integrations.mn_sos.mappers import (
+    format_office_title,
+    is_in_scope_file,
+    is_write_in,
+    map_candidate,
+    map_election,
+    map_race,
+)
 
 
 def test_is_in_scope_file_matches_confirmed_federal_state_labels():
@@ -42,6 +49,12 @@ def test_is_write_in_matches_9901_only():
     assert is_write_in("9901") is True
     assert is_write_in("0202") is False
     assert is_write_in("") is False
+
+
+def test_format_office_title_appends_district_when_needed():
+    assert format_office_title("State Senator", "1") == "State Senator District 1"
+    assert format_office_title("State Senator District 1", "1") == "State Senator District 1"
+    assert format_office_title("U.S. Senator", "") == "U.S. Senator"
 
 
 def test_map_election_returns_2024_general_poc_identity():

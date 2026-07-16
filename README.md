@@ -98,7 +98,6 @@ States closest to a full ✅ row based on available public data:
 |---|---|---|
 | **KY** | Add certified recap/live results ingestion to existing SOS race/candidate adapter | Kentucky SOS recaps / election-night portal |
 | **TN** | Stage 1 + certified results shipped; live election-night dashboard still needs endpoint discovery | Tennessee SOS / ENR |
-| **OH** | Adapter built; needs CF solver deployment/wiring | Ohio SOS + Clarity ENR |
 | **NC** | Existing adapter; Stage 1 race creation hardening | NC SBE FTP site |
 
 > See [`docs/state-research/COVERAGE-ANALYSIS-RESULTS.md`](docs/state-research/COVERAGE-ANALYSIS-RESULTS.md) for the full source analysis on all 48 researched states.

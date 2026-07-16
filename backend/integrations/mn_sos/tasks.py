@@ -23,7 +23,7 @@ from ops.models import SyncLog
 
 from .client import MnSosClient
 from .exceptions import MnSosRetryableError
-from .mappers import is_in_scope_file, map_candidate, map_election, map_race
+from .mappers import format_office_title, is_in_scope_file, map_candidate, map_election, map_race
 from .parsers import parse_candidate_table, parse_file_index, parse_result_file
 
 logger = logging.getLogger(__name__)
@@ -64,6 +64,7 @@ def sync_mn_races(self):
 
         in_scope_office_ids: set[str] = set()
         office_titles_by_id: dict[str, str] = {}
+        district_by_id: dict[str, str] = {}
         fetch_failure_count = 0
         for file_entry in in_scope_files:
             try:
@@ -78,6 +79,7 @@ def sync_mn_races(self):
             for row in parse_result_file(text):
                 in_scope_office_ids.add(row["office_id"])
                 office_titles_by_id.setdefault(row["office_id"], row["office_name"])
+                district_by_id.setdefault(row["office_id"], row["district"])
 
         if not in_scope_office_ids:
             sync_log.notes = "No in-scope offices found in result files"
@@ -86,8 +88,7 @@ def sync_mn_races(self):
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return {"created": 0, "updated": 0}
 
-        cand_url = f"https://electionresultsfiles.sos.mn.gov/{meta['mn_date_path']}/cand.txt"
-        cand_text = client.fetch_file(cand_url)
+        cand_text = client.fetch_candidate_table(meta["mn_date_path"])
         candidate_rows = [
             row for row in parse_candidate_table(cand_text)
             if row["office_id"] in in_scope_office_ids
@@ -96,7 +97,10 @@ def sync_mn_races(self):
         seen_candidate_pks: set[int] = set()
 
         for office_id in in_scope_office_ids:
-            office_title = office_titles_by_id[office_id]
+            office_title = format_office_title(
+                office_titles_by_id[office_id],
+                district_by_id.get(office_id, ""),
+            )
             race_defaults = map_race(office_id, office_title)
             race_identity = {
                 "office_title": race_defaults.pop("office_title"),

@@ -22,7 +22,7 @@ import logging
 from django.core.cache import cache
 
 from integrations.mn_sos.client import MnSosClient
-from integrations.mn_sos.mappers import is_in_scope_file, is_write_in
+from integrations.mn_sos.mappers import format_office_title, is_in_scope_file, is_write_in
 from integrations.mn_sos.parsers import parse_file_index, parse_result_file
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
@@ -93,6 +93,7 @@ class MinnesotaAdapter(StateResultsAdapter):
             source_url = url
             for row in parse_result_file(text):
                 try:
+                    office_title = format_office_title(row["office_name"], row["district"])
                     result_row = ResultRow(
                         candidate_name=row["candidate_name"] or None,
                         option_label=None,
@@ -100,7 +101,7 @@ class MinnesotaAdapter(StateResultsAdapter):
                         vote_pct=_safe_float(row["candidate_pct"]),
                         is_winner=None,
                         result_type="unofficial",
-                        office_title=row["office_name"],
+                        office_title=office_title,
                         is_write_in_aggregate=is_write_in(row["candidate_order_code"]),
                         raw=row,
                     )

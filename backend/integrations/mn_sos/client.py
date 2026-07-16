@@ -19,6 +19,7 @@ from .exceptions import MnSosRetryableError
 logger = logging.getLogger(__name__)
 
 _FILE_INDEX_URL = "https://electionresults.sos.mn.gov/Select/MediaFiles/Index"
+_FILE_HOST = "https://electionresultsfiles.sos.mn.gov"
 
 _HEADERS = {
     "User-Agent": (
@@ -65,3 +66,7 @@ class MnSosClient:
     def fetch_file(self, url: str) -> str:
         """GET a result file or cand.txt directly by its full URL."""
         return self._get(url).text
+
+    def fetch_candidate_table(self, date_path: str) -> str:
+        """GET cand.txt for one election's result directory."""
+        return self._get(f"{_FILE_HOST}/{date_path}/cand.txt").text
