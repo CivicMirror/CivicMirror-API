@@ -14,7 +14,7 @@ import logging
 
 import requests
 
-from .exceptions import MnSosRetryableError
+from .exceptions import MnSosError, MnSosRetryableError
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ class MnSosClient:
         url = self.file_url(date_path, filename)
         for attempt in range(self.max_retries + 1):
             try:
-                resp = self._session.head(url, timeout=self.timeout)
+                resp = self._session.head(url, timeout=self.timeout, allow_redirects=True)
             except requests.RequestException as exc:
                 if attempt >= self.max_retries:
                     raise MnSosRetryableError(f"MN SOS HEAD failed: {exc}") from exc
@@ -103,7 +103,10 @@ class MnSosClient:
                     attempt, url, resp.status_code,
                 )
                 continue
-            resp.raise_for_status()
+            # Any other status (redirects are already resolved by
+            # allow_redirects) is unexpected and won't fix itself — fail now
+            # rather than looping to a misleading "retries exhausted".
+            raise MnSosError(f"MN SOS returned unexpected {resp.status_code} for {url}")
         raise MnSosRetryableError("MN SOS HEAD retries exhausted")
 
     def fetch_file_index(self, ers_election_id: int) -> str:

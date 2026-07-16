@@ -1,9 +1,12 @@
+import datetime
 from unittest.mock import patch
 
 import pytest
 
-from elections.models import Candidate, ElectionSourceLink, Race
+from elections.models import Candidate, Election, ElectionSourceLink, Race
+from integrations.mn_sos.exceptions import MnSosError
 from integrations.mn_sos.tasks import sync_mn_races
+from ops.models import SyncLog
 
 _IN_SCOPE_FILES = [
     {"label": "U.S. Senator Statewide", "url": "https://x/ussenate.txt"},
@@ -208,3 +211,31 @@ def test_sync_mn_races_skips_withdrawal_check_on_partial_fetch_failure():
     state_senate_candidate.refresh_from_db()
     assert state_senate_candidate.candidate_status == Candidate.CandidateStatus.RUNNING
     assert result["withdrawn"] == 0
+
+
+_ELECTION_WITHOUT_DATE_PATH = {
+    "source_id": "mn_sos_2024_general",
+    "name": "2024 Minnesota General Election",
+    "election_date": datetime.date(2024, 11, 5),
+    "election_type": "general",
+    "jurisdiction_level": Election.JurisdictionLevel.STATE,
+    "state": "MN",
+    "status": Election.Status.RESULTS_CERTIFIED,
+    "source_metadata": {"mn_ers_election_id": 170},  # no mn_date_path
+}
+
+
+@pytest.mark.django_db
+def test_sync_mn_races_fails_clearly_when_date_path_metadata_missing():
+    # An election row lacking mn_date_path (stale/registry gap/manual edit)
+    # must fail with a clear error + SyncLog entry, not a bare KeyError.
+    with patch(
+        "integrations.mn_sos.tasks.map_election",
+        return_value=dict(_ELECTION_WITHOUT_DATE_PATH),
+    ):
+        with pytest.raises(MnSosError, match="mn_date_path"):
+            sync_mn_races()
+
+    log = SyncLog.objects.filter(source="mn_sos").order_by("-id").first()
+    assert log.status == SyncLog.Status.FAILED
+    assert "mn_date_path" in (log.last_error or "")
