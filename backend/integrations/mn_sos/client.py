@@ -14,7 +14,7 @@ import logging
 
 import requests
 
-from .exceptions import MnSosRetryableError
+from .exceptions import MnSosError, MnSosRetryableError
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +69,45 @@ class MnSosClient:
             resp.raise_for_status()
             return resp
         raise MnSosRetryableError("MN SOS request retries exhausted")
+
+    @staticmethod
+    def file_url(date_path: str, filename: str) -> str:
+        """Build the direct file-host URL for one result file."""
+        return f"{_FILE_HOST}/{date_path}/{filename}"
+
+    def file_exists(self, date_path: str, filename: str) -> bool:
+        """
+        HEAD a result file on the unprotected file host.
+
+        Returns True on 200, False on 404. Transient statuses are retried and
+        then raise MnSosRetryableError; any other status raises.
+        """
+        url = self.file_url(date_path, filename)
+        for attempt in range(self.max_retries + 1):
+            try:
+                resp = self._session.head(url, timeout=self.timeout, allow_redirects=True)
+            except requests.RequestException as exc:
+                if attempt >= self.max_retries:
+                    raise MnSosRetryableError(f"MN SOS HEAD failed: {exc}") from exc
+                logger.warning("mn_sos.client.retry attempt=%d url=%s err=%s", attempt, url, exc)
+                continue
+            if resp.status_code == 200:
+                return True
+            if resp.status_code == 404:
+                return False
+            if resp.status_code in _RETRYABLE_STATUSES:
+                if attempt >= self.max_retries:
+                    raise MnSosRetryableError(f"MN SOS returned {resp.status_code} for {url}")
+                logger.warning(
+                    "mn_sos.client.retry attempt=%d url=%s status=%d",
+                    attempt, url, resp.status_code,
+                )
+                continue
+            # Any other status (redirects are already resolved by
+            # allow_redirects) is unexpected and won't fix itself — fail now
+            # rather than looping to a misleading "retries exhausted".
+            raise MnSosError(f"MN SOS returned unexpected {resp.status_code} for {url}")
+        raise MnSosRetryableError("MN SOS HEAD retries exhausted")
 
     def fetch_file_index(self, ers_election_id: int) -> str:
         """

@@ -1,57 +1,39 @@
 """
-Shared in-scope file discovery for MN SOS Stage 1 (race/candidate sync) and
+In-scope result-file discovery for MN SOS Stage 1 (race/candidate sync) and
 Stage 2 (results adapter).
 
-Both stages need the same thing: the set of Federal+State result files for one
-election. They must also handle the Radware-protected index the same way, so
-the logic lives here once rather than being duplicated (and drifting) across
-tasks.py and results/adapters/mn.py.
+Discovery probes the unprotected file host directly: for a given election's
+date path, HEAD each in-scope filename (from the external dictionary,
+data/result_filenames.txt) against
+electionresultsfiles.sos.mn.gov/{date_path}/ and keep the ones that exist. The
+set that returns 200 IS that election's manifest — discovered live, with no
+dependency on the Radware-protected portal index.
+
+A file host that returns 200 for a filename means that office is on the ballot
+for this election; a 404 means it is not. An empty result is therefore a valid
+answer (an election with no Federal/State offices), not an error.
 """
 from __future__ import annotations
 
 import logging
 
-from .exceptions import MnSosRetryableError
-from .manifests import KNOWN_IN_SCOPE_FILES
-from .mappers import is_in_scope_file
-from .parsers import parse_file_index
+from . import filenames
 
 logger = logging.getLogger(__name__)
 
 
-def discover_in_scope_files(client, ers_election_id: int) -> list[dict]:
+def probe_in_scope_files(client, date_path: str) -> list[dict]:
     """
-    Return the in-scope {label, url} result files for one election.
-
-    Discovery order:
-      1. Live "Downloadable Text Files" index. When it loads as real HTML we
-         parse it and keep only the in-scope (Federal+State) files.
-      2. If the index is unavailable — Radware serves a CAPTCHA page, or the
-         request fails retryably — fall back to a verified static manifest for
-         this election, when one exists.
-
-    A live index that loads cleanly but lists no in-scope files is treated as a
-    genuine empty result (an election with no Federal/State offices) and
-    returned as an empty list — never masked by the manifest.
-
-    Raises MnSosRetryableError when the index is blocked and no static manifest
-    exists for this election, so the caller retries instead of recording a
-    false empty success.
+    Return the in-scope {filename, url} result files that exist for one
+    election, by probing the file host. Transient host failures raise
+    MnSosRetryableError (from the client) so the caller retries.
     """
-    try:
-        index_html = client.fetch_file_index(ers_election_id)
-    except MnSosRetryableError:
-        manifest = KNOWN_IN_SCOPE_FILES.get(ers_election_id)
-        if manifest is None:
-            logger.warning(
-                "mn_sos.discovery.index_blocked_no_manifest ers_election_id=%s",
-                ers_election_id,
-            )
-            raise
-        logger.info(
-            "mn_sos.discovery.manifest_fallback ers_election_id=%s count=%d",
-            ers_election_id, len(manifest),
-        )
-        return [dict(entry) for entry in manifest]
-
-    return [f for f in parse_file_index(index_html) if is_in_scope_file(f["label"])]
+    found: list[dict] = []
+    for name in filenames.in_scope_filenames():
+        if client.file_exists(date_path, name):
+            found.append({"filename": name, "url": client.file_url(date_path, name)})
+    logger.info(
+        "mn_sos.discovery.probe date_path=%s found=%d",
+        date_path, len(found),
+    )
+    return found

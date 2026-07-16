@@ -1,64 +1,44 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from integrations.mn_sos.discovery import discover_in_scope_files
+from integrations.mn_sos.client import MnSosClient
+from integrations.mn_sos.discovery import probe_in_scope_files
 from integrations.mn_sos.exceptions import MnSosRetryableError
-from integrations.mn_sos.manifests import KNOWN_IN_SCOPE_FILES
 
-_REAL_INDEX_HTML = (
-    '<a class="downloadlink" href="https://x/ussenate.txt">U.S. Senator Statewide</a>'
-    '<a class="downloadlink" href="https://x/cntyRaces.txt">County Races</a>'
-)
+_SCOPE = ["USPres.txt", "ussenate.txt", "judicial.txt"]
 
 
-def _client_returning(html):
-    client = MagicMock()
-    client.fetch_file_index.return_value = html
+def _client(exists_map):
+    """A client whose file_exists follows exists_map; file_url stays real."""
+    client = MagicMock(spec=MnSosClient)
+    client.file_url.side_effect = MnSosClient.file_url
+    client.file_exists.side_effect = lambda dp, name: exists_map[name]
     return client
 
 
-def _client_raising(exc):
-    client = MagicMock()
-    client.fetch_file_index.side_effect = exc
-    return client
+def test_probe_returns_only_existing_in_scope_files():
+    client = _client({"USPres.txt": True, "ussenate.txt": True, "judicial.txt": False})
+    with patch("integrations.mn_sos.discovery.filenames.in_scope_filenames", return_value=_SCOPE):
+        files = probe_in_scope_files(client, "20241105")
+
+    urls = [f["url"] for f in files]
+    assert urls == [
+        "https://electionresultsfiles.sos.mn.gov/20241105/USPres.txt",
+        "https://electionresultsfiles.sos.mn.gov/20241105/ussenate.txt",
+    ]
 
 
-def test_discover_uses_live_index_and_keeps_only_in_scope():
-    client = _client_returning(_REAL_INDEX_HTML)
-
-    files = discover_in_scope_files(client, 170)
-
-    labels = [f["label"] for f in files]
-    assert labels == ["U.S. Senator Statewide"]  # County Races dropped
-    client.fetch_file_index.assert_called_once_with(170)
+def test_probe_returns_empty_when_no_in_scope_files_exist():
+    # e.g. an odd-year local election with no Federal/State offices.
+    client = _client(dict.fromkeys(_SCOPE, False))
+    with patch("integrations.mn_sos.discovery.filenames.in_scope_filenames", return_value=_SCOPE):
+        assert probe_in_scope_files(client, "20251104") == []
 
 
-def test_discover_falls_back_to_manifest_when_index_blocked_for_known_election():
-    client = _client_raising(MnSosRetryableError("captcha"))
-
-    files = discover_in_scope_files(client, 170)
-
-    assert files == KNOWN_IN_SCOPE_FILES[170]
-    # Returned entries are copies, not the shared manifest objects.
-    assert files is not KNOWN_IN_SCOPE_FILES[170]
-    assert all(f["url"].endswith(".txt") for f in files)
-
-
-def test_discover_raises_when_index_blocked_and_no_manifest():
-    client = _client_raising(MnSosRetryableError("captcha"))
-
-    with pytest.raises(MnSosRetryableError):
-        discover_in_scope_files(client, 999999)  # unknown election, no manifest
-
-
-def test_discover_returns_empty_for_genuinely_empty_live_index():
-    # A real index that loads cleanly but lists no in-scope files must return
-    # empty — not silently fall back to a manifest.
-    client = _client_returning(
-        '<a class="downloadlink" href="https://x/cntyRaces.txt">County Races</a>'
-    )
-
-    files = discover_in_scope_files(client, 170)
-
-    assert files == []
+def test_probe_propagates_retryable_error_from_transient_host_failure():
+    client = MagicMock(spec=MnSosClient)
+    client.file_exists.side_effect = MnSosRetryableError("host 503")
+    with patch("integrations.mn_sos.discovery.filenames.in_scope_filenames", return_value=_SCOPE):
+        with pytest.raises(MnSosRetryableError):
+            probe_in_scope_files(client, "20241105")
