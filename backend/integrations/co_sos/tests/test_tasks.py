@@ -30,6 +30,7 @@ class TestSyncCoElectionsTask:
         from integrations.co_sos.tasks import sync_co_elections
 
         fingerprint = "abc123"
+        results_url = "https://results.enr.clarityelections.com/CO/126592/"
 
         with (
             patch("integrations.co_sos.tasks.ColoradoSosClient") as MockClient,
@@ -43,9 +44,10 @@ class TestSyncCoElectionsTask:
             result = sync_co_elections.apply().get()
 
         assert result["created"] >= 1
-        assert ElectionSourceLink.objects.filter(
+        link = ElectionSourceLink.objects.filter(
             source="co_sos", source_id="co_sos_2026_primary"
-        ).exists()
+        ).select_related("election").get()
+        assert link.election.results_url == results_url
         mock_stage2.delay.assert_called_once()
 
     def test_skips_candidates_when_page_unchanged(self):

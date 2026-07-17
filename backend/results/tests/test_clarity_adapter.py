@@ -321,8 +321,8 @@ def test_fetch_results_uses_proxy_for_sc_enr_host(mock_proxy_get, mock_cache):
 
 
 @pytest.mark.django_db
-def test_fetch_results_no_proxy_for_non_blocked_host(mock_proxy_get, mock_election, mock_cache):
-    """Non-blocked Clarity hosts (e.g. WV results.enr.clarityelections.com) use direct request."""
+def test_fetch_results_uses_proxy_for_results_enr_host(mock_proxy_get, mock_election, mock_cache):
+    """results.enr.clarityelections.com is blocked from this runtime and must use the proxy."""
     ver_response = MagicMock()
     ver_response.text = "371599"
     summary_response = MagicMock()
@@ -333,7 +333,7 @@ def test_fetch_results_no_proxy_for_non_blocked_host(mock_proxy_get, mock_electi
     ConcreteClarity().fetch_results("2026-05-13", 1)
 
     for call in mock_proxy_get.call_args_list:
-        assert call[1].get("use_proxy") is False
+        assert call[1].get("use_proxy") is True
 
 
 @pytest.mark.django_db
@@ -346,6 +346,7 @@ def test_version_cache_key():
 # ---------------------------------------------------------------------------
 
 def test_clarity_proxy_hosts_includes_sc_enr():
+    assert "results.enr.clarityelections.com" in CLARITY_PROXY_HOSTS
     assert "www.enr-scvotes.org" in CLARITY_PROXY_HOSTS
     assert "enr-scvotes.org" in CLARITY_PROXY_HOSTS
 
@@ -370,4 +371,3 @@ def test_ia_adapter_registered():
     adapter = get_adapter("IA")
     assert adapter is not None
     assert adapter.state == "IA"
-

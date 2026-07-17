@@ -71,6 +71,7 @@ class TestMapElection:
         assert result["name"] == "2026 Colorado Primary Election"
         assert result["election_date"] == co_election_date(2026, "primary")
         assert result["jurisdiction_level"] == "state"
+        assert result["results_url"] == "https://results.enr.clarityelections.com/CO/126592/"
 
 
 class TestBuildRaceGroups:

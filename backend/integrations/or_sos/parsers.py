@@ -82,15 +82,34 @@ def document_checksum(content: bytes) -> str:
 
 def parse_result_document(content: bytes, source_url: str) -> list[OrResultRecord]:
     suffix = PurePosixPath(source_url.split("?", 1)[0]).suffix.lower()
+    if content.startswith(b"%PDF") or suffix == ".pdf":
+        return _parse_pdf(content)
     if suffix == ".zip":
         return _parse_zip(content)
     if suffix in {".csv", ".txt", ".tsv"}:
         return _parse_delimited(content, source_file=PurePosixPath(source_url).name)
     if suffix == ".xlsx":
         return _parse_xlsx(content, source_file=PurePosixPath(source_url).name)
-    if suffix in {".pdf", ".xls"}:
+    if suffix == ".xls":
         raise OrSosUnsupportedDocumentError(f"Oregon result document type is not parsed yet: {suffix}")
     raise OrSosUnsupportedDocumentError(f"Unsupported Oregon result document type: {suffix or 'unknown'}")
+
+
+def _parse_pdf(content: bytes) -> list[OrResultRecord]:
+    try:
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+    except Exception as exc:
+        raise OrSosUnsupportedDocumentError(f"Oregon result PDF could not be parsed: {exc}") from exc
+    return parse_result_pdf_text(text)
+
+
+def parse_result_pdf_text(text: str) -> list[OrResultRecord]:
+    records: list[OrResultRecord] = []
+    page_chunks = re.split(r"(?=May\s+\d{1,2},\s+\d{4},\s+Primary Election Abstract of Votes)", text)
+    for chunk in page_chunks:
+        records.extend(_parse_result_pdf_page(chunk))
+    return records
 
 
 def parse_open_offices_pdf(content: bytes) -> list[OrOpenOffice]:
@@ -334,6 +353,110 @@ _DATE_RE = re.compile(
     r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b",
     flags=re.IGNORECASE,
 )
+
+
+_PARTY_LABELS = {"democrat", "republican", "independent", "libertarian", "nonpartisan"}
+
+
+def _parse_result_pdf_page(page_text: str) -> list[OrResultRecord]:
+    lines = [_clean_text(line) for line in page_text.splitlines()]
+    lines = [line for line in lines if line]
+    if not lines:
+        return []
+
+    try:
+        county_index = next(idx for idx, line in enumerate(lines) if line.startswith("County"))
+    except StopIteration:
+        return []
+
+    total_line = next((line for line in lines[county_index + 1:] if line.startswith("Total ")), "")
+    if not total_line:
+        return []
+
+    preamble = [
+        line
+        for line in lines[:county_index]
+        if "Abstract of Votes" not in line and not line.startswith("* Nominee") and not line.startswith("** Elected")
+    ]
+    party_index = next((idx for idx, line in enumerate(preamble) if _is_party_pdf_line(line)), None)
+    if party_index is None:
+        party = ""
+        if preamble and preamble[0].lower().startswith("measure "):
+            office_lines = preamble[:1]
+            choice_lines = []
+        else:
+            office_lines = preamble[:-1]
+            choice_lines = preamble[-1:]
+    else:
+        party = _clean_party_pdf_line(preamble[party_index])
+        office_lines = preamble[:party_index]
+        choice_lines = preamble[party_index + 1:]
+
+    office_title = _normalize_result_pdf_office_title(office_lines)
+    if not office_title:
+        return []
+
+    choices = _pdf_choices_from_header(choice_lines, lines[county_index])
+    votes = [_safe_int(value) for value in re.findall(r"\d[\d,]*", total_line)]
+    if not choices or not votes:
+        return []
+
+    records: list[OrResultRecord] = []
+    for choice, vote_count in zip(choices, votes, strict=False):
+        records.append(
+            OrResultRecord(
+                office_title=office_title,
+                choice=choice,
+                vote_count=vote_count,
+                party=party,
+                source_file="official-results.pdf",
+            )
+        )
+    return records
+
+
+def _is_party_pdf_line(line: str) -> bool:
+    lowered = line.lower().replace("(cont.)", "").strip()
+    return lowered in _PARTY_LABELS
+
+
+def _clean_party_pdf_line(line: str) -> str:
+    return _clean_text(line.replace("(cont.)", "")).title()
+
+
+def _normalize_result_pdf_office_title(lines: list[str]) -> str:
+    office_lines = [line for line in lines if line]
+    if not office_lines:
+        return ""
+    office = " ".join(office_lines)
+    district = _result_pdf_district(office)
+    lowered = office.lower()
+    if "us senator" in lowered or "u.s. senator" in lowered:
+        return "U.S. Senator"
+    if "us representative" in lowered or "u.s. representative" in lowered:
+        return f"U.S. Representative, District {district}" if district else "U.S. Representative"
+    if "state senator" in lowered or "state senate" in lowered:
+        return f"Oregon State Senator, District {district}" if district else "Oregon State Senator"
+    if "state representative" in lowered or "state house" in lowered:
+        return f"Oregon State Representative, District {district}" if district else "Oregon State Representative"
+    return office
+
+
+def _result_pdf_district(value: str) -> str:
+    match = re.search(r"\b(\d+)(?:st|nd|rd|th)?\s+District\b", value, flags=re.IGNORECASE)
+    return str(int(match.group(1))) if match else ""
+
+
+def _pdf_choices_from_header(choice_lines: list[str], county_line: str) -> list[str]:
+    if choice_lines:
+        raw_choices = choice_lines[0]
+    else:
+        raw_choices = county_line.removeprefix("County").strip()
+    return [_clean_pdf_choice(choice) for choice in raw_choices.split() if _clean_pdf_choice(choice)]
+
+
+def _clean_pdf_choice(value: str) -> str:
+    return value.strip().strip("*").strip()
 
 
 def _offices_from_line(line: str, section: str = "") -> list[OrOpenOffice]:

@@ -18,6 +18,10 @@ _STATEWIDE_KEYWORDS = frozenset({
     "colorado state university system board of governors",
 })
 
+_RESULTS_URLS = {
+    (2026, "primary"): "https://results.enr.clarityelections.com/CO/126592/",
+}
+
 
 def normalize(text: str) -> str:
     return " ".join(text.strip().lower().split())
@@ -84,6 +88,7 @@ def map_election(year: int, election_type: str) -> dict:
         "jurisdiction_level": Election.JurisdictionLevel.STATE,
         "state": "CO",
         "status": infer_election_status(election_date),
+        "results_url": _RESULTS_URLS.get((year, election_type), ""),
     }
 
 
