@@ -7,7 +7,6 @@ docs/superpowers/specs/2026-07-13-mn-adapter-design.md).
 """
 from __future__ import annotations
 
-import datetime
 import re
 
 from elections.models import Election, Race
@@ -50,27 +49,20 @@ def format_office_title(office_name: str, district: str) -> str:
     return f"{office_name} District {district}"
 
 
-# Historical POC election: 2024 Minnesota general (confirmed live 2026-07-13).
-# Live discovery of future elections' ersElectionId is out of scope for this build.
-_POC_ERS_ELECTION_ID = 170
-_POC_DATE_PATH = "20241105"
-_POC_ELECTION_DATE = datetime.date(2024, 11, 5)
-
-
-def map_election() -> dict:
-    """Return Election model field values for the Nov 2024 general POC election."""
+def map_election(election) -> dict:
+    """Map a registered MnElection descriptor to Election model field values."""
+    metadata = {"mn_date_path": election.date_path}
+    if election.ers_election_id is not None:
+        metadata["mn_ers_election_id"] = election.ers_election_id
     return {
-        "source_id": "mn_sos_2024_general",
-        "name": "2024 Minnesota General Election",
-        "election_date": _POC_ELECTION_DATE,
-        "election_type": "general",
+        "source_id": election.source_id,
+        "name": election.name,
+        "election_date": election.election_date,
+        "election_type": election.election_type,
         "jurisdiction_level": Election.JurisdictionLevel.STATE,
         "state": "MN",
-        "status": Election.Status.RESULTS_CERTIFIED,
-        "source_metadata": {
-            "mn_ers_election_id": _POC_ERS_ELECTION_ID,
-            "mn_date_path": _POC_DATE_PATH,
-        },
+        "status": election.status,
+        "source_metadata": metadata,
     }
 
 
