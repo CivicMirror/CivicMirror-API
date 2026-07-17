@@ -27,6 +27,7 @@ urlpatterns = [
     path("tasks/sync-oh-sos/", views.sync_oh_sos_trigger, name="internal-sync-oh-sos"),
     path("tasks/sync-il-sbe/", views.sync_il_sbe_trigger, name="internal-sync-il-sbe"),
     path("tasks/sync-mn-sos/", views.sync_mn_sos_trigger, name="internal-sync-mn-sos"),
+    path("tasks/discover-mn-sos/", views.discover_mn_sos_trigger, name="internal-discover-mn-sos"),
     path("tasks/sync-mi-sos/", views.sync_mi_sos_trigger, name="internal-sync-mi-sos"),
     path("tasks/sync-or-sos/", views.sync_or_sos_trigger, name="internal-sync-or-sos"),
     path("tasks/sync-ky-sos/", views.sync_ky_sos_trigger, name="internal-sync-ky-sos"),
