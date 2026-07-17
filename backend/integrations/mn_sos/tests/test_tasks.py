@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 
 from elections.models import Candidate, Election, ElectionSourceLink, Race
-from integrations.mn_sos.exceptions import MnSosError
+from integrations.mn_sos.election_registry import MnElection
 from integrations.mn_sos.tasks import sync_mn_races
 from ops.models import SyncLog
 
@@ -226,16 +226,56 @@ _ELECTION_WITHOUT_DATE_PATH = {
 
 
 @pytest.mark.django_db
-def test_sync_mn_races_fails_clearly_when_date_path_metadata_missing():
-    # An election row lacking mn_date_path (stale/registry gap/manual edit)
-    # must fail with a clear error + SyncLog entry, not a bare KeyError.
+def test_sync_mn_races_records_clear_error_when_date_path_metadata_missing():
+    # An election lacking mn_date_path (stale/registry gap/manual edit) must be
+    # recorded as a clear error in the SyncLog, not raise a bare KeyError. With
+    # one registry election failing, the whole run reports FAILED.
     with patch(
         "integrations.mn_sos.tasks.map_election",
         return_value=dict(_ELECTION_WITHOUT_DATE_PATH),
     ):
-        with pytest.raises(MnSosError, match="mn_date_path"):
-            sync_mn_races()
+        result = sync_mn_races()
 
+    assert result["created"] == 0
     log = SyncLog.objects.filter(source="mn_sos").order_by("-id").first()
     assert log.status == SyncLog.Status.FAILED
     assert "mn_date_path" in (log.last_error or "")
+
+
+@pytest.mark.django_db
+def test_sync_mn_races_iterates_multiple_registered_elections():
+    # Two registered elections, each with the same in-scope Senate file/roster,
+    # produce a distinct Election + race + candidate; counts aggregate.
+    e1 = MnElection(
+        election_date=datetime.date(2024, 11, 5), election_type="general",
+        name="2024 Minnesota General Election", source_id="mn_sos_2024_general",
+        ers_election_id=170,
+    )
+    e2 = MnElection(
+        election_date=datetime.date(2026, 8, 11), election_type="primary",
+        name="2026 Minnesota Primary",
+    )
+    with patch(
+        "integrations.mn_sos.tasks.load_elections", return_value=[e1, e2],
+    ), patch(
+        "integrations.mn_sos.tasks.probe_in_scope_files", return_value=_IN_SCOPE_FILES,
+    ), patch(
+        "integrations.mn_sos.tasks.MnSosClient.fetch_file",
+        side_effect=lambda url: "fake text for " + url,
+    ), patch(
+        "integrations.mn_sos.tasks.parse_result_file", return_value=_SENATE_RESULT_ROWS,
+    ), patch(
+        "integrations.mn_sos.tasks.MnSosClient.fetch_candidate_table",
+        return_value="fake cand text",
+    ), patch(
+        "integrations.mn_sos.tasks.parse_candidate_table", return_value=_CANDIDATE_ROWS,
+    ):
+        result = sync_mn_races()
+
+    assert Election.objects.filter(source_metadata__mn_date_path="20241105").exists()
+    assert Election.objects.filter(source_metadata__mn_date_path="20260811").exists()
+    # one U.S. Senator race + one Klobuchar candidate per election
+    assert result["created"] == 4
+    log = SyncLog.objects.filter(source="mn_sos").order_by("-id").first()
+    assert log.status == SyncLog.Status.COMPLETED
+    assert "elections=2 ok=2" in log.notes
