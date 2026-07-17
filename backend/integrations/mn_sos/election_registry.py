@@ -18,9 +18,14 @@ from pathlib import Path
 
 _DATA_FILE = Path(__file__).parent / "data" / "elections.toml"
 
-# Election.Status.UPCOMING; kept as a literal so this data loader needs no
-# Django model import.
-_DEFAULT_STATUS = "upcoming"
+def _default_status_for_date(election_date: datetime.date) -> str:
+    """Infer Election.Status for unpinned MN descriptors without importing Django models."""
+    today = datetime.date.today()
+    if election_date > today:
+        return "upcoming"
+    if election_date == today:
+        return "active"
+    return "results_pending"
 
 
 @dataclasses.dataclass
@@ -28,12 +33,14 @@ class MnElection:
     election_date: datetime.date
     election_type: str
     name: str
-    status: str = _DEFAULT_STATUS
+    status: str | None = None
     suffix: str | None = None
     ers_election_id: int | None = None
     source_id: str | None = None
 
     def __post_init__(self):
+        if self.status is None:
+            self.status = _default_status_for_date(self.election_date)
         if not self.source_id:
             self.source_id = f"mn_sos_{self.date_path}"
 
@@ -48,7 +55,7 @@ def _to_descriptor(entry: dict) -> MnElection:
         election_date=entry["date"],
         election_type=entry["type"],
         name=entry["name"],
-        status=entry.get("status", _DEFAULT_STATUS),
+        status=entry.get("status"),
         suffix=str(entry["suffix"]) if entry.get("suffix") is not None else None,
         ers_election_id=entry.get("ers_election_id"),
         source_id=entry.get("source_id"),

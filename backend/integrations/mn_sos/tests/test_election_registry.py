@@ -60,13 +60,36 @@ def test_source_id_defaults_to_date_path_when_unpinned():
     assert e.source_id == "mn_sos_20260811"
 
 
-def test_status_defaults_to_upcoming():
-    e = MnElection(
-        election_date=datetime.date(2026, 11, 3),
+def test_status_defaults_from_election_date():
+    past = MnElection(
+        election_date=datetime.date(2000, 11, 7),
         election_type="general",
-        name="2026 Minnesota General",
+        name="2000 Minnesota General",
     )
-    assert e.status == "upcoming"
+    today = MnElection(
+        election_date=datetime.date.today(),
+        election_type="general",
+        name="Minnesota General Today",
+    )
+    future = MnElection(
+        election_date=datetime.date(2999, 11, 3),
+        election_type="general",
+        name="2999 Minnesota General",
+    )
+
+    assert past.status == "results_pending"
+    assert today.status == "active"
+    assert future.status == "upcoming"
+
+
+def test_explicit_status_wins_over_date_default():
+    e = MnElection(
+        election_date=datetime.date(2000, 11, 7),
+        election_type="general",
+        name="2000 Minnesota General",
+        status="results_certified",
+    )
+    assert e.status == "results_certified"
 
 
 @pytest.mark.django_db
