@@ -298,6 +298,21 @@ def test_discover_registers_new_election_when_cand_file_exists():
 
 
 @pytest.mark.django_db
+def test_discover_registers_past_election_as_results_pending():
+    with patch(
+        "integrations.mn_sos.tasks.statutory_statewide_elections",
+        return_value=[(datetime.date(2000, 9, 12), "primary", "2000 Minnesota Primary")],
+    ), patch(
+        "integrations.mn_sos.tasks.MnSosClient.file_exists", return_value=True,
+    ):
+        result = discover_mn_elections()
+
+    assert "mn_sos_20000912" in result["registered"]
+    link = ElectionSourceLink.objects.get(source="mn_sos", source_id="mn_sos_20000912")
+    assert link.election.status == Election.Status.RESULTS_PENDING
+
+
+@pytest.mark.django_db
 def test_discover_skips_when_cand_file_absent():
     with patch(
         "integrations.mn_sos.tasks.statutory_statewide_elections",
