@@ -1,6 +1,7 @@
 import datetime
 
 from elections.models import Election, Race
+from integrations.mn_sos.election_registry import MnElection
 from integrations.mn_sos.mappers import (
     format_office_title,
     is_in_scope_file,
@@ -57,15 +58,36 @@ def test_format_office_title_appends_district_when_needed():
     assert format_office_title("U.S. Senator", "") == "U.S. Senator"
 
 
-def test_map_election_returns_2024_general_poc_identity():
-    mapped = map_election()
+def test_map_election_maps_descriptor_identity_and_metadata():
+    election = MnElection(
+        election_date=datetime.date(2024, 11, 5),
+        election_type="general",
+        name="2024 Minnesota General Election",
+        status="results_certified",
+        ers_election_id=170,
+        source_id="mn_sos_2024_general",
+    )
+    mapped = map_election(election)
     assert mapped["source_id"] == "mn_sos_2024_general"
     assert mapped["state"] == "MN"
     assert mapped["election_type"] == "general"
     assert mapped["election_date"] == datetime.date(2024, 11, 5)
     assert mapped["jurisdiction_level"] == Election.JurisdictionLevel.STATE
+    assert mapped["status"] == "results_certified"
     assert mapped["source_metadata"]["mn_ers_election_id"] == 170
     assert mapped["source_metadata"]["mn_date_path"] == "20241105"
+
+
+def test_map_election_omits_ers_id_metadata_when_absent():
+    election = MnElection(
+        election_date=datetime.date(2026, 8, 11),
+        election_type="primary",
+        name="2026 Minnesota Primary",
+    )
+    mapped = map_election(election)
+    assert mapped["source_id"] == "mn_sos_20260811"
+    assert mapped["source_metadata"]["mn_date_path"] == "20260811"
+    assert "mn_ers_election_id" not in mapped["source_metadata"]
 
 
 def test_map_race_builds_statewide_office_fields():

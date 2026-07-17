@@ -1,0 +1,26 @@
+# MN SOS elections to sync (Stage 1 race/candidate sync).
+#
+# Add one [[election]] block per election. This is the registry the sync task
+# iterates; adding an election is a data edit, no code change.
+#
+# Fields:
+#   date            (required) election date; date_path is derived from it
+#   type            (required) general | primary | special | municipal | ...
+#   name            (required) human-readable election name
+#   status          (optional) Election.Status value; default "upcoming"
+#   suffix          (optional) same-day special-election directory suffix,
+#                   e.g. "27" -> date_path 20250128_27 (see issue #55). Only
+#                   needed for a concurrent same-day election; obtain it once
+#                   from the portal listing.
+#   ers_election_id (optional) portal deep-link metadata only; not required
+#                   for data fetching (discovery keys on date_path).
+#   source_id       (optional) pin for continuity with an already-ingested
+#                   election; defaults to mn_sos_{date_path}.
+
+[[election]]
+date = 2024-11-05
+type = "general"
+name = "2024 Minnesota General Election"
+status = "results_certified"
+ers_election_id = 170
+source_id = "mn_sos_2024_general"
