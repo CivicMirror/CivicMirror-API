@@ -42,6 +42,7 @@ _CLARITY_HEADERS = {
 # Hostnames known to block GCP datacenter IPs (CloudFront IP reputation).
 # Add new hostnames here when confirmed blocked; the proxy handles the rest.
 CLARITY_PROXY_HOSTS: frozenset[str] = frozenset({
+    "results.enr.clarityelections.com",
     "www.enr-scvotes.org",
     "enr-scvotes.org",
     "liveresults.boe.ohio.gov",

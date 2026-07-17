@@ -5,7 +5,7 @@ import io
 import zipfile
 from unittest.mock import MagicMock, patch
 
-import pytest
+import requests
 from openpyxl import Workbook
 
 from integrations.or_sos.client import (
@@ -15,8 +15,7 @@ from integrations.or_sos.client import (
     parse_public_view_guid,
     resolve_records_attachment_url,
 )
-from integrations.or_sos.exceptions import OrSosUnsupportedDocumentError
-from integrations.or_sos.parsers import document_checksum, parse_result_document
+from integrations.or_sos.parsers import document_checksum, parse_result_document, parse_result_pdf_text
 from results.adapters.oregon import OregonAdapter
 
 _HISTORY_XML = """<?xml version="1.0" encoding="utf-8"?>
@@ -52,6 +51,22 @@ _VIEWS_XML = """<?xml version="1.0" encoding="utf-8"?>
     </GetViewCollectionResponse>
   </soap:Body>
 </soap:Envelope>"""
+
+
+_REST_HISTORY_JSON = {
+    "value": [
+        {
+            "Title": "May 19, 2026 Primary Election",
+            "Election_x0020_Date": "2026-05-19T05:00:00Z",
+            "Election_x0020_Type": "Primary",
+            "Results": (
+                '<a href="https&#58;//records.sos.state.or.us/ORSOSWebDrawer/Recordhtml/123">'
+                "Official Results</a>"
+            ),
+            "Modified": "2026-06-12T19:56:09Z",
+        }
+    ]
+}
 
 
 _CSV = b"Contest Name,Candidate Name,Total Votes,Vote Percent,Party\nGovernor,Alice Smith,1,55.5,DEM\nGovernor,Bob Jones,2,44.5,REP\n"
@@ -90,6 +105,23 @@ def test_parse_history_response_extracts_row():
     assert rows[0].election_type == "Primary Election"
     assert "results.csv" in rows[0].results_html
     assert rows[0].source_version == "2026-06-30 12:00:00"
+
+
+def test_get_history_rows_falls_back_to_sharepoint_rest_when_soap_blocked():
+    rest_response = MagicMock()
+    rest_response.json.return_value = _REST_HISTORY_JSON
+    rest_response.raise_for_status.return_value = None
+
+    with patch("integrations.or_sos.client.requests.post", side_effect=requests.RequestException("401 Unauthorized")), \
+         patch("integrations.or_sos.client.requests.get", return_value=rest_response) as mock_get:
+        rows = OrSosClient().get_history_rows()
+
+    assert len(rows) == 1
+    assert rows[0].election_date == datetime.date(2026, 5, 19)
+    assert rows[0].election_type == "Primary"
+    assert "Recordhtml/123" in rows[0].results_html
+    assert rows[0].source_version == "2026-06-12T19:56:09Z"
+    mock_get.assert_called_once()
 
 
 def test_find_result_links_absolutizes_relative_urls():
@@ -131,9 +163,64 @@ def test_parse_result_document_zip_with_xlsx():
     assert records[0].source_file == "official/results.xlsx"
 
 
-def test_parse_result_document_pdf_is_explicitly_unsupported():
-    with pytest.raises(OrSosUnsupportedDocumentError):
-        parse_result_document(b"%PDF", "https://example.test/results.pdf")
+def test_parse_result_pdf_text_uses_statewide_total_rows():
+    records = parse_result_pdf_text(
+        """
+        May 19, 2026, Primary Election Abstract of Votes
+        US Senator
+        Democrat
+        *Merkley Wells Misc.
+        County Jeff Paul Damian
+        Baker 832 100 9
+        Total 457,006 30,544 2,907
+        * Nominee
+        """
+    )
+
+    assert len(records) == 3
+    assert records[0].office_title == "U.S. Senator"
+    assert records[0].choice == "Merkley"
+    assert records[0].vote_count == 457006
+    assert records[0].party == "Democrat"
+    assert records[0].source_file == "official-results.pdf"
+
+
+def test_parse_result_pdf_text_normalizes_district_office_titles():
+    records = parse_result_pdf_text(
+        """
+        May 19, 2026, Primary Election Abstract of Votes
+        State Representative
+        18th
+        District
+        Democrat
+        *Sosa Misc.
+        County Rick
+        Total 9,303 70
+        """
+    )
+
+    assert [record.office_title for record in records] == [
+        "Oregon State Representative, District 18",
+        "Oregon State Representative, District 18",
+    ]
+
+
+def test_parse_result_pdf_text_uses_county_line_choices_for_measures():
+    records = parse_result_pdf_text(
+        """
+        May 29, 2026, Primary Election Abstract of Votes
+        Measure 120
+        Increases fuel taxes, registration/title fees for roads
+        County Yes *No
+        Baker 399 5,805
+        Total 637,544 14,454
+        """
+    )
+
+    assert [(record.office_title, record.choice, record.vote_count) for record in records] == [
+        ("Measure 120", "Yes", 637544),
+        ("Measure 120", "No", 14454),
+    ]
 
 
 def test_resolve_records_attachment_url_prefers_downloadable_file():
@@ -162,6 +249,60 @@ def test_download_document_follows_records_viewer_attachment():
     assert content == _CSV
     assert resolved_url == "https://records.sos.state.or.us/download/results.csv"
     assert mock_get.call_count == 2
+
+
+def test_download_document_submits_records_viewer_download_form():
+    html_response = MagicMock()
+    html_response.headers = {"Content-Type": "text/html; charset=utf-8"}
+    html_response.text = """
+    <form method="post" action="./RecordViewer.aspx?uri=16180585" id="form1">
+      <input type="hidden" name="__VIEWSTATE" value="view" />
+      <input type="hidden" name="__EVENTVALIDATION" value="event" />
+      <input type="hidden" name="strFileName" value="D:\\CMSearchORSOS\\results.PDF" />
+      <input type="submit" name="btnDownload" value="Download" id="btnDownload" />
+    </form>
+    """
+    html_response.url = "https://records.sos.state.or.us/ORSOSCMSearch/Search/RecordViewer.aspx?uri=16180585"
+    html_response.content = b"<html></html>"
+
+    pdf_response = MagicMock()
+    pdf_response.headers = {"Content-Type": "application/pdf"}
+    pdf_response.url = html_response.url
+    pdf_response.content = b"%PDF-1.7"
+
+    with patch("integrations.or_sos.client.requests.get", return_value=html_response), \
+         patch("integrations.or_sos.client.requests.post", return_value=pdf_response) as mock_post:
+        content, resolved_url = OrSosClient().download_document(html_response.url)
+
+    assert content == b"%PDF-1.7"
+    assert resolved_url == html_response.url
+    posted = mock_post.call_args.kwargs["data"]
+    assert mock_post.call_args.args[0] == (
+        "https://records.sos.state.or.us/ORSOSCMSearch/Search/RecordViewer.aspx?uri=16180585"
+    )
+    assert posted["__VIEWSTATE"] == "view"
+    assert posted["__EVENTVALIDATION"] == "event"
+    assert posted["btnDownload"] == "Download"
+
+
+def test_download_document_extracts_embedded_records_viewer_pdf():
+    html_response = MagicMock()
+    html_response.headers = {"Content-Type": "text/html; charset=utf-8"}
+    html_response.text = """
+    <html><body>
+      <script>var myPdfBase64 = 'JVBERi0xLjcKJSVFT0Y=';</script>
+    </body></html>
+    """
+    html_response.url = "https://records.sos.state.or.us/ORSOSCMSearch/Search/RecordViewer.aspx?uri=16180585"
+    html_response.content = b"<html></html>"
+
+    with patch("integrations.or_sos.client.requests.get", return_value=html_response), \
+         patch("integrations.or_sos.client.requests.post") as mock_post:
+        content, resolved_url = OrSosClient().download_document(html_response.url)
+
+    assert content == b"%PDF-1.7\n%%EOF"
+    assert resolved_url == html_response.url
+    mock_post.assert_not_called()
 
 
 def test_oregon_adapter_fetches_direct_csv_result():
@@ -219,7 +360,7 @@ def test_oregon_adapter_unsupported_pdf_returns_partial():
 
     assert result.rows == []
     assert result.mapping_confidence == "partial"
-    assert "not parsed yet" in result.notes
+    assert "could not be parsed" in result.notes
 
 
 def test_oregon_adapter_returns_no_data_when_history_index_unavailable():
