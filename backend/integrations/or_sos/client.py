@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import datetime
 import logging
 import re
@@ -9,6 +11,7 @@ from html import unescape
 from urllib.parse import urljoin
 
 import requests
+from bs4 import BeautifulSoup
 
 from .exceptions import OrSosError
 
@@ -18,6 +21,7 @@ _BASE_URL = "https://sos.oregon.gov"
 _ORESTAR_BASE_URL = "https://secure.sos.state.or.us/orestar"
 _LISTS_URL = f"{_BASE_URL}/elections/_vti_bin/Lists.asmx"
 _VIEWS_URL = f"{_BASE_URL}/elections/_vti_bin/Views.asmx"
+_HISTORY_REST_URL = f"{_BASE_URL}/elections/_api/web/lists/getbytitle('History')/items"
 CURRENT_ELECTION_URL = f"{_BASE_URL}/elections/Pages/current-election.aspx"
 ELECTION_DATES_URL = f"{_BASE_URL}/elections/Pages/election-dates.aspx"
 CF_SEARCH_PAGE_URL = f"{_ORESTAR_BASE_URL}/CFSearchPage.do"
@@ -62,17 +66,21 @@ class OrSosClient:
     </GetListItems>
   </soap:Body>
 </soap:Envelope>"""
-        resp = requests.post(
-            _LISTS_URL,
-            data=envelope.encode("utf-8"),
-            headers={
-                "Content-Type": "text/xml; charset=utf-8",
-                "SOAPAction": f"{_SP_NS}GetListItems",
-            },
-            timeout=self.timeout,
-        )
-        resp.raise_for_status()
-        return parse_history_response(resp.text)
+        try:
+            resp = requests.post(
+                _LISTS_URL,
+                data=envelope.encode("utf-8"),
+                headers={
+                    "Content-Type": "text/xml; charset=utf-8",
+                    "SOAPAction": f"{_SP_NS}GetListItems",
+                },
+                timeout=self.timeout,
+            )
+            resp.raise_for_status()
+            return parse_history_response(resp.text)
+        except requests.RequestException as exc:
+            logger.warning("or_sos.history_soap_failed: %s", exc)
+            return self._get_history_rows_via_rest()
 
     def download_document(self, url: str) -> tuple[bytes, str]:
         resp = requests.get(
@@ -83,6 +91,10 @@ class OrSosClient:
         resp.raise_for_status()
         content_type = (resp.headers.get("Content-Type") or "").lower()
         if "text/html" in content_type:
+            embedded_pdf = extract_embedded_pdf(resp.text)
+            if embedded_pdf:
+                return embedded_pdf, resp.url
+
             attachment_url = resolve_records_attachment_url(resp.text, resp.url)
             if attachment_url and attachment_url != resp.url:
                 attachment_resp = requests.get(
@@ -92,6 +104,26 @@ class OrSosClient:
                 )
                 attachment_resp.raise_for_status()
                 return attachment_resp.content, attachment_resp.url
+            form_payload = records_viewer_download_payload(resp.text)
+            if form_payload:
+                form_action = records_viewer_download_action(resp.text, resp.url) or resp.url
+                download_resp = requests.post(
+                    form_action,
+                    data=form_payload,
+                    cookies=resp.cookies,
+                    timeout=self.timeout,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (compatible; CivicMirror/1.0; +https://civicmirror.app)",
+                        "Referer": resp.url,
+                    },
+                )
+                download_resp.raise_for_status()
+                post_content_type = (download_resp.headers.get("Content-Type") or "").lower()
+                if "text/html" in post_content_type:
+                    embedded_pdf = extract_embedded_pdf(download_resp.text)
+                    if embedded_pdf:
+                        return embedded_pdf, download_resp.url
+                return download_resp.content, download_resp.url
         return resp.content, resp.url
 
     def fetch_open_offices_pdf(self, url: str = OPEN_OFFICES_GENERAL_URL) -> tuple[bytes, str]:
@@ -115,6 +147,19 @@ class OrSosClient:
         )
         resp.raise_for_status()
         return resp.json(), resp.url
+
+    def _get_history_rows_via_rest(self) -> list[OrHistoryRow]:
+        resp = requests.get(
+            _HISTORY_REST_URL,
+            params={"$top": 5000},
+            timeout=self.timeout,
+            headers={
+                "Accept": "application/json;odata=nometadata",
+                "User-Agent": "Mozilla/5.0 (compatible; CivicMirror/1.0; +https://civicmirror.app)",
+            },
+        )
+        resp.raise_for_status()
+        return parse_history_rest_response(resp.json())
 
     def search_candidate_filings(self, election_year: int, election_id: str, page_index: int = 0) -> tuple[str, str]:
         token = self._get_orestar_csrf_token(CF_SEARCH_PAGE_URL)
@@ -277,6 +322,25 @@ def parse_history_response(xml_text: str) -> list[OrHistoryRow]:
     return rows
 
 
+def parse_history_rest_response(payload: dict) -> list[OrHistoryRow]:
+    rows: list[OrHistoryRow] = []
+    for item in payload.get("value", []):
+        date_text = item.get("Election_x0020_Date") or ""
+        election_type = (item.get("Election_x0020_Type") or item.get("Title") or "").strip()
+        results_html = item.get("Results") or ""
+        modified = item.get("Modified") or ""
+        source_version = modified or f"{date_text}|{election_type}|{results_html}"
+        rows.append(
+            OrHistoryRow(
+                election_date=_parse_sharepoint_date(date_text),
+                election_type=election_type,
+                results_html=results_html,
+                source_version=source_version,
+            )
+        )
+    return rows
+
+
 def find_result_links(results_html: str) -> list[str]:
     html = unescape(results_html or "")
     links = re.findall(r"href=[\"']([^\"']+)[\"']", html, flags=re.IGNORECASE)
@@ -296,6 +360,44 @@ def resolve_records_attachment_url(html: str, base_url: str) -> str:
         if any(keyword in lowered for keyword in download_keywords):
             return link
     return ""
+
+
+def records_viewer_download_payload(html: str) -> dict[str, str]:
+    soup = BeautifulSoup(html or "", "html.parser")
+    button = soup.find("input", attrs={"name": "btnDownload"})
+    if button is None:
+        return {}
+
+    payload: dict[str, str] = {}
+    for field in soup.find_all("input"):
+        name = field.get("name")
+        if not name:
+            continue
+        payload[name] = field.get("value") or ""
+    payload["btnDownload"] = button.get("value") or "Download"
+    return payload
+
+
+def records_viewer_download_action(html: str, base_url: str) -> str:
+    soup = BeautifulSoup(html or "", "html.parser")
+    form = soup.find("form")
+    if form is None:
+        return ""
+    action = form.get("action") or ""
+    return urljoin(base_url, action.strip()) if action.strip() else ""
+
+
+def extract_embedded_pdf(html: str) -> bytes:
+    match = re.search(r"JVBER[0-9A-Za-z+/=]{8,}", html or "")
+    if not match:
+        return b""
+    encoded = match.group(0)
+    padded = encoded + ("=" * ((4 - len(encoded) % 4) % 4))
+    try:
+        decoded = base64.b64decode(padded, validate=False)
+    except (binascii.Error, ValueError):
+        return b""
+    return decoded if decoded.startswith(b"%PDF") else b""
 
 
 def select_history_row(rows: list[OrHistoryRow], election_date: datetime.date, election_type: str = "") -> OrHistoryRow | None:
@@ -320,7 +422,7 @@ def _parse_sharepoint_date(value: str) -> datetime.date | None:
     value = _clean_sharepoint_value(value)
     if not value:
         return None
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d"):
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d"):
         try:
             return datetime.datetime.strptime(value[:19], fmt).date()
         except ValueError:
