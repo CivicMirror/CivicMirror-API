@@ -26,7 +26,8 @@ from ops.models import SyncLog
 
 from .client import MnSosClient
 from .discovery import probe_in_scope_files
-from .election_registry import load_elections
+from .election_dates import statutory_statewide_elections
+from .election_registry import MnElection, registered_elections
 from .exceptions import MnSosError, MnSosRetryableError
 from .mappers import format_office_title, map_candidate, map_election, map_race
 from .parsers import parse_candidate_table, parse_result_file
@@ -34,11 +35,9 @@ from .parsers import parse_candidate_table, parse_result_file
 logger = logging.getLogger(__name__)
 
 
-def _sync_one_election(client, election) -> dict:
-    """Sync races + candidates for one registered election; return counts."""
+def _ensure_election(election):
+    """Upsert the Election row for a descriptor; return (election_obj, source_id)."""
     from aggregation import ingest
-
-    created_count = updated_count = withdrawn_count = 0
 
     mapped_election = map_election(election)
     source_id = mapped_election.pop("source_id")
@@ -52,6 +51,16 @@ def _sync_one_election(client, election) -> dict:
     election_obj, _ = ingest.ingest_election(
         source="mn_sos", source_id=source_id, identity=identity, fields=fields,
     )
+    return election_obj, source_id
+
+
+def _sync_one_election(client, election) -> dict:
+    """Sync races + candidates for one registered election; return counts."""
+    from aggregation import ingest
+
+    created_count = updated_count = withdrawn_count = 0
+
+    election_obj, source_id = _ensure_election(election)
 
     meta = election_obj.source_metadata or {}
     date_path = meta.get("mn_date_path")
@@ -166,7 +175,7 @@ def sync_mn_races(self):
     errors: list[str] = []
     retryable_exc: MnSosRetryableError | None = None
 
-    elections = load_elections()
+    elections = registered_elections()
     for election in elections:
         try:
             counts = _sync_one_election(client, election)
@@ -207,3 +216,70 @@ def sync_mn_races(self):
         raise self.retry(exc=retryable_exc)
 
     return {"created": totals["created"], "updated": totals["updated"], "withdrawn": totals["withdrawn"]}
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def discover_mn_elections(self):
+    """
+    Auto-onboard statewide (Tier-1) MN elections. For each statutory primary /
+    general date not already registered, probe the unprotected file host for
+    cand.txt; when it exists (candidate filing has opened), register the
+    Election so the ongoing sync picks it up. No portal / CAPTCHA involved.
+
+    Same-day special elections (Tier-2) are not discovered here: their date
+    path carries an unguessable suffix that only the portal listing exposes
+    (see issue #55); those are added to the TOML registry by hand.
+    """
+    sync_log = SyncLog.objects.create(
+        source="mn_sos",
+        task_name="discover_mn_elections",
+        status=SyncLog.Status.STARTED,
+    )
+    client = MnSosClient()
+    existing_date_paths = {e.date_path for e in registered_elections()}
+    registered: list[str] = []
+    errors: list[str] = []
+    retryable_exc: MnSosRetryableError | None = None
+
+    for election_date, election_type, name in statutory_statewide_elections(timezone.localdate()):
+        date_path = election_date.strftime("%Y%m%d")
+        if date_path in existing_date_paths:
+            continue
+        try:
+            if not client.file_exists(date_path, "cand.txt"):
+                continue
+        except MnSosRetryableError as exc:
+            retryable_exc = exc
+            errors.append(f"{date_path}: {exc}")
+            logger.warning("mn_sos.discover.probe_failed date_path=%s err=%s", date_path, exc)
+            continue
+
+        descriptor = MnElection(
+            election_date=election_date, election_type=election_type, name=name,
+        )
+        _ensure_election(descriptor)
+        registered.append(descriptor.source_id)
+        existing_date_paths.add(date_path)
+        logger.info(
+            "mn_sos.discover.registered source_id=%s date_path=%s",
+            descriptor.source_id, date_path,
+        )
+
+    sync_log.records_created = len(registered)
+    sync_log.notes = f"registered={registered}"
+    sync_log.completed_at = timezone.now()
+    if errors:
+        sync_log.error_count = len(errors)
+        sync_log.last_error = "; ".join(errors)
+        sync_log.status = SyncLog.Status.COMPLETED_WITH_WARNINGS
+        sync_log.save(update_fields=[
+            "records_created", "notes", "completed_at", "error_count", "last_error", "status",
+        ])
+    else:
+        sync_log.status = SyncLog.Status.COMPLETED
+        sync_log.save(update_fields=["records_created", "notes", "completed_at", "status"])
+
+    if retryable_exc is not None:
+        raise self.retry(exc=retryable_exc)
+
+    return {"registered": registered}

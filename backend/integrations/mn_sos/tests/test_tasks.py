@@ -5,7 +5,7 @@ import pytest
 
 from elections.models import Candidate, Election, ElectionSourceLink, Race
 from integrations.mn_sos.election_registry import MnElection
-from integrations.mn_sos.tasks import sync_mn_races
+from integrations.mn_sos.tasks import discover_mn_elections, sync_mn_races
 from ops.models import SyncLog
 
 _IN_SCOPE_FILES = [
@@ -256,7 +256,7 @@ def test_sync_mn_races_iterates_multiple_registered_elections():
         name="2026 Minnesota Primary",
     )
     with patch(
-        "integrations.mn_sos.tasks.load_elections", return_value=[e1, e2],
+        "integrations.mn_sos.tasks.registered_elections", return_value=[e1, e2],
     ), patch(
         "integrations.mn_sos.tasks.probe_in_scope_files", return_value=_IN_SCOPE_FILES,
     ), patch(
@@ -279,3 +279,49 @@ def test_sync_mn_races_iterates_multiple_registered_elections():
     log = SyncLog.objects.filter(source="mn_sos").order_by("-id").first()
     assert log.status == SyncLog.Status.COMPLETED
     assert "elections=2 ok=2" in log.notes
+
+
+@pytest.mark.django_db
+def test_discover_registers_new_election_when_cand_file_exists():
+    with patch(
+        "integrations.mn_sos.tasks.statutory_statewide_elections",
+        return_value=[(datetime.date(2026, 8, 11), "primary", "2026 Minnesota Primary")],
+    ), patch(
+        "integrations.mn_sos.tasks.MnSosClient.file_exists", return_value=True,
+    ):
+        result = discover_mn_elections()
+
+    assert "mn_sos_20260811" in result["registered"]
+    link = ElectionSourceLink.objects.get(source="mn_sos", source_id="mn_sos_20260811")
+    assert link.election.source_metadata["mn_date_path"] == "20260811"
+    assert link.election.election_type == "primary"
+
+
+@pytest.mark.django_db
+def test_discover_skips_when_cand_file_absent():
+    with patch(
+        "integrations.mn_sos.tasks.statutory_statewide_elections",
+        return_value=[(datetime.date(2028, 8, 8), "primary", "2028 Minnesota Primary")],
+    ), patch(
+        "integrations.mn_sos.tasks.MnSosClient.file_exists", return_value=False,
+    ):
+        result = discover_mn_elections()
+
+    assert result["registered"] == []
+    assert not ElectionSourceLink.objects.filter(source="mn_sos", source_id="mn_sos_20280808").exists()
+
+
+@pytest.mark.django_db
+def test_discover_skips_already_registered_date_without_probing():
+    # 2024 general is in the TOML seed (date_path 20241105); discovery must not
+    # re-probe or re-register it.
+    with patch(
+        "integrations.mn_sos.tasks.statutory_statewide_elections",
+        return_value=[(datetime.date(2024, 11, 5), "general", "2024 Minnesota General Election")],
+    ), patch(
+        "integrations.mn_sos.tasks.MnSosClient.file_exists", return_value=True,
+    ) as file_exists:
+        result = discover_mn_elections()
+
+    assert result["registered"] == []
+    file_exists.assert_not_called()
