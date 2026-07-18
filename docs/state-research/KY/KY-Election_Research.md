@@ -90,10 +90,6 @@ Election-level spec fields:
 - **URL:** https://elect.ky.gov/results/
 - Certified results as downloadable files and PDFs. Authoritative; use when OpenElections lags. Slower to parse (PDF/XLS), but policy-clean.
 
-### If live/unofficial election-night data is ever genuinely required
-- Request data access from the SBE via their Contact Us form, **or**
-- Use a licensed feed (AP Elections API, Decision Desk HQ).
-- Do **not** scrape `vrsws` or Clarity.
 
 ---
 
