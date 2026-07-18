@@ -108,6 +108,10 @@ def _is_measure_race(office_title: str) -> bool:
 
 def _row_source_identity(row) -> dict[str, str]:
     raw = row.raw or {}
+    contest_code = str(raw.get("contest_code") or "").strip()
+    if not contest_code:
+        return {}
+
     identity = {}
     for key in ("contest_code", "party_code"):
         value = str(raw.get(key) or "").strip()
