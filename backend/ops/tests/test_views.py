@@ -44,13 +44,13 @@ def test_coverage_tiers_reflect_full_core_definition(client):
 
     assert tiers["AZ"] == "full"
     assert tiers["AK"] == "results"
+    assert tiers["AL"] == "results"
     assert tiers["DE"] == "results"
     assert tiers["FL"] == "full"
     assert tiers["IL"] == "full"
     assert tiers["TX"] == "full"
     assert tiers["WA"] == "full"
     assert tiers["NC"] == "results"
-    assert "AL" not in tiers
 
 
 @pytest.mark.django_db
