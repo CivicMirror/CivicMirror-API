@@ -7,6 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from openpyxl import load_workbook
+
 from results.adapters.base import ResultRow
 
 from .exceptions import AlSosError
@@ -37,9 +38,9 @@ def parse_enr_workbook(content: bytes) -> AlEnrParsedResult:
     if "Statistics" not in workbook.sheetnames:
         raise AlSosError("Alabama ENR workbook missing Statistics sheet")
 
-    county_stats = _parse_statistics(workbook["Statistics"])
+    county_stats, statistics_row_count = _parse_statistics(workbook["Statistics"])
     is_complete = all(
-        stat["total_precincts"] == stat["precincts_reported"]
+        stat["precincts_reported"] >= stat["total_precincts"]
         for stat in county_stats.values()
         if stat["total_precincts"] is not None
     )
@@ -48,8 +49,10 @@ def parse_enr_workbook(content: bytes) -> AlEnrParsedResult:
     totals: dict[tuple[str, str, str, str], int] = defaultdict(int)
     metadata: dict[tuple[str, str, str, str], dict] = {}
     election_codes: set[str] = set()
+    all_results_row_count = 0
 
     for raw in _iter_dict_rows(workbook["AllResults"]):
+        all_results_row_count += 1
         contest_code = _clean(raw.get("Contest Code"))
         contest_title = _clean(raw.get("Contest Title"))
         candidate_name = _clean(raw.get("Candidate Name"))
@@ -95,15 +98,22 @@ def parse_enr_workbook(content: bytes) -> AlEnrParsedResult:
 
     return AlEnrParsedResult(
         rows=rows,
-        source_version=_source_version(election_codes, county_stats, len(rows)),
+        source_version=_source_version(
+            election_codes,
+            county_stats,
+            all_results_row_count=all_results_row_count,
+            statistics_row_count=statistics_row_count,
+        ),
         is_complete=is_complete,
         county_stats=county_stats,
     )
 
 
-def _parse_statistics(sheet) -> dict[str, dict]:
+def _parse_statistics(sheet) -> tuple[dict[str, dict], int]:
     stats: dict[str, dict] = {}
+    row_count = 0
     for raw in _iter_dict_rows(sheet):
+        row_count += 1
         county_code = _clean(raw.get("County Code"))
         if not county_code:
             continue
@@ -118,7 +128,7 @@ def _parse_statistics(sheet) -> dict[str, dict]:
             "precincts_reported": _safe_int(raw.get("Precincts Reported")),
             "last_updated": last_updated_value,
         }
-    return stats
+    return stats, row_count
 
 
 def _iter_dict_rows(sheet):
@@ -128,10 +138,16 @@ def _iter_dict_rows(sheet):
         yield dict(zip(headers, row))
 
 
-def _source_version(election_codes: set[str], county_stats: dict[str, dict], row_count: int) -> str:
+def _source_version(
+    election_codes: set[str],
+    county_stats: dict[str, dict],
+    *,
+    all_results_row_count: int,
+    statistics_row_count: int,
+) -> str:
     code = ",".join(sorted(election_codes))
     latest = max((stat["last_updated"] for stat in county_stats.values()), default="")
-    return f"{code}:{latest}:{row_count}"
+    return f"{code}:{latest}:all_results={all_results_row_count}:statistics={statistics_row_count}"
 
 
 def _safe_int(value) -> int:
