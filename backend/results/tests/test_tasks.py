@@ -317,6 +317,59 @@ def test_process_race_no_office_titles_uses_all_rows():
     assert OfficialResult.objects.filter(race=race, candidate=candidate).exists()
 
 
+@pytest.mark.django_db
+def test_process_race_prefers_source_contest_identity_over_office_title():
+    election = make_election(state="AL")
+    dem_race = make_race(
+        election,
+        office_title="UNITED STATES SENATOR",
+        status=Race.CertificationStatus.RESULTS_PENDING,
+    )
+    dem_race.source_metadata = {
+        "bootstrapped_from": "results_adapter",
+        "state": "AL",
+        "contest_code": "001",
+        "party_code": "DEM",
+    }
+    dem_race.save(update_fields=["source_metadata"])
+    dem_candidate = Candidate.objects.create(race=dem_race, name="JOHN SMITH")
+    rep_race = make_race(
+        election,
+        office_title="UNITED STATES SENATOR",
+        status=Race.CertificationStatus.RESULTS_PENDING,
+    )
+    rep_race.source_metadata = {
+        "bootstrapped_from": "results_adapter",
+        "state": "AL",
+        "contest_code": "002",
+        "party_code": "REP",
+    }
+    rep_race.save(update_fields=["source_metadata"])
+    rep_candidate = Candidate.objects.create(race=rep_race, name="JOHN SMITH")
+
+    result = make_adapter_result(rows=[
+        make_result_row(
+            candidate_name="JOHN SMITH",
+            office_title="UNITED STATES SENATOR",
+            vote_count=100,
+            raw={"contest_code": "001", "party_code": "DEM"},
+        ),
+        make_result_row(
+            candidate_name="JOHN SMITH",
+            office_title="UNITED STATES SENATOR",
+            vote_count=200,
+            raw={"contest_code": "002", "party_code": "REP"},
+        ),
+    ])
+
+    from results.tasks import _process_race_results
+    _process_race_results(dem_race, result, "AL")
+    _process_race_results(rep_race, result, "AL")
+
+    assert OfficialResult.objects.get(race=dem_race, candidate=dem_candidate).vote_count == 100
+    assert OfficialResult.objects.get(race=rep_race, candidate=rep_candidate).vote_count == 200
+
+
 # ---------------------------------------------------------------------------
 # _process_race_results: certification guard — UNOFFICIAL results should not
 # advance race to RESULTS_CERTIFIED
@@ -427,6 +480,46 @@ def test_bootstrap_multiple_offices():
     assert len(created) == 2
     titles = {r.office_title for r in created}
     assert titles == {"U.S. Senate", "Governor"}
+
+
+@pytest.mark.django_db
+def test_bootstrap_preserves_al_contest_identity_for_same_stripped_title():
+    election = make_election(state="AL")
+    rows = [
+        make_result_row(
+            candidate_name="JOHN SMITH",
+            office_title="UNITED STATES SENATOR",
+            vote_count=100,
+            raw={"contest_code": "001", "party_code": "DEM"},
+        ),
+        make_result_row(
+            candidate_name="JOHN SMITH",
+            office_title="UNITED STATES SENATOR",
+            vote_count=200,
+            raw={"contest_code": "002", "party_code": "REP"},
+        ),
+    ]
+    result = make_adapter_result(rows=rows)
+
+    from results.tasks import _bootstrap_races_from_results, _process_race_results
+    created = _bootstrap_races_from_results(election, result, "AL")
+
+    assert len(created) == 2
+    assert {race.office_title for race in created} == {"UNITED STATES SENATOR"}
+    identities = {
+        (race.source_metadata["contest_code"], race.source_metadata["party_code"])
+        for race in created
+    }
+    assert identities == {("001", "DEM"), ("002", "REP")}
+
+    for race in created:
+        _process_race_results(race, result, "AL")
+
+    results_by_identity = {
+        (official.race.source_metadata["contest_code"], official.race.source_metadata["party_code"]): official.vote_count
+        for official in OfficialResult.objects.filter(race__in=created).select_related("race")
+    }
+    assert results_by_identity == {("001", "DEM"): 100, ("002", "REP"): 200}
 
 
 @pytest.mark.django_db

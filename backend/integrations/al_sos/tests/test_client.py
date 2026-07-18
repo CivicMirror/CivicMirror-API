@@ -52,6 +52,14 @@ def test_fetch_enr_export_posts_hidden_fields():
         timeout=30,
     )
     session.post.assert_called_once()
-    assert session.post.call_args.kwargs["data"]["__EVENTTARGET"] == "hlnkExportData"
-    assert session.post.call_args.kwargs["data"]["__EVENTARGUMENT"] == ""
-    assert session.post.call_args.kwargs["data"]["__VIEWSTATE"] == "view-state"
+    session.post.assert_called_once_with(
+        "https://www2.alabamavotes.gov/electionNight/statewideResultsByContest.aspx?ecode=1001295",
+        data={
+            "__EVENTTARGET": "hlnkExportData",
+            "__EVENTARGUMENT": "",
+            "__VIEWSTATE": "view-state",
+            "__VIEWSTATEGENERATOR": "generator",
+            "__EVENTVALIDATION": "validation",
+        },
+        timeout=60,
+    )

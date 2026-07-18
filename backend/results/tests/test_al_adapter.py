@@ -41,6 +41,36 @@ def test_alabama_adapter_fetches_by_ecode_metadata():
 
 
 @pytest.mark.django_db
+def test_alabama_adapter_fetches_by_results_url_metadata():
+    from elections.models import Election
+
+    results_url = "https://www2.alabamavotes.gov/electionNight/statewideResultsByContest.aspx?ecode=1001295"
+    election = Election.objects.create(
+        source_id="al_2026_runoff_url",
+        name="2026 Alabama Primary Runoff",
+        state="AL",
+        election_type="primary",
+        election_date=date(2026, 6, 16),
+        status="RESULTS_PENDING",
+        jurisdiction_level="STATE",
+        source_metadata={"results_url": results_url},
+    )
+    content = (FIXTURES / "al_sos_enr_export.xlsx").read_bytes()
+
+    with patch("results.adapters.al.cache") as mock_cache, \
+         patch("results.adapters.al.AlSosClient") as MockClient:
+        mock_cache.get.return_value = None
+        MockClient.return_value.fetch_enr_export_from_url.return_value = content
+
+        result = AlabamaAdapter().fetch_results(election.election_date, election.pk)
+
+    assert result.mapping_confidence == "full"
+    assert result.source_url == results_url
+    MockClient.return_value.fetch_enr_export_from_url.assert_called_once_with(results_url)
+    MockClient.return_value.fetch_enr_export.assert_not_called()
+
+
+@pytest.mark.django_db
 def test_alabama_adapter_returns_unchanged_when_source_version_matches():
     from elections.models import Election
 
