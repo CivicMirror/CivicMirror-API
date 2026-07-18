@@ -24,7 +24,7 @@ Use this table to identify the next best integration target. States with multipl
 | State | Elections | Races | Community | Ballots | Live | Results | Candidate Info |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **AK** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **AL** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **AL** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **AR** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **AZ** | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **CA** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
