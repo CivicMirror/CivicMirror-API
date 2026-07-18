@@ -38,6 +38,19 @@ def test_adapter_states_reflects_live_registry(client):
 
 
 @pytest.mark.django_db
+def test_coverage_tiers_reflect_full_core_definition(client):
+    response = client.get("/api/coverage/sync-status/")
+    tiers = response.json()["coverage_tiers"]
+
+    assert tiers["AZ"] == "full"
+    assert tiers["FL"] == "full"
+    assert tiers["IL"] == "full"
+    assert tiers["TX"] == "full"
+    assert tiers["WA"] == "full"
+    assert tiers["NC"] == "results"
+
+
+@pytest.mark.django_db
 def test_state_specific_source_grouped_by_state(client):
     _make_log("wv_sos", records_updated=42)
     response = client.get("/api/coverage/sync-status/")

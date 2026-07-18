@@ -22,6 +22,12 @@ _US_STATE_CODES = frozenset([
 
 _GLOBAL_SOURCES = frozenset(["civic_api"])
 
+_FULL_CORE_STATES = frozenset([
+    "AZ", "CO", "FL", "GA", "IL", "MA", "MI", "PA", "SC", "TX", "VA", "WA", "WV",
+])
+
+_STATE_INTEGRATION_STATES = frozenset(["KY"])
+
 
 def _source_state_code(source: str) -> str | None:
     """'wv_sos' -> 'WV', 'sc_enr' -> 'SC', 'tx_goelect' -> 'TX'.
@@ -44,6 +50,16 @@ def _serialize_log(log: SyncLog) -> dict:
         "records_updated": log.records_updated,
         "records_skipped": log.records_skipped,
     }
+
+
+def _coverage_tiers(adapter_states: list[str]) -> dict[str, str]:
+    tiers = {state: "full" for state in _FULL_CORE_STATES}
+    tiers.update({state: "state" for state in _STATE_INTEGRATION_STATES})
+
+    for state in adapter_states:
+        tiers.setdefault(state, "results")
+
+    return dict(sorted(tiers.items()))
 
 
 class CoverageSyncStatusView(APIView):
@@ -94,9 +110,12 @@ class CoverageSyncStatusView(APIView):
 
             by_state.setdefault(state_code, {})[log.source] = _serialize_log(log)
 
+        adapter_states = sorted(list_supported_states())
+
         return Response({
             "as_of": timezone.now(),
             "global": global_sources,
             "by_state": by_state,
-            "adapter_states": sorted(list_supported_states()),
+            "adapter_states": adapter_states,
+            "coverage_tiers": _coverage_tiers(adapter_states),
         })
