@@ -153,3 +153,11 @@ Same caveat: no stable naming; scrape the year page.
 ## Source Coverage Analysis
 
 Alabama's state sources now cover Stage 2 well: live county-level results with reporting progress via the ENR export, certified totals via Drupal xlsx, and precinct-level archives back a decade. Remaining gaps vs. CivicMirror requirements are unchanged from March: ballot measure text, candidate contact/biographical data, incumbent status, and district boundaries (GeoJSON/FIPS) are absent from state files. Fill with **Google Civic API** (officials, districts, ballot measures by address), **Ballotpedia** (candidate profiles, measure text), **OpenStates** (state legislative), and **MEDSL** (historical normalization).
+
+## Implementation Notes
+
+- Results adapter: `backend/results/adapters/al.py`
+- Integration helpers: `backend/integrations/al_sos/`
+- Required election metadata: `source_metadata["al_ecode"]`, for example `"1001295"`
+- Optional override: `source_metadata["results_url"]`
+- Coverage tier after this adapter: Results Adapter. AL is not Full Core until a state-source Stage 1 election/race/candidate ingestion pipeline exists.
