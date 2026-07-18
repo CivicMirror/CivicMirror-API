@@ -10,7 +10,7 @@ def health_check(request):
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('django-admin/', admin.site.urls),
     path('internal/', include('internal.urls')),
     path('api/', include('accounts.urls')),
     path('api/', include('api.urls')),
