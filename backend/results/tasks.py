@@ -106,6 +106,30 @@ def _is_measure_race(office_title: str) -> bool:
     return any(kw in normalized for kw in _MEASURE_TITLE_KEYWORDS)
 
 
+def _row_source_identity(row) -> dict[str, str]:
+    raw = row.raw or {}
+    identity = {}
+    for key in ("contest_code", "party_code"):
+        value = str(raw.get(key) or "").strip()
+        if value:
+            identity[key] = value
+    return identity
+
+
+def _race_source_identity(race) -> dict[str, str]:
+    metadata = race.source_metadata or {}
+    identity = {}
+    for key in ("contest_code", "party_code"):
+        value = str(metadata.get(key) or "").strip()
+        if value:
+            identity[key] = value
+    return identity
+
+
+def _office_title_key(office_title: str) -> str:
+    return " ".join((office_title or "").strip().lower().split())
+
+
 def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
     """
     Auto-create Race, Candidate, and MeasureOption rows from result data when
@@ -117,14 +141,18 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
     """
     from elections.models import Candidate, Election, MeasureOption, Race
 
-    rows_by_office: dict[str, list] = {}
+    rows_by_race: dict[tuple[str, tuple[tuple[str, str], ...]], list] = {}
+    title_by_key: dict[tuple[str, tuple[tuple[str, str], ...]], str] = {}
     for row in adapter_result.rows:
         title = (row.office_title or '').strip()
         if not title:
             continue
-        rows_by_office.setdefault(title, []).append(row)
+        identity = tuple(sorted(_row_source_identity(row).items()))
+        key = (title, identity)
+        rows_by_race.setdefault(key, []).append(row)
+        title_by_key[key] = title
 
-    if not rows_by_office:
+    if not rows_by_race:
         logger.warning(
             "_bootstrap_races_from_results: no office_titles in result rows for election %s; cannot bootstrap",
             election.pk,
@@ -145,7 +173,9 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
             return existing
 
         created_races = []
-        for office_title, rows in rows_by_office.items():
+        for key, rows in rows_by_race.items():
+            office_title = title_by_key[key]
+            identity = dict(key[1])
             race_type = (
                 Race.RaceType.MEASURE if _is_measure_race(office_title)
                 else Race.RaceType.CANDIDATE
@@ -160,7 +190,11 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
                 source=Race.Source.RESULTS_ADAPTER,
                 race_status=Race.RaceStatus.ACTIVE,
                 match_confidence=Race.MatchConfidence.LOW,
-                source_metadata={'bootstrapped_from': 'results_adapter', 'state': state},
+                source_metadata={
+                    'bootstrapped_from': 'results_adapter',
+                    'state': state,
+                    **identity,
+                },
             )
             created_races.append(race)
             logger.info(
@@ -205,14 +239,30 @@ def _process_race_results(race, adapter_result, state: str):
     from elections.models import Candidate, MeasureOption, Race
     from results.models import OfficialResult
 
-    # --- Filter rows to this race by office_title ----------------------------
+    # --- Filter rows to this race by source identity or office_title ---------
+    race_identity = _race_source_identity(race)
+    if race_identity:
+        filtered_rows = [
+            r for r in adapter_result.rows
+            if all(_row_source_identity(r).get(key) == value for key, value in race_identity.items())
+        ]
+        if not filtered_rows:
+            logger.debug(
+                "_process_race_results: no source identity match for race %s ('%s') in %s",
+                race.id, race.office_title, state,
+            )
+            race.certification_status = Race.CertificationStatus.PARTIAL_RESULTS
+            race.save(update_fields=['certification_status'])
+            return
+    else:
+        filtered_rows = None
+
     has_office_titles = any(r.office_title for r in adapter_result.rows)
-    if has_office_titles:
+    if filtered_rows is None and has_office_titles:
         filtered_rows = [
             r for r in adapter_result.rows
             if r.office_title
-            and ' '.join(r.office_title.strip().lower().split())
-            == ' '.join(race.office_title.strip().lower().split())
+            and _office_title_key(r.office_title) == _office_title_key(race.office_title)
         ]
         if not filtered_rows:
             # Feed has office titles but none matched this race — skip rather than
@@ -224,7 +274,7 @@ def _process_race_results(race, adapter_result, state: str):
             race.certification_status = Race.CertificationStatus.PARTIAL_RESULTS
             race.save(update_fields=['certification_status'])
             return
-    else:
+    elif filtered_rows is None:
         filtered_rows = list(adapter_result.rows)
 
     # --- Coerce candidate_name → option_label for measure races ---------------
