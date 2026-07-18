@@ -169,6 +169,7 @@ INSTALLED_APPS += [
     'integrations.ky_sos',
     'integrations.tn_sos',
     'integrations.mi_sos',
+    'integrations.al_sos',
     'internal',
     'api',
     'accounts',
