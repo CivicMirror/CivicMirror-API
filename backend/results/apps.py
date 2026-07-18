@@ -1,3 +1,5 @@
+from importlib import import_module
+
 from django.apps import AppConfig
 
 
@@ -7,30 +9,14 @@ class ResultsConfig(AppConfig):
 
     def ready(self):
         # Import concrete adapters so @register runs at Django startup.
-        from results.adapters import (  # noqa: F401
-            ar,
-            az,
-            ca,
-            co,
-            ct,
-            fl,
-            ga,
-            ia,
-            il,
-            ma,
-            me,
-            mi,
-            mn,
-            nc,
-            nj,
-            ny,
-            oh,
-            oregon,
-            pa,
-            sc,
-            tn,
-            tx,
-            va,
-            wa,
-            wv,
-        )
+        # Use importlib because `in` is a valid module name but a Python keyword.
+        adapter_modules = [
+            "ak", "ar", "az", "ca", "co", "ct", "de", "fl", "ga", "hi",
+            "id", "ia", "il", "in", "ks", "la", "ma", "me", "mi", "mn",
+            "ms", "mt", "nc", "nd", "ne", "nh", "nj", "nv", "ny", "oh",
+            "ok", "oregon", "pa", "ri", "sc", "sd", "tn", "tx", "va",
+            "vt", "wa", "wi", "wv", "wy",
+        ]
+
+        for module in adapter_modules:
+            import_module(f"results.adapters.{module}")
