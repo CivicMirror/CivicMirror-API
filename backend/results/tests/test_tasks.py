@@ -523,6 +523,34 @@ def test_bootstrap_preserves_al_contest_identity_for_same_stripped_title():
 
 
 @pytest.mark.django_db
+def test_bootstrap_does_not_split_generic_rows_by_party_code_only():
+    election = make_election(state="FL")
+    rows = [
+        make_result_row(
+            candidate_name="ALICE DEM",
+            office_title="Governor",
+            raw={"party_code": "DEM"},
+        ),
+        make_result_row(
+            candidate_name="BOB REP",
+            office_title="Governor",
+            raw={"party_code": "REP"},
+        ),
+    ]
+    result = make_adapter_result(rows=rows)
+
+    from results.tasks import _bootstrap_races_from_results
+    created = _bootstrap_races_from_results(election, result, "FL")
+
+    assert len(created) == 1
+    race = created[0]
+    assert race.office_title == "Governor"
+    assert "party_code" not in race.source_metadata
+    names = set(Candidate.objects.filter(race=race).values_list("name", flat=True))
+    assert names == {"ALICE DEM", "BOB REP"}
+
+
+@pytest.mark.django_db
 def test_bootstrap_skips_rows_with_no_office_title():
     election = make_election()
     rows = [
