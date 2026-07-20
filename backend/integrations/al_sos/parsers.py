@@ -17,7 +17,9 @@ from .exceptions import AlSosError
 _PARTY_SUFFIX_RE = _re.compile(r"\s+\(([A-Z]{2,5})\)\s*$")
 
 _YEAR_PAGE_BASE_URL = "https://www.sos.alabama.gov"
-_DASH_RE = _re.compile(r"\s[‐-―-]\s")
+_DASH_RE = _re.compile(r"\s–\s")  # en dash only -- do not add ASCII hyphen-minus here,
+# real election names may contain a plain " - " (e.g. "District 63 - Runoff") and a
+# hyphen-inclusive class would split on the wrong dash and silently drop the election.
 
 
 @dataclass(frozen=True)
@@ -177,6 +179,8 @@ def _infer_election_type(heading_text: str) -> str:
     lowered = heading_text.lower()
     if "special" in lowered:
         return "special"
+    if "runoff" in lowered and "general" in lowered:
+        return "general_runoff"
     if "runoff" in lowered:
         return "primary_runoff"
     if "primary" in lowered:
