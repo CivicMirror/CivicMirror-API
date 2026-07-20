@@ -18,7 +18,7 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
-from elections.models import Candidate, Election
+from elections.models import Candidate, Election, ElectionSourceLink
 from ops.models import SyncLog
 
 from .client import AlSosClient
@@ -48,6 +48,21 @@ def sync_al_elections(self, year: int | None = None):
 
         created_count = 0
         for entry in parsed:
+            # source_metadata is written wholesale by _apply_fields (plain setattr,
+            # no deep-merge), and al_sos owns the field's provenance on every run
+            # since it's the only source that writes it -- so re-syncing must
+            # preserve any human-curated keys already on the row (specifically
+            # al_fcpa_election_id, which sync_al_fcpa_candidates depends on)
+            # rather than clobbering them with a metadata dict that only knows
+            # about al_document_links.
+            existing_link = ElectionSourceLink.objects.filter(
+                source="al_sos", source_id=entry["source_id"],
+            ).select_related("election").first()
+            source_metadata = dict(
+                (existing_link.election.source_metadata or {}) if existing_link else {}
+            )
+            source_metadata["al_document_links"] = entry["document_links"]
+
             election, created = ingest.ingest_election(
                 source="al_sos",
                 source_id=entry["source_id"],
@@ -59,7 +74,7 @@ def sync_al_elections(self, year: int | None = None):
                 },
                 fields={
                     "name": entry["name"],
-                    "source_metadata": {"al_document_links": entry["document_links"]},
+                    "source_metadata": source_metadata,
                 },
             )
             if created:

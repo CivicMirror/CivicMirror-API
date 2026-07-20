@@ -54,6 +54,29 @@ def test_sync_al_elections_is_idempotent():
     assert Election.objects.filter(state="AL").count() == 4
 
 
+@pytest.mark.django_db
+def test_sync_al_elections_preserves_curated_fcpa_election_id_on_resync():
+    from elections.models import Election
+    from integrations.al_sos.tasks import sync_al_elections
+
+    with patch("integrations.al_sos.tasks.AlSosClient") as MC:
+        MC.return_value.fetch_election_year_page.return_value = _year_page_html()
+        sync_al_elections.apply(kwargs={"year": 2026})
+
+    primary = Election.objects.get(state="AL", election_type="primary")
+    primary.source_metadata["al_fcpa_election_id"] = "160"
+    primary.save(update_fields=["source_metadata"])
+
+    with patch("integrations.al_sos.tasks.AlSosClient") as MC:
+        MC.return_value.fetch_election_year_page.return_value = _year_page_html()
+        sync_al_elections.apply(kwargs={"year": 2026})
+
+    primary.refresh_from_db()
+    assert primary.source_metadata["al_fcpa_election_id"] == "160"
+    links = primary.source_metadata["al_document_links"]
+    assert any("Sample Ballots" == link["label"] for link in links)
+
+
 def _make_al_election(**overrides):
     from elections.models import Election
 
