@@ -1007,6 +1007,6 @@ Google Civic, Ballotpedia, OpenStates, and other third-party sources may still e
 
 ## Current Coverage Tier
 
-**Full Core Coverage (shipped 2026-07-20).** `sync_al_elections` ingests elections from the SOS year page; `sync_al_fcpa_candidates` ingests federal/state-office races and candidates from FCPA for any Election manually tagged with `source_metadata["al_fcpa_election_id"]`; `results/adapters/al.py` ingests live/unofficial results from the ENR export (shipped earlier).
+**Full Core Coverage (shipped 2026-07-20).** `sync_al_elections` ingests elections from the SOS year page; `sync_al_fcpa_candidates` ingests state/statewide-office races and candidates from FCPA (Governor down through State Senator/Representative — FCPA has no federal-office data) for any Election manually tagged with `source_metadata["al_fcpa_election_id"]`; `results/adapters/al.py` ingests live/unofficial results from the ENR export (shipped earlier).
 
 Deferred to future work (see §4-§6 above): candidate-certification PDF parsing and the FCPA-provisional -> certified-ballot-qualified promotion path, sample-ballot validation, statewide ballot measures, and ArcGIS district-geometry ingestion.
