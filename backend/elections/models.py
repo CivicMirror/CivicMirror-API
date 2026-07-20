@@ -111,6 +111,7 @@ class Race(models.Model):
         TN_SOS = 'tn_sos', 'Tennessee SOS'
         OR_SOS = 'or_sos', 'Oregon SOS'
         KY_SOS = 'ky_sos', 'Kentucky SOS'
+        AL_SOS = 'al_sos', 'Alabama SOS'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'
