@@ -4,7 +4,13 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-from integrations.al_sos.parsers import normalize_contest_title, parse_enr_workbook, parse_election_year_page
+from integrations.al_sos.parsers import (
+    normalize_contest_title,
+    parse_election_year_page,
+    parse_enr_workbook,
+    parse_fcpa_committee_detail,
+    parse_fcpa_race_search_response,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -154,3 +160,37 @@ def test_parse_election_year_page_classifies_general_runoff():
     elections = parse_election_year_page(html)
 
     assert elections[0]["election_type"] == "general_runoff"
+
+
+def _search_results_json() -> str:
+    return (FIXTURES / "al_fcpa_search_results_page1.json").read_text()
+
+
+def _committee_detail_html() -> str:
+    return (FIXTURES / "al_fcpa_committee_detail_4834.html").read_text()
+
+
+def test_parse_fcpa_race_search_response_returns_rows_and_total():
+    rows, total_records = parse_fcpa_race_search_response(_search_results_json())
+
+    assert total_records == 848
+    assert len(rows) == 3
+    assert rows[0]["committee_id"] == 4834
+    assert rows[0]["candidate_name"] == "ABBETT, JIMMY"
+    assert rows[0]["candidate_status"] == "Active"
+    assert rows[0]["year"] == 2026
+
+
+def test_parse_fcpa_committee_detail_extracts_structured_fields():
+    detail = parse_fcpa_committee_detail(_committee_detail_html())
+
+    assert detail["committee_id"] == 4834
+    assert detail["candidateFirstName"] == "JIMMY"
+    assert detail["candidateLastName"] == "ABBETT"
+    assert detail["suffix"] == ""
+    assert detail["office"] == "Sheriff"
+    assert detail["jurisdiction"] == "TALLAPOOSA COUNTY"
+    assert detail["district"] == ""
+    assert detail["party"] == "Republican"
+    assert detail["committeeStatus"] == "Active"
+    assert detail["dissolved"] is False

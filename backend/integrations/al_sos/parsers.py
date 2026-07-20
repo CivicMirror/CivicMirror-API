@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import json
 import re as _re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -231,3 +232,71 @@ def parse_election_year_page(html: str) -> list[dict]:
         })
 
     return results
+
+
+def parse_fcpa_race_search_response(json_text: str) -> tuple[list[dict], int]:
+    """Parse a com.acf.common.page.politicalracesearchresults JSON response."""
+    payload = json.loads(json_text)
+    if not payload.get("success"):
+        raise AlSosError("Alabama FCPA race search response reported success=false")
+
+    data = payload.get("data") or {}
+    rows = [
+        {
+            "committee_id": row["COMMITTEEID"],
+            "candidate_name": _clean(row.get("CANDIDATE", "")),
+            "candidate_status": row.get("CANDIDATESTATUS", ""),
+            "year": row.get("YEAR"),
+        }
+        for row in data.get("list", [])
+    ]
+    return rows, int(data.get("totalRecords", 0))
+
+
+def _extract_balanced_object(text: str, marker: str) -> str:
+    """Extract the {...} object literal immediately following `marker`."""
+    start = text.find(marker)
+    if start == -1:
+        raise AlSosError(f"Alabama FCPA committee detail page missing {marker!r}")
+    brace_start = text.find("{", start)
+    if brace_start == -1:
+        raise AlSosError("Alabama FCPA committee detail page missing object literal")
+
+    depth = 0
+    for i in range(brace_start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[brace_start:i + 1]
+    raise AlSosError("Alabama FCPA committee detail page has unterminated object literal")
+
+
+def parse_fcpa_committee_detail(html: str) -> dict:
+    """
+    Parse the committeeDetailsObj JSON embedded in a committee detail page
+    (page.acfPublicCommitteeDetails). Verified strict JSON against the real
+    capture in docs/state-research/AL/fcpa.alabamavotes.gov_Archive
+    [26-07-20 12-42-17].har -- json.loads works directly, no JS-literal
+    normalization needed.
+    """
+    raw = _extract_balanced_object(html, "committeeDetailsObj")
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise AlSosError(f"Alabama FCPA committeeDetailsObj is not valid JSON: {exc}") from exc
+
+    return {
+        "committee_id": data.get("id"),
+        "candidateFirstName": data.get("candidateFirstName", ""),
+        "candidateMiddleName": data.get("candidateMiddleName", ""),
+        "candidateLastName": data.get("candidateLastName", ""),
+        "suffix": data.get("suffix", ""),
+        "office": data.get("office", ""),
+        "jurisdiction": data.get("jurisdiction", ""),
+        "district": data.get("district", ""),
+        "party": data.get("party", ""),
+        "committeeStatus": data.get("committeeStatus", ""),
+        "dissolved": bool(data.get("dissolved", False)),
+    }
