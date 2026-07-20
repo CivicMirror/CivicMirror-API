@@ -121,7 +121,16 @@ Parse with pandas/openpyxl; `Statistics.Precincts Reported == Total Precincts` p
 
 URL pattern is `/sites/default/files/election-data/{YYYY-MM}/{human-named-file}` — the month bucket is the *upload* month, not the election month, and filenames are inconsistent (spaces, underscores, `_0`/`_1` dedupe suffixes). **File discovery must scrape the election-data page HTML**; URL construction from naming patterns is not reliable.
 
-⚠️ ZIP internal format not verified this session — the sandbox couldn't reach sos.alabama.gov (egress proxy TLS failure; the site also disallows robots). Download one locally and confirm the per-precinct schema before building the certified adapter.
+**Precinct ZIP internal schema — verified 2026-07-20** against `election-data/2020-08/2020 Primary Runoff Precinct Results.zip` (found via the HTML link list in the captured election-data page, re-downloaded fresh and confirmed byte-identical to the copy already in this folder):
+
+- Real legacy binary `.xls` (BIFF/OLE2 Compressed Document format) — requires `xlrd`, not `openpyxl` or pandas' default engine.
+- One `.xls` file per county, named `{Election-Label}-{CountyName}.xls`; county comes from the filename, not file contents.
+- One sheet per file, named `Precinct Results`. Header row: `Contest Title | Party | Candidate` followed by one column per precinct in that county (column count varies by county's precinct count).
+- Rows 1–6 are county-wide summary stats (`Registered Voters - Total`, `Ballots Cast - Total`, `Ballots Cast - Democrat/Republican/Non-Partisan/Blank`) rather than contest rows.
+- Every contest below contributes one row per candidate, plus synthetic `Over Votes`/`Under Votes` rows per contest/party.
+- Confirmed the full archive contains all 67 counties (not a partial capture) with a consistent schema across all 67 files.
+
+⚠️ TLS gotcha for a future certified/precinct-level HTTP client: `sos.alabama.gov`'s server does not send its GlobalSign intermediate certificate, so standard verification fails with `unable to get local issuer certificate` / `unable to verify the first certificate` from a bare `requests`/`curl` client (confirmed via `openssl s_client`, not a proxy or network-egress issue — the leaf cert itself is legitimate, subject `O=State of Alabama`). A production client will need either the intermediate bundled locally or an explicit, documented certificate-pinning/verify workaround.
 
 ### Per-Year Certification Files
 
@@ -139,14 +148,14 @@ Same caveat: no stable naming; scrape the year page.
 
 - **Election night (live):** deterministic adapter polling the ENR export postback. One request returns the full statewide picture including reporting progress. Suggest ≥60s polling interval; the Statistics sheet's per-county `Last Updated` timestamps let you skip unchanged counties downstream. Fits the hybrid architecture as a structured-source adapter, keyed by ecode (manual config per election).
 - **Certified (post-election):** xlsx ingestion from the Drupal year pages, with HTML-scrape discovery. Two format families so far: the ENR-style export schema and the simpler PARTY/CONTEST/CANDIDATE/TOTALVOTES per-county-sheet layout.
-- **Precinct-level:** ZIP archives fill the sub-county granularity ENR lacks — verify format, then decide deterministic vs. LLM pipeline.
+- **Precinct-level:** ZIP archives fill the sub-county granularity ENR lacks. Schema is now verified (see above) — legacy `.xls` per county, `Precinct Results` sheet, `Contest Title | Party | Candidate | {precinct columns}` — a deterministic parser (via `xlrd`) is feasible; no LLM pipeline needed.
 
 ## Open Questions
 
 - No AUP/terms found on the ENR site (cf. Kentucky, where AUP confirmation was required before using live ENR). Nothing prohibitive observed, but worth a look before election-night polling at scale.
 - ecode discovery per election — check on the next election night whether SOS's homepage or election-information page links the live ecode, or whether it stays bookmark-only.
-- Precinct ZIP internal schema (blocked from sandbox; verify locally).
 - Whether ENR serves partial results identically mid-count (capture was post-certification; 100% precincts reported).
+- Certified/precinct-level HTTP client needs a documented fix for `sos.alabama.gov`'s missing intermediate certificate (see TLS gotcha above) before it can be built as a standard `requests`-based adapter.
 
 ---
 
