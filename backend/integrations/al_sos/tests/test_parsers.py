@@ -135,3 +135,22 @@ def test_parse_election_year_page_source_id_is_stable_and_unique():
 
     assert len(source_ids) == len(set(source_ids))
     assert all(sid.startswith("al_sos_2026_") for sid in source_ids)
+
+
+def test_parse_election_year_page_does_not_split_on_plain_hyphen_in_name():
+    html = (
+        "<h3>City Council District 63 - Runoff – January 13, 2026</h3>"
+        "<blockquote><p><a href=\"/x.pdf\">Doc</a></p></blockquote>"
+    )
+    elections = parse_election_year_page(html)
+
+    assert len(elections) == 1
+    assert elections[0]["name"] == "City Council District 63 - Runoff"
+    assert elections[0]["election_date"] == dt.date(2026, 1, 13)
+
+
+def test_parse_election_year_page_classifies_general_runoff():
+    html = "<h3>General Election Runoff – December 1, 2026</h3><blockquote></blockquote>"
+    elections = parse_election_year_page(html)
+
+    assert elections[0]["election_type"] == "general_runoff"
