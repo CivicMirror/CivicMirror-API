@@ -1,9 +1,10 @@
+import datetime as dt
 import io
 from pathlib import Path
 
 from openpyxl import load_workbook
 
-from integrations.al_sos.parsers import normalize_contest_title, parse_enr_workbook
+from integrations.al_sos.parsers import normalize_contest_title, parse_enr_workbook, parse_election_year_page
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -88,3 +89,49 @@ def _save_workbook(workbook) -> bytes:
     output = io.BytesIO()
     workbook.save(output)
     return output.getvalue()
+
+
+def _year_page_html() -> str:
+    return (FIXTURES / "al_year_page_2026.html").read_text()
+
+
+def test_parse_election_year_page_finds_all_headings():
+    elections = parse_election_year_page(_year_page_html())
+
+    assert len(elections) == 4
+    names = [e["name"] for e in elections]
+    assert "Special General Election House District 63" in names
+    assert "Primary Election" in names
+    assert "Primary Runoff Election" in names
+    assert "General Election" in names
+
+
+def test_parse_election_year_page_extracts_dates_and_types():
+    elections = parse_election_year_page(_year_page_html())
+    by_name = {e["name"]: e for e in elections}
+
+    assert by_name["Primary Election"]["election_date"] == dt.date(2026, 5, 19)
+    assert by_name["Primary Election"]["election_type"] == "primary"
+    assert by_name["Primary Runoff Election"]["election_date"] == dt.date(2026, 6, 16)
+    assert by_name["Primary Runoff Election"]["election_type"] == "primary_runoff"
+    assert by_name["General Election"]["election_date"] == dt.date(2026, 11, 3)
+    assert by_name["General Election"]["election_type"] == "general"
+    assert by_name["Special General Election House District 63"]["election_type"] == "special"
+
+
+def test_parse_election_year_page_extracts_document_links():
+    elections = parse_election_year_page(_year_page_html())
+    by_name = {e["name"]: e for e in elections}
+
+    primary_links = by_name["Primary Election"]["document_links"]
+    assert {"label": "Sample Ballots", "url": "https://www.sos.alabama.gov/alabama-votes/2026-primary-election-sample-ballots"} in primary_links
+    republican_cert = next(link for link in primary_links if "Republican Party Certification" in link["label"])
+    assert republican_cert["url"] == "https://www.sos.alabama.gov/sites/default/files/election-2026/2026RepublicanCertification.pdf"
+
+
+def test_parse_election_year_page_source_id_is_stable_and_unique():
+    elections = parse_election_year_page(_year_page_html())
+    source_ids = [e["source_id"] for e in elections]
+
+    assert len(source_ids) == len(set(source_ids))
+    assert all(sid.startswith("al_sos_2026_") for sid in source_ids)

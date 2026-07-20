@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import datetime as dt
 import io
-import re
+import re as _re
 from collections import defaultdict
 from dataclasses import dataclass
+from urllib.parse import urljoin
 
+from bs4 import BeautifulSoup
 from openpyxl import load_workbook
 
 from results.adapters.base import ResultRow
 
 from .exceptions import AlSosError
 
-_PARTY_SUFFIX_RE = re.compile(r"\s+\(([A-Z]{2,5})\)\s*$")
+_PARTY_SUFFIX_RE = _re.compile(r"\s+\(([A-Z]{2,5})\)\s*$")
+
+_YEAR_PAGE_BASE_URL = "https://www.sos.alabama.gov"
+_DASH_RE = _re.compile(r"\s[‐-―-]\s")
 
 
 @dataclass(frozen=True)
@@ -162,3 +167,63 @@ def _clean(value) -> str:
 
 def _is_write_in(value: str) -> bool:
     return "write-in" in value.lower() or "write in" in value.lower()
+
+
+def _slugify(text: str) -> str:
+    return _re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+
+
+def _infer_election_type(heading_text: str) -> str:
+    lowered = heading_text.lower()
+    if "special" in lowered:
+        return "special"
+    if "runoff" in lowered:
+        return "primary_runoff"
+    if "primary" in lowered:
+        return "primary"
+    if "general" in lowered:
+        return "general"
+    if "municipal" in lowered:
+        return "municipal"
+    return "other"
+
+
+def parse_election_year_page(html: str) -> list[dict]:
+    """
+    Parse an Alabama SOS year-specific Election Information page
+    (www.sos.alabama.gov/alabama-votes/voter/election-information/{year}).
+
+    Each <h3> heading is "{Name} – {Month Day, Year}"; the immediately
+    following <blockquote> holds that election's official document links.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    results: list[dict] = []
+
+    for heading in soup.find_all("h3"):
+        text = " ".join(heading.get_text().split())
+        parts = _DASH_RE.split(text, maxsplit=1)
+        if len(parts) != 2:
+            continue
+        name, date_text = parts[0].strip(), parts[1].strip()
+        try:
+            election_date = dt.datetime.strptime(date_text, "%B %d, %Y").date()
+        except ValueError:
+            continue
+
+        blockquote = heading.find_next_sibling("blockquote")
+        document_links = []
+        if blockquote is not None:
+            for a in blockquote.find_all("a", href=True):
+                label = " ".join(a.get_text().split())
+                url = urljoin(_YEAR_PAGE_BASE_URL, a["href"])
+                document_links.append({"label": label, "url": url})
+
+        results.append({
+            "name": name,
+            "election_date": election_date,
+            "election_type": _infer_election_type(name),
+            "source_id": f"al_sos_{election_date.year}_{_slugify(name)}",
+            "document_links": document_links,
+        })
+
+    return results

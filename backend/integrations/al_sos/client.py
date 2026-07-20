@@ -74,3 +74,12 @@ class AlSosClient:
         if "spreadsheetml" not in content_type and "sosEnrExport.xlsx" not in disposition:
             raise AlSosError("Alabama ENR export did not return an Excel workbook")
         return post_response.content
+
+    def fetch_election_year_page(self, year: int) -> str:
+        url = f"https://www.sos.alabama.gov/alabama-votes/voter/election-information/{year}"
+        try:
+            response = self.session.get(url, timeout=self.timeout)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise AlSosRetryableError(f"Alabama election-information page request failed: {exc}") from exc
+        return response.text
