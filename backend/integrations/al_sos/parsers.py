@@ -296,6 +296,7 @@ def parse_fcpa_committee_detail(html: str) -> dict:
         "office": data.get("office", ""),
         "jurisdiction": data.get("jurisdiction", ""),
         "district": data.get("district", ""),
+        "place": data.get("place", ""),
         "party": data.get("party", ""),
         "committeeStatus": data.get("committeeStatus", ""),
         "dissolved": bool(data.get("dissolved", False)),

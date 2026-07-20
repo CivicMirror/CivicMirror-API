@@ -35,6 +35,30 @@ def test_geography_scope():
     assert geography_scope("Governor") == "statewide"
 
 
+def test_normalize_office_title_state_board_of_education_with_district():
+    assert normalize_office_title("State Board of Education", "3") == "State Board of Education - District 3"
+
+
+def test_normalize_office_title_state_board_of_education_without_district():
+    assert normalize_office_title("State Board of Education", "") == "State Board of Education"
+
+
+def test_normalize_office_title_public_service_commissioner_with_place():
+    assert normalize_office_title("Public Service Commissioner", "", place="1") == "Public Service Commissioner - Place 1"
+
+
+def test_normalize_office_title_public_service_commissioner_without_place():
+    assert normalize_office_title("Public Service Commissioner", "") == "Public Service Commissioner"
+
+
+def test_geography_scope_state_board_of_education_is_legislative_district():
+    assert geography_scope("State Board of Education - District 3") == "state_legislative_district"
+
+
+def test_geography_scope_public_service_commissioner_is_statewide():
+    assert geography_scope("Public Service Commissioner - Place 1") == "statewide"
+
+
 def test_party_abbrev():
     assert party_abbrev("Republican") == "REP"
     assert party_abbrev("Democratic") == "DEM"

@@ -148,6 +148,72 @@ def test_sync_al_fcpa_candidates_creates_race_and_candidate():
 
 
 @pytest.mark.django_db
+def test_sync_al_fcpa_candidates_state_board_of_education_districts_stay_distinct():
+    import json as _json
+
+    from elections.models import Race
+    from integrations.al_sos.tasks import sync_al_fcpa_candidates
+
+    _make_al_election()
+
+    search_page_district_3 = {
+        "data": {
+            "totalRecords": 1,
+            "list": [
+                {"COMMITTEEID": 9101, "CANDIDATE": "ALPHA, ANN", "CANDIDATESTATUS": "Active", "YEAR": 2026},
+            ],
+        },
+        "success": True,
+    }
+    search_page_district_5 = {
+        "data": {
+            "totalRecords": 1,
+            "list": [
+                {"COMMITTEEID": 9102, "CANDIDATE": "BETA, BOB", "CANDIDATESTATUS": "Active", "YEAR": 2026},
+            ],
+        },
+        "success": True,
+    }
+    detail_by_committee = {
+        9101: {**_COMMITTEE_DETAIL, "committee_id": 9101, "office": "State Board of Education",
+               "district": "3", "candidateFirstName": "Ann", "candidateLastName": "Alpha"},
+        9102: {**_COMMITTEE_DETAIL, "committee_id": 9102, "office": "State Board of Education",
+               "district": "5", "candidateFirstName": "Bob", "candidateLastName": "Beta"},
+    }
+
+    def _fetch_race_search(election_id, office_id, page_number, page_size=100):
+        if office_id != 39 or page_number != 1:
+            return _json.dumps(_SEARCH_PAGE_EMPTY)
+        # SBOE search results aren't split by district; both candidates come
+        # back under office_id=39 and district is only known from the detail page.
+        return _json.dumps({
+            "data": {
+                "totalRecords": 2,
+                "list": search_page_district_3["data"]["list"] + search_page_district_5["data"]["list"],
+            },
+            "success": True,
+        })
+
+    with patch("integrations.al_sos.tasks.AlSosClient") as MC:
+        client = MC.return_value
+        client.fetch_fcpa_race_search.side_effect = _fetch_race_search
+        client.fetch_fcpa_committee_detail.side_effect = lambda committee_id: str(committee_id)
+        with patch(
+            "integrations.al_sos.tasks.parse_fcpa_committee_detail",
+            side_effect=lambda html: detail_by_committee[int(html)],
+        ):
+            sync_al_fcpa_candidates.apply()
+
+    assert Race.objects.filter(
+        election__state="AL", office_title="State Board of Education - District 3"
+    ).exists()
+    assert Race.objects.filter(
+        election__state="AL", office_title="State Board of Education - District 5"
+    ).exists()
+    assert Race.objects.filter(office_title__startswith="State Board of Education").count() == 2
+
+
+@pytest.mark.django_db
 def test_sync_al_fcpa_candidates_skips_elections_without_fcpa_id():
     from elections.models import Race
     from integrations.al_sos.tasks import sync_al_fcpa_candidates

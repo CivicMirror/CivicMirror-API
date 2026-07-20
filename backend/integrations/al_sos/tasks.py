@@ -154,7 +154,9 @@ def sync_al_fcpa_candidates(self):
                         if detail["dissolved"]:
                             dissolved_committee_ids.add(committee_id)
 
-                        office_title = normalize_office_title(detail["office"], detail["district"])
+                        office_title = normalize_office_title(
+                            detail["office"], detail["district"], detail.get("place", "")
+                        )
                         race, race_created = ingest.ingest_race(
                             election=election,
                             source="al_sos",

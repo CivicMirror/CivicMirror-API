@@ -45,26 +45,43 @@ _PARTY_MAP = {
 }
 
 
-def normalize_office_title(office: str, district: str) -> str:
+def normalize_office_title(office: str, district: str, place: str = "") -> str:
     """
     E.g. ("State Senator", "27") -> "State Senate - District 27", matching
     the cross-state convention used by integrations.pa_sos and
     integrations.mi_sos.
+
+    State Board of Education (office id 39) has 8 elected districts and
+    Public Service Commissioner (office ids 31/32) is elected statewide by
+    "Place" -- both need their district/place folded into the title, or
+    every district/place collapses into a single race via ingest_race's
+    canonical key (office_title + ocd_division_id + race_type).
     """
     office = (office or "").strip()
     district = (district or "").strip()
+    place = (place or "").strip()
     title = _OFFICE_TITLE_OVERRIDES.get(office, office)
 
     if title == "State Senator":
         return f"State Senate - District {district}" if district else "State Senate"
     if title == "State Representative":
         return f"State House - District {district}" if district else "State House"
+    if title == "State Board of Education":
+        return f"State Board of Education - District {district}" if district else "State Board of Education"
+    if title == "Public Service Commissioner":
+        return f"Public Service Commissioner - Place {place}" if place else "Public Service Commissioner"
     return title
 
 
 def geography_scope(office_title: str) -> str:
-    title = office_title.lower()
-    if "state senate" in title or "state house" in title:
+    """
+    Districted state-legislative-style offices normalize their title to
+    "... - District {N}" (State Senate, State House, State Board of
+    Education); anything else -- including Public Service Commissioner,
+    which is elected statewide at-large by "Place" rather than by a
+    sub-state jurisdiction -- is statewide.
+    """
+    if " - district" in office_title.lower():
         return "state_legislative_district"
     return "statewide"
 
