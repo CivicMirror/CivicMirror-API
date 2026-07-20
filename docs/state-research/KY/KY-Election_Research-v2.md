@@ -15,7 +15,7 @@
 |---|---:|---|---|
 | Stage 1 — Election Creation | ✅ Available | Kentucky `Elections` XML, supplemented by Google Civic Information | The official XML provides election ID, name, type, and date. |
 | Stage 1 — Race Creation | ✅ Path identified | Kentucky `Contests`, `Candidates`, `PoliticalParties`, and `GeopoliticalUnits` XML | The official datasets provide stable IDs and jurisdiction relationships. |
-| Stage 2 — Live Results Ingestion | ✅ Available with operational caution | Kentucky `/liveresults/Data` XML downloads | Officially documented XML files; current results are refreshed every two minutes. Do not scrape the rendered HTML pages. |
+| Stage 2 — Live Results Ingestion | ✅ Available with operational caution | Kentucky `/liveresults/Data` XML downloads | Officially documented XML files; current results are refreshed every two minutes, but CivicMirror does not need to poll at that cadence. Do not scrape the rendered HTML pages. |
 | Stage 2 — Certified Results | ✅ Available | `elect.ky.gov` certification and recap files | Use as the authoritative final comparison baseline. |
 | Historical normalization | ✅ Available, may lag | OpenElections Kentucky | Useful standardized CSVs, but volunteer-maintained and not a guaranteed live source. |
 
@@ -453,7 +453,9 @@ The existence of a separately documented XML download page changes the implement
 
 - Avoid automating the rendered HTML interface.
 - Use the documented XML download paths.
-- Poll no faster than the published two-minute update rate.
+- Treat the published two-minute update rate as the source's maximum useful refresh cadence, not CivicMirror's default polling schedule.
+- Poll once every 24 hours during off-season periods, aligned with the other nightly state syncs, so special or off-cycle elections are still detected.
+- During active election windows, increase polling to hourly unless project needs later justify a faster cadence.
 - Identify itself honestly where a user agent is accepted.
 - Apply conditional requests and backoff where supported.
 - Contact the Kentucky State Board of Elections for clarification or allowlisting if the production host receives a policy block.
@@ -624,14 +626,16 @@ At the beginning of an election cycle or ingestion run:
 
 During election-night reporting:
 
-1. Poll `CurrentResultsExcludeLocal` every two minutes when only federal, statewide, congressional, and legislative contests are required.
-2. Poll `CurrentResults` when county, city, judicial, school, or other local contests are required.
-3. Do not poll both full feeds unless there is a specific need.
-4. Save the original XML response with retrieval time and checksum.
-5. Skip processing when the response hash has not changed.
-6. Join result records using `gpu_id`, `contest_id`, and `candidate_id`.
-7. Update reporting status from `ReportData.status`.
-8. Label all records `unofficial` until certification.
+1. Poll once every 24 hours during off-season periods, aligned with the other nightly state syncs, so special or off-cycle elections are still detected.
+2. During active election windows, poll hourly. The official XML refreshes every two minutes, but that cadence is not necessary for CivicMirror unless future needs demand it.
+3. Poll `CurrentResultsExcludeLocal` when only federal, statewide, congressional, and legislative contests are required.
+4. Poll `CurrentResults` when county, city, judicial, school, or other local contests are required.
+5. Do not poll both full feeds unless there is a specific need.
+6. Save the original XML response with retrieval time and checksum.
+7. Skip processing when the response hash has not changed.
+8. Join result records using `gpu_id`, `contest_id`, and `candidate_id`.
+9. Update reporting status from `ReportData.status`.
+10. Label all records `unofficial` until certification.
 
 ### Phase C — Failure handling
 
@@ -658,7 +662,9 @@ source_id: ky_sbe_live_xml
 source_type: official_unofficial_results
 base_url: https://vrsws.sos.ky.gov/liveresults/Data
 format: xml
-minimum_poll_interval_seconds: 120
+source_refresh_interval_seconds: 120
+off_season_poll_interval_seconds: 86400
+active_election_poll_interval_seconds: 3600
 result_type: unofficial
 
 source_id: ky_sbe_certified
@@ -712,7 +718,7 @@ Version 2 makes the following corrections and additions:
 8. **Adds predictable county cumulative and precinct PDF routes** discovered in the HAR.
 9. **Qualifies the Akamai conclusion:** the HAR confirms browser-validation infrastructure but does not contain a 403 or Acceptable Use Policy page.
 10. **Keeps certified Kentucky files as the final authority** and OpenElections as the historical/normalized secondary source.
-11. **Adds an implementation workflow** for metadata loading, two-minute polling, backoff, raw snapshot retention, and certification reconciliation.
+11. **Adds an implementation workflow** for metadata loading, nightly off-season polling, hourly active-election polling, backoff, raw snapshot retention, and certification reconciliation.
 
 ---
 
@@ -722,7 +728,7 @@ Kentucky has a viable official integration path.
 
 The rendered ENR website should be treated as a browser-facing verification layer, not scraped as an API. The attached HAR confirms that it serves complete HTML pages, uses geopolitical-unit IDs for navigation, reloads at three-minute intervals when auto-refresh is enabled, exposes county PDF downloads, and operates behind Akamai browser validation.
 
-The official `/liveresults/Data` page is the appropriate machine-readable layer. Its documented XML files supply the metadata and vote totals necessary to create elections, races, jurisdictions, candidates, and live result records. Polling should follow the published two-minute refresh schedule and stop or back off once reporting is final.
+The official `/liveresults/Data` page is the appropriate machine-readable layer. Its documented XML files supply the metadata and vote totals necessary to create elections, races, jurisdictions, candidates, and live result records. The files refresh every two minutes, but CivicMirror should poll nightly during off-season periods and hourly during active election windows, then stop or back off once reporting is final.
 
 Certified results from `elect.ky.gov` remain the authoritative final baseline. OpenElections remains a useful standardized historical supplement but should not be relied on for immediate election-night coverage.
 
