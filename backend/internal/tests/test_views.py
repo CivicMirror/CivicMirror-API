@@ -405,3 +405,45 @@ def test_sync_tn_sos_has_lock():
     from internal.task_locks import TASK_LOCKS
 
     assert TASK_LOCKS["sync_tn_sos"] == ("daily", 23 * 60 * 60)
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_al_elections_valid_token(client, internal_token):
+    with patch("internal.views.sync_al_elections") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "al-elections-1"
+        mock_task.apply_async.return_value = mock_result
+        response = client.post(
+            "/internal/tasks/sync-al-elections/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert response.status_code == 202
+    assert response.json()["task_id"] == "al-elections-1"
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_al_fcpa_valid_token(client, internal_token):
+    with patch("internal.views.sync_al_fcpa_candidates") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "al-fcpa-1"
+        mock_task.apply_async.return_value = mock_result
+        response = client.post(
+            "/internal/tasks/sync-al-fcpa/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert response.status_code == 202
+    assert response.json()["task_id"] == "al-fcpa-1"
+
+
+def test_sync_al_elections_has_lock():
+    from internal.task_locks import TASK_LOCKS
+
+    assert TASK_LOCKS["sync_al_elections"] == ("daily", 23 * 60 * 60)
+
+
+def test_sync_al_fcpa_has_lock():
+    from internal.task_locks import TASK_LOCKS
+
+    assert TASK_LOCKS["sync_al_fcpa"] == ("daily", 23 * 60 * 60)
