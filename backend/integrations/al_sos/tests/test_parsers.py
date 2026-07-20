@@ -162,6 +162,26 @@ def test_parse_election_year_page_classifies_general_runoff():
     assert elections[0]["election_type"] == "general_runoff"
 
 
+def test_parse_election_year_page_distinguishes_same_date_specials_by_jurisdiction():
+    html = (
+        "<h3>Special Primary Election, Congressional Districts 1, 2, 6, and 7 "
+        "– August 11, 2026</h3><blockquote></blockquote>"
+        "<h3>Special Primary Election, State Senate Districts 25 and 26 "
+        "– August 11, 2026</h3><blockquote></blockquote>"
+    )
+    elections = parse_election_year_page(html)
+    by_name = {e["name"]: e for e in elections}
+
+    assert by_name["Special Primary Election, Congressional Districts 1, 2, 6, and 7"]["jurisdiction_level"] == "national"
+    assert by_name["Special Primary Election, State Senate Districts 25 and 26"]["jurisdiction_level"] == "state"
+
+
+def test_parse_election_year_page_non_congressional_defaults_to_state_jurisdiction():
+    elections = parse_election_year_page(_year_page_html())
+
+    assert all(e["jurisdiction_level"] == "state" for e in elections)
+
+
 def _search_results_json() -> str:
     return (FIXTURES / "al_fcpa_search_results_page1.json").read_text()
 

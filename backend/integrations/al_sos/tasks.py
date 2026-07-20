@@ -70,7 +70,7 @@ def sync_al_elections(self, year: int | None = None):
                     "state": "AL",
                     "election_type": entry["election_type"],
                     "election_date": entry["election_date"],
-                    "jurisdiction_level": "state",
+                    "jurisdiction_level": entry["jurisdiction_level"],
                 },
                 fields={
                     "name": entry["name"],

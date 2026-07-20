@@ -193,6 +193,10 @@ def _infer_election_type(heading_text: str) -> str:
     return "other"
 
 
+def _infer_jurisdiction_level(heading_text: str) -> str:
+    return "national" if "congressional" in heading_text.lower() else "state"
+
+
 def parse_election_year_page(html: str) -> list[dict]:
     """
     Parse an Alabama SOS year-specific Election Information page
@@ -200,6 +204,14 @@ def parse_election_year_page(html: str) -> list[dict]:
 
     Each <h3> heading is "{Name} – {Month Day, Year}"; the immediately
     following <blockquote> holds that election's official document links.
+
+    jurisdiction_level is inferred from the heading text (anything mentioning
+    "Congressional" is "national", otherwise "state") so that two same-date
+    special elections at different jurisdiction levels (e.g. a Congressional
+    special and a State Senate special on the same day) get distinct
+    canonical keys instead of colliding. This is a targeted fix, not a
+    general solution: two same-date specials at the SAME jurisdiction level
+    (e.g. two State Senate specials scheduled together) would still collide.
     """
     soup = BeautifulSoup(html, "html.parser")
     results: list[dict] = []
@@ -227,6 +239,7 @@ def parse_election_year_page(html: str) -> list[dict]:
             "name": name,
             "election_date": election_date,
             "election_type": _infer_election_type(name),
+            "jurisdiction_level": _infer_jurisdiction_level(name),
             "source_id": f"al_sos_{election_date.year}_{_slugify(name)}",
             "document_links": document_links,
         })
