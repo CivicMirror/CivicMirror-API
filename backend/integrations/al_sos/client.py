@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from urllib.parse import parse_qs, urlparse
+import base64
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -8,6 +9,7 @@ from bs4 import BeautifulSoup
 from .exceptions import AlSosError, AlSosRetryableError
 
 _BASE_URL = "https://www2.alabamavotes.gov/electionNight/statewideResultsByContest.aspx"
+_FCPA_BASE_URL = "https://fcpa.alabamavotes.gov/page.request.do"
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -82,4 +84,44 @@ class AlSosClient:
             response.raise_for_status()
         except requests.RequestException as exc:
             raise AlSosRetryableError(f"Alabama election-information page request failed: {exc}") from exc
+        return response.text
+
+    def fetch_fcpa_race_search(self, election_id: str, office_id: int, page_number: int, page_size: int = 100) -> str:
+        params = {
+            "page": "com.acf.common.page.politicalracesearchresults",
+            "pageNumber": page_number,
+            "pageSize": page_size,
+            "sortDirection": "ASC",
+            "sortBy": "candidate",
+            "election": election_id,
+            "office": office_id,
+            "jurisdiction": "null",
+            "party": "null",
+            "place": "null",
+            "district": "null",
+            "city": "null",
+            "year": "null",
+        }
+        url = f"{_FCPA_BASE_URL}?{urlencode(params)}"
+        try:
+            response = self.session.get(url, timeout=self.timeout)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise AlSosRetryableError(f"Alabama FCPA race search request failed: {exc}") from exc
+        return response.text
+
+    def fetch_fcpa_committee_detail(self, committee_id: int) -> str:
+        encoded_type = base64.b64encode(b"pcc").decode()
+        encoded_id = base64.b64encode(str(committee_id).encode()).decode()
+        params = {
+            "page": "page.acfPublicCommitteeDetails",
+            "type": encoded_type,
+            "id": encoded_id,
+        }
+        url = f"{_FCPA_BASE_URL}?{urlencode(params)}"
+        try:
+            response = self.session.get(url, timeout=self.timeout)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise AlSosRetryableError(f"Alabama FCPA committee detail request failed: {exc}") from exc
         return response.text
