@@ -77,6 +77,28 @@ def test_sync_al_elections_preserves_curated_fcpa_election_id_on_resync():
     assert any("Sample Ballots" == link["label"] for link in links)
 
 
+_SAME_DATE_SPECIALS_HTML = (
+    "<h3>Special Primary Election, Congressional Districts 1, 2, 6, and 7 "
+    "– August 11, 2026</h3><blockquote></blockquote>"
+    "<h3>Special Primary Election, State Senate Districts 25 and 26 "
+    "– August 11, 2026</h3><blockquote></blockquote>"
+)
+
+
+@pytest.mark.django_db
+def test_sync_al_elections_keeps_same_date_specials_at_different_jurisdiction_levels_separate():
+    from elections.models import Election
+    from integrations.al_sos.tasks import sync_al_elections
+
+    with patch("integrations.al_sos.tasks.AlSosClient") as MC:
+        MC.return_value.fetch_election_year_page.return_value = _SAME_DATE_SPECIALS_HTML
+        sync_al_elections.apply(kwargs={"year": 2026})
+
+    elections = Election.objects.filter(state="AL", election_type="special", election_date="2026-08-11")
+    assert elections.count() == 2
+    assert set(elections.values_list("jurisdiction_level", flat=True)) == {"national", "state"}
+
+
 def _make_al_election(**overrides):
     from elections.models import Election
 
