@@ -94,6 +94,7 @@ A Tier A results adapter has immediate value even without a full SOS adapter —
 | **MI** | B (custom) | `results/adapters/mi.py` + `integrations/mi_sos/` | 2026-07-15 | Full Core | BOE candidate listings for Stage 1; MVIC results adapter with bulk-file and HTML fallback paths |
 | **PA** | B (custom) | `results/adapters/pa.py` + `integrations/pa_sos/` | 2026-07-15 | Full Core | PA SOS candidate-list Stage 1 plus `electionreturns.pa.gov` results adapter |
 | **KY** | Stage 1 | `integrations/ky_sos/` | 2026-07-15 | Stage 1 Coverage | Kentucky SOS race/candidate ingestion for federal/state offices; certified recap and live results ingestion remain future work |
+| **AL** | B | `results/adapters/al.py` + `integrations/al_sos/` | 2026-07-20 | Full Core | FCPA Political Race Search for state/statewide offices (Stage 1); ENR statewide Excel export for results (Stage 2, shipped earlier); `al_fcpa_election_id` in `source_metadata` is cycle-granular for regular statewide-cycle years (verified live against fcpa.alabamavotes.gov — one ID spans primary+runoff+general; special elections get per-date IDs) and must be curated per target Election; certifications/sample-ballots/district geometry deferred |
 
 **AR** validated the "Tier B without a full SOS adapter" pattern — the TotalVote REST API is richer than Clarity and eliminates the need for election-by-election `results_url` config. AR elections/races still come from Civic API (Stage 1 only).
 

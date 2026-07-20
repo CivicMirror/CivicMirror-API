@@ -1,9 +1,16 @@
+import datetime as dt
 import io
 from pathlib import Path
 
 from openpyxl import load_workbook
 
-from integrations.al_sos.parsers import normalize_contest_title, parse_enr_workbook
+from integrations.al_sos.parsers import (
+    normalize_contest_title,
+    parse_election_year_page,
+    parse_enr_workbook,
+    parse_fcpa_committee_detail,
+    parse_fcpa_race_search_response,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -88,3 +95,122 @@ def _save_workbook(workbook) -> bytes:
     output = io.BytesIO()
     workbook.save(output)
     return output.getvalue()
+
+
+def _year_page_html() -> str:
+    return (FIXTURES / "al_year_page_2026.html").read_text()
+
+
+def test_parse_election_year_page_finds_all_headings():
+    elections = parse_election_year_page(_year_page_html())
+
+    assert len(elections) == 4
+    names = [e["name"] for e in elections]
+    assert "Special General Election House District 63" in names
+    assert "Primary Election" in names
+    assert "Primary Runoff Election" in names
+    assert "General Election" in names
+
+
+def test_parse_election_year_page_extracts_dates_and_types():
+    elections = parse_election_year_page(_year_page_html())
+    by_name = {e["name"]: e for e in elections}
+
+    assert by_name["Primary Election"]["election_date"] == dt.date(2026, 5, 19)
+    assert by_name["Primary Election"]["election_type"] == "primary"
+    assert by_name["Primary Runoff Election"]["election_date"] == dt.date(2026, 6, 16)
+    assert by_name["Primary Runoff Election"]["election_type"] == "primary_runoff"
+    assert by_name["General Election"]["election_date"] == dt.date(2026, 11, 3)
+    assert by_name["General Election"]["election_type"] == "general"
+    assert by_name["Special General Election House District 63"]["election_type"] == "special"
+
+
+def test_parse_election_year_page_extracts_document_links():
+    elections = parse_election_year_page(_year_page_html())
+    by_name = {e["name"]: e for e in elections}
+
+    primary_links = by_name["Primary Election"]["document_links"]
+    assert {"label": "Sample Ballots", "url": "https://www.sos.alabama.gov/alabama-votes/2026-primary-election-sample-ballots"} in primary_links
+    republican_cert = next(link for link in primary_links if "Republican Party Certification" in link["label"])
+    assert republican_cert["url"] == "https://www.sos.alabama.gov/sites/default/files/election-2026/2026RepublicanCertification.pdf"
+
+
+def test_parse_election_year_page_source_id_is_stable_and_unique():
+    elections = parse_election_year_page(_year_page_html())
+    source_ids = [e["source_id"] for e in elections]
+
+    assert len(source_ids) == len(set(source_ids))
+    assert all(sid.startswith("al_sos_2026_") for sid in source_ids)
+
+
+def test_parse_election_year_page_does_not_split_on_plain_hyphen_in_name():
+    html = (
+        "<h3>City Council District 63 - Runoff – January 13, 2026</h3>"
+        "<blockquote><p><a href=\"/x.pdf\">Doc</a></p></blockquote>"
+    )
+    elections = parse_election_year_page(html)
+
+    assert len(elections) == 1
+    assert elections[0]["name"] == "City Council District 63 - Runoff"
+    assert elections[0]["election_date"] == dt.date(2026, 1, 13)
+
+
+def test_parse_election_year_page_classifies_general_runoff():
+    html = "<h3>General Election Runoff – December 1, 2026</h3><blockquote></blockquote>"
+    elections = parse_election_year_page(html)
+
+    assert elections[0]["election_type"] == "general_runoff"
+
+
+def test_parse_election_year_page_distinguishes_same_date_specials_by_jurisdiction():
+    html = (
+        "<h3>Special Primary Election, Congressional Districts 1, 2, 6, and 7 "
+        "– August 11, 2026</h3><blockquote></blockquote>"
+        "<h3>Special Primary Election, State Senate Districts 25 and 26 "
+        "– August 11, 2026</h3><blockquote></blockquote>"
+    )
+    elections = parse_election_year_page(html)
+    by_name = {e["name"]: e for e in elections}
+
+    assert by_name["Special Primary Election, Congressional Districts 1, 2, 6, and 7"]["jurisdiction_level"] == "national"
+    assert by_name["Special Primary Election, State Senate Districts 25 and 26"]["jurisdiction_level"] == "state"
+
+
+def test_parse_election_year_page_non_congressional_defaults_to_state_jurisdiction():
+    elections = parse_election_year_page(_year_page_html())
+
+    assert all(e["jurisdiction_level"] == "state" for e in elections)
+
+
+def _search_results_json() -> str:
+    return (FIXTURES / "al_fcpa_search_results_page1.json").read_text()
+
+
+def _committee_detail_html() -> str:
+    return (FIXTURES / "al_fcpa_committee_detail_4834.html").read_text()
+
+
+def test_parse_fcpa_race_search_response_returns_rows_and_total():
+    rows, total_records = parse_fcpa_race_search_response(_search_results_json())
+
+    assert total_records == 848
+    assert len(rows) == 3
+    assert rows[0]["committee_id"] == 4834
+    assert rows[0]["candidate_name"] == "ABBETT, JIMMY"
+    assert rows[0]["candidate_status"] == "Active"
+    assert rows[0]["year"] == 2026
+
+
+def test_parse_fcpa_committee_detail_extracts_structured_fields():
+    detail = parse_fcpa_committee_detail(_committee_detail_html())
+
+    assert detail["committee_id"] == 4834
+    assert detail["candidateFirstName"] == "JIMMY"
+    assert detail["candidateLastName"] == "ABBETT"
+    assert detail["suffix"] == ""
+    assert detail["office"] == "Sheriff"
+    assert detail["jurisdiction"] == "TALLAPOOSA COUNTY"
+    assert detail["district"] == ""
+    assert detail["party"] == "Republican"
+    assert detail["committeeStatus"] == "Active"
+    assert detail["dissolved"] is False

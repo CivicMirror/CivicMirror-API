@@ -44,7 +44,7 @@ def test_coverage_tiers_reflect_full_core_definition(client):
 
     assert tiers["AZ"] == "full"
     assert tiers["AK"] == "results"
-    assert tiers["AL"] == "results"
+    assert tiers["AL"] == "full"
     assert tiers["DE"] == "results"
     assert tiers["FL"] == "full"
     assert tiers["IL"] == "full"

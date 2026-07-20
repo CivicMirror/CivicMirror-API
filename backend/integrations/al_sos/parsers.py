@@ -2,17 +2,25 @@ from __future__ import annotations
 
 import datetime as dt
 import io
-import re
+import json
+import re as _re
 from collections import defaultdict
 from dataclasses import dataclass
+from urllib.parse import urljoin
 
+from bs4 import BeautifulSoup
 from openpyxl import load_workbook
 
 from results.adapters.base import ResultRow
 
 from .exceptions import AlSosError
 
-_PARTY_SUFFIX_RE = re.compile(r"\s+\(([A-Z]{2,5})\)\s*$")
+_PARTY_SUFFIX_RE = _re.compile(r"\s+\(([A-Z]{2,5})\)\s*$")
+
+_YEAR_PAGE_BASE_URL = "https://www.sos.alabama.gov"
+_DASH_RE = _re.compile(r"\s–\s")  # en dash only -- do not add ASCII hyphen-minus here,
+# real election names may contain a plain " - " (e.g. "District 63 - Runoff") and a
+# hyphen-inclusive class would split on the wrong dash and silently drop the election.
 
 
 @dataclass(frozen=True)
@@ -162,3 +170,147 @@ def _clean(value) -> str:
 
 def _is_write_in(value: str) -> bool:
     return "write-in" in value.lower() or "write in" in value.lower()
+
+
+def _slugify(text: str) -> str:
+    return _re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+
+
+def _infer_election_type(heading_text: str) -> str:
+    lowered = heading_text.lower()
+    if "special" in lowered:
+        return "special"
+    if "runoff" in lowered and "general" in lowered:
+        return "general_runoff"
+    if "runoff" in lowered:
+        return "primary_runoff"
+    if "primary" in lowered:
+        return "primary"
+    if "general" in lowered:
+        return "general"
+    if "municipal" in lowered:
+        return "municipal"
+    return "other"
+
+
+def _infer_jurisdiction_level(heading_text: str) -> str:
+    return "national" if "congressional" in heading_text.lower() else "state"
+
+
+def parse_election_year_page(html: str) -> list[dict]:
+    """
+    Parse an Alabama SOS year-specific Election Information page
+    (www.sos.alabama.gov/alabama-votes/voter/election-information/{year}).
+
+    Each <h3> heading is "{Name} – {Month Day, Year}"; the immediately
+    following <blockquote> holds that election's official document links.
+
+    jurisdiction_level is inferred from the heading text (anything mentioning
+    "Congressional" is "national", otherwise "state") so that two same-date
+    special elections at different jurisdiction levels (e.g. a Congressional
+    special and a State Senate special on the same day) get distinct
+    canonical keys instead of colliding. This is a targeted fix, not a
+    general solution: two same-date specials at the SAME jurisdiction level
+    (e.g. two State Senate specials scheduled together) would still collide.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    results: list[dict] = []
+
+    for heading in soup.find_all("h3"):
+        text = " ".join(heading.get_text().split())
+        parts = _DASH_RE.split(text, maxsplit=1)
+        if len(parts) != 2:
+            continue
+        name, date_text = parts[0].strip(), parts[1].strip()
+        try:
+            election_date = dt.datetime.strptime(date_text, "%B %d, %Y").date()
+        except ValueError:
+            continue
+
+        blockquote = heading.find_next_sibling("blockquote")
+        document_links = []
+        if blockquote is not None:
+            for a in blockquote.find_all("a", href=True):
+                label = " ".join(a.get_text().split())
+                url = urljoin(_YEAR_PAGE_BASE_URL, a["href"])
+                document_links.append({"label": label, "url": url})
+
+        results.append({
+            "name": name,
+            "election_date": election_date,
+            "election_type": _infer_election_type(name),
+            "jurisdiction_level": _infer_jurisdiction_level(name),
+            "source_id": f"al_sos_{election_date.year}_{_slugify(name)}",
+            "document_links": document_links,
+        })
+
+    return results
+
+
+def parse_fcpa_race_search_response(json_text: str) -> tuple[list[dict], int]:
+    """Parse a com.acf.common.page.politicalracesearchresults JSON response."""
+    payload = json.loads(json_text)
+    if not payload.get("success"):
+        raise AlSosError("Alabama FCPA race search response reported success=false")
+
+    data = payload.get("data") or {}
+    rows = [
+        {
+            "committee_id": row["COMMITTEEID"],
+            "candidate_name": _clean(row.get("CANDIDATE", "")),
+            "candidate_status": row.get("CANDIDATESTATUS", ""),
+            "year": row.get("YEAR"),
+        }
+        for row in data.get("list", [])
+    ]
+    return rows, int(data.get("totalRecords", 0))
+
+
+def _extract_balanced_object(text: str, marker: str) -> str:
+    """Extract the {...} object literal immediately following `marker`."""
+    start = text.find(marker)
+    if start == -1:
+        raise AlSosError(f"Alabama FCPA committee detail page missing {marker!r}")
+    brace_start = text.find("{", start)
+    if brace_start == -1:
+        raise AlSosError("Alabama FCPA committee detail page missing object literal")
+
+    depth = 0
+    for i in range(brace_start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[brace_start:i + 1]
+    raise AlSosError("Alabama FCPA committee detail page has unterminated object literal")
+
+
+def parse_fcpa_committee_detail(html: str) -> dict:
+    """
+    Parse the committeeDetailsObj JSON embedded in a committee detail page
+    (page.acfPublicCommitteeDetails). Verified strict JSON against the real
+    capture in docs/state-research/AL/fcpa.alabamavotes.gov_Archive
+    [26-07-20 12-42-17].har -- json.loads works directly, no JS-literal
+    normalization needed.
+    """
+    raw = _extract_balanced_object(html, "committeeDetailsObj")
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise AlSosError(f"Alabama FCPA committeeDetailsObj is not valid JSON: {exc}") from exc
+
+    return {
+        "committee_id": data.get("id"),
+        "candidateFirstName": data.get("candidateFirstName", ""),
+        "candidateMiddleName": data.get("candidateMiddleName", ""),
+        "candidateLastName": data.get("candidateLastName", ""),
+        "suffix": data.get("suffix", ""),
+        "office": data.get("office", ""),
+        "jurisdiction": data.get("jurisdiction", ""),
+        "district": data.get("district", ""),
+        "place": data.get("place", ""),
+        "party": data.get("party", ""),
+        "committeeStatus": data.get("committeeStatus", ""),
+        "dissolved": bool(data.get("dissolved", False)),
+    }
