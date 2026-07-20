@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -63,3 +63,32 @@ def test_fetch_enr_export_posts_hidden_fields():
         },
         timeout=60,
     )
+
+
+def test_fetch_fcpa_race_search_builds_correct_url():
+    client = AlSosClient()
+    with patch.object(client.session, "get") as mock_get:
+        mock_get.return_value = MagicMock(status_code=200, text='{"data":{"totalRecords":0,"list":[]},"success":true}')
+        mock_get.return_value.raise_for_status = MagicMock()
+        client.fetch_fcpa_race_search("160", 23, 1)
+
+    url = mock_get.call_args[0][0]
+    assert "page=com.acf.common.page.politicalracesearchresults" in url
+    assert "election=160" in url
+    assert "office=23" in url
+    assert "pageNumber=1" in url
+    assert "pageSize=100" in url
+
+
+def test_fetch_fcpa_committee_detail_base64_encodes_id():
+    client = AlSosClient()
+    with patch.object(client.session, "get") as mock_get:
+        mock_get.return_value = MagicMock(status_code=200, text="<html></html>")
+        mock_get.return_value.raise_for_status = MagicMock()
+        client.fetch_fcpa_committee_detail(4834)
+
+    url = mock_get.call_args[0][0]
+    # base64("pcc") == "cGNj", base64("4834") == "NDgzNA==" -- verified against
+    # the real captured URL in the FCPA HAR.
+    assert "type=cGNj" in url
+    assert "id=NDgzNA%3D%3D" in url or "id=NDgzNA==" in url
