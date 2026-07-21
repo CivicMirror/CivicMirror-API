@@ -89,6 +89,31 @@ def test_candidate_matching_by_normalized_name_and_party(ca_precedence):
 
 
 @pytest.mark.django_db
+def test_ingest_candidate_same_name_different_party_updates_existing_row(ca_precedence):
+    """The DB's unique_candidate_name_per_race constraint is (race, name) only —
+    it has no notion of party. A second filing for the same name in the same
+    race with a party string that doesn't normalize to the same code as the
+    first must not attempt a second INSERT (that IntegrityErrors); it should
+    reconcile onto the existing row instead, same as any other field update.
+    """
+    e, _ = ingest.ingest_election(source="or_sos", source_id="x", identity=_election_identity(), fields={})
+    r, _ = ingest.ingest_race(
+        election=e, source="or_sos",
+        identity={"office_title": "State Representative", "ocd_division_id": "", "race_type": "candidate"},
+        fields={"office_title": "State Representative"},
+    )
+    c1, created1 = ingest.ingest_candidate(race=r, source="or_sos", name="April Dobson", party="Democrat",
+                                            fields={})
+    c2, created2 = ingest.ingest_candidate(race=r, source="or_sos", name="April Dobson", party="D",
+                                            fields={})
+
+    assert created1 is True
+    assert created2 is False
+    assert c1.pk == c2.pk
+    assert Candidate.objects.filter(race=r, name="April Dobson").count() == 1
+
+
+@pytest.mark.django_db
 def test_ingest_election_flags_review_when_date_missing(ca_precedence):
     e, _ = ingest.ingest_election(
         source="ca_sos", source_id="bad",
