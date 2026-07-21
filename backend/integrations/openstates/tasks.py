@@ -10,7 +10,7 @@ from integrations.orchestrator.exceptions import AmbiguousMatchError
 from integrations.orchestrator.source_store import SourceRecordStore
 from ops.models import SyncLog
 
-from .client import OpenStatesClient, OpenStatesForbiddenError, OpenStatesRateLimitError
+from .client import OpenStatesClient, OpenStatesError, OpenStatesForbiddenError, OpenStatesRateLimitError
 from .mappers import map_person
 
 logger = logging.getLogger(__name__)
@@ -112,6 +112,13 @@ def sync_openstates_legislators(self, state: str):
         sync_log.completed_at = timezone.now()
         sync_log.save(update_fields=['error_count', 'last_error', 'status', 'completed_at'])
         raise self.retry(exc=exc, countdown=600)
+    except OpenStatesError as exc:
+        sync_log.error_count = 1
+        sync_log.last_error = str(exc)
+        sync_log.status = SyncLog.Status.COMPLETED_WITH_WARNINGS
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=['error_count', 'last_error', 'status', 'completed_at'])
+        raise self.retry(exc=exc, countdown=300)
     except Exception as exc:
         logger.exception('Open States sync failed for state=%s', state)
         sync_log.error_count = 1

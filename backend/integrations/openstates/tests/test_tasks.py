@@ -5,7 +5,7 @@ import pytest
 from celery.exceptions import Retry
 
 from elections.models import Candidate, Election, Race
-from integrations.openstates.client import OpenStatesForbiddenError, OpenStatesRateLimitError
+from integrations.openstates.client import OpenStatesError, OpenStatesForbiddenError, OpenStatesRateLimitError
 from integrations.openstates.tasks import US_STATES, sync_openstates_all_states, sync_openstates_legislators
 from ops.models import SyncLog
 
@@ -148,6 +148,25 @@ def test_sync_openstates_legislators_retries_on_rate_limit():
     assert sync_log.status == SyncLog.Status.COMPLETED_WITH_WARNINGS
     assert sync_log.error_count == 1
     assert mock_retry.call_args.kwargs['countdown'] == 600
+
+
+@pytest.mark.django_db
+def test_sync_openstates_legislators_retries_on_connectivity_error():
+    with (
+        patch('integrations.openstates.tasks.OpenStatesClient') as mock_client_cls,
+        patch.object(sync_openstates_legislators, 'retry', side_effect=Retry()) as mock_retry,
+    ):
+        mock_client_cls.return_value.list_people_all_pages.side_effect = OpenStatesError(
+            'Unable to reach the Open States API.'
+        )
+
+        with pytest.raises(Retry):
+            sync_openstates_legislators('CA')
+
+    sync_log = SyncLog.objects.get(task_name='sync_openstates_legislators', address_label='CA')
+    assert sync_log.status == SyncLog.Status.COMPLETED_WITH_WARNINGS
+    assert sync_log.error_count == 1
+    assert mock_retry.call_args.kwargs['countdown'] == 300
 
 
 @patch('integrations.openstates.tasks.sync_openstates_legislators.apply_async')
