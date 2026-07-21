@@ -1,6 +1,11 @@
 import os
+from datetime import date
+from unittest.mock import patch
+
+import pytest
 
 from integrations.md_sbe.parsers import parse_county_results_csv
+from results.adapters.md import MarylandAdapter
 from results.adapters.md_aggregate import aggregate_county_rows
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -67,14 +72,6 @@ def test_aggregate_county_rows_excludes_offices_not_in_allowlist():
     # Allowlist a different office than what's in the fixture.
     rows = aggregate_county_rows(county_rows, office_allowlist=frozenset({"Governor"}))
     assert rows == []
-
-
-from datetime import date
-from unittest.mock import patch
-
-import pytest
-
-from results.adapters.md import MarylandAdapter
 
 
 @pytest.mark.django_db
