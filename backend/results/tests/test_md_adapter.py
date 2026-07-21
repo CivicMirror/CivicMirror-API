@@ -38,11 +38,21 @@ def test_aggregate_county_rows_marks_winner_true_if_any_county_row_says_so():
 
 def test_aggregate_county_rows_flags_write_in_aggregate():
     rows = aggregate_county_rows(_county_rows(), office_allowlist=frozenset({"U.S. Senator"}))
-    write_ins = next(r for r in rows if r.candidate_name == "Other Write-Ins")
+    write_in_rows = [r for r in rows if r.is_write_in_aggregate]
 
+    # All six write-in-flagged candidate names (Patrick J. Burke, Billy Bridges,
+    # Irwin William Gibbs, Christy Renee Helmondollar, Robin Rowe, Other
+    # Write-Ins) must collapse into exactly ONE combined row per office —
+    # otherwise they'd collide on the same (candidate=None) DB key downstream.
+    assert len(write_in_rows) == 1
+
+    write_ins = write_in_rows[0]
+    assert write_ins.candidate_name == "Write-In"
     assert write_ins.is_write_in_aggregate is True
-    # 86 (county 01) + 621 (county 02) = 707
-    assert write_ins.vote_count == 707
+    # county01: 17 (Burke) + 1 (Bridges) + 0 (Gibbs) + 0 (Helmondollar) + 0 (Rowe) + 86 (Other Write-Ins) = 104
+    # county02: 143 (Burke) + 6 (Bridges) + 0 (Gibbs) + 0 (Helmondollar) + 1 (Rowe) + 621 (Other Write-Ins) = 771
+    # 104 + 771 = 875
+    assert write_ins.vote_count == 875
 
 
 def test_aggregate_county_rows_sets_office_title_and_result_type():

@@ -22,11 +22,15 @@ class MdSbeClient:
         self.session = requests.Session()
         self.timeout = 15
 
-    def fetch_county_results(self, year: int, cycle_prefix: str, county_code: str) -> str:
-        url = (
+    @staticmethod
+    def build_url(year: int, cycle_prefix: str, county_code: str) -> str:
+        return (
             f"{_BASE_URL}/elections/archive/{year}/election_data/"
             f"{cycle_prefix}{year % 100:02d}_{county_code}CountyResults.csv"
         )
+
+    def fetch_county_results(self, year: int, cycle_prefix: str, county_code: str) -> str:
+        url = self.build_url(year=year, cycle_prefix=cycle_prefix, county_code=county_code)
         try:
             response = self.session.get(url, timeout=self.timeout)
         except requests.RequestException as exc:
@@ -34,11 +38,8 @@ class MdSbeClient:
 
         # utf-8-sig strips a leading BOM if present, and is a no-op otherwise —
         # some MD SBE CSVs (candidate lists) are BOM-prefixed, county results
-        # currently are not, so decode defensively either way. Strip any remaining
-        # BOM character from the decoded text.
+        # currently are not, so decode defensively either way.
         text = response.content.decode("utf-8-sig", errors="replace")
-        if text.startswith('﻿'):
-            text = text[1:]
 
         if response.status_code != 200 or _PAGE_NOT_FOUND_MARKER in text:
             raise MdSbeRetryableError(

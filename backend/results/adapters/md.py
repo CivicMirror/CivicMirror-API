@@ -40,10 +40,11 @@ _CACHE_TTL = 86400 * 30  # 30 days
 _OFFICE_ALLOWLIST = frozenset({"President - Vice Pres", "U.S. Senator"})
 _CYCLE_PREFIX = "PG"
 _YEAR = 2024
-# Defined locally (rather than read off the client instance) so the adapter's
-# fetch loop count doesn't depend on a mocked MdSbeClient exposing a real
-# COUNTY_CODES attribute in tests.
-_COUNTY_CODES: tuple[str, ...] = tuple(f"{i:02d}" for i in range(1, 25))
+# Read off the real class attribute once at module-import time (before any
+# `@patch("results.adapters.md.MdSbeClient")` in a test can swap the name),
+# so the adapter's fetch loop count doesn't depend on a mocked MdSbeClient
+# exposing a real COUNTY_CODES attribute at call-time.
+_COUNTY_CODES: tuple[str, ...] = MdSbeClient.COUNTY_CODES
 
 
 @register
@@ -82,9 +83,8 @@ class MarylandAdapter(StateResultsAdapter):
                 )
                 continue
             csv_bytes_for_checksum.extend(csv_text.encode("utf-8", errors="ignore"))
-            source_url = (
-                f"https://elections.maryland.gov/elections/archive/{_YEAR}/election_data/"
-                f"{_CYCLE_PREFIX}{_YEAR % 100:02d}_{county_code}CountyResults.csv"
+            source_url = MdSbeClient.build_url(
+                year=_YEAR, cycle_prefix=_CYCLE_PREFIX, county_code=county_code,
             )
             all_rows.extend(parse_county_results_csv(csv_text))
 

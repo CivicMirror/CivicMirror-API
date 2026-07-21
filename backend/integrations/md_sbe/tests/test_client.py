@@ -17,7 +17,10 @@ def test_county_codes_span_01_through_24():
 def test_fetch_county_results_builds_expected_url_and_decodes_utf8_sig(mock_get):
     response = MagicMock(status_code=200)
     # utf-8-sig decoding must strip a BOM if present, and be a no-op if absent.
-    response.content = "﻿Office Name,Total Votes\r\nU.S. Senator,100\r\n".encode("utf-8-sig")
+    # encode("utf-8-sig") already prepends a single leading BOM to the bytes —
+    # the source string itself must NOT also contain a literal BOM character,
+    # or this would simulate an unrealistic double-BOM byte stream.
+    response.content = "Office Name,Total Votes\r\nU.S. Senator,100\r\n".encode("utf-8-sig")
     mock_get.return_value = response
 
     text = MdSbeClient().fetch_county_results(year=2024, cycle_prefix="PG", county_code="01")
