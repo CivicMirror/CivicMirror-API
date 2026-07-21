@@ -152,13 +152,28 @@ def ingest_candidate(*, race, source, name, party, fields):
     state = race.election.state or "*"
 
     match = None
+    name_only_match = None
     # Order-independent match on (normalized name, normalized party); nonpartisan = name only.
     for cand in race.candidates.all():
-        if name_match_key(cand.name) == norm_name and (
-            norm_party == "" or normalize_party(cand.party) == norm_party
-        ):
+        if name_match_key(cand.name) != norm_name:
+            continue
+        if name_only_match is None:
+            name_only_match = cand
+        if norm_party == "" or normalize_party(cand.party) == norm_party:
             match = cand
             break
+
+    if match is None and name_only_match is not None:
+        # unique_candidate_name_per_race only constrains (race, name), not party,
+        # so a party that doesn't reconcile can never mean "a second candidate
+        # with this exact name" — it means the source corrected/varied the
+        # party spelling. Fall back to the name match rather than attempting a
+        # second insert that the DB would reject outright.
+        logger.warning(
+            "ingest_candidate.party_mismatch race=%s name=%s existing_party=%r incoming_party=%r",
+            race.pk, name, name_only_match.party, party,
+        )
+        match = name_only_match
 
     created = match is None
     if match is None:
