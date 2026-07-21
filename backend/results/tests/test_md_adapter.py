@@ -57,3 +57,83 @@ def test_aggregate_county_rows_excludes_offices_not_in_allowlist():
     # Allowlist a different office than what's in the fixture.
     rows = aggregate_county_rows(county_rows, office_allowlist=frozenset({"Governor"}))
     assert rows == []
+
+
+from datetime import date
+from unittest.mock import patch
+
+import pytest
+
+from results.adapters.md import MarylandAdapter
+
+
+@pytest.mark.django_db
+@patch("results.adapters.md.MdSbeClient")
+def test_fetch_results_sums_across_all_24_counties(mock_client_cls, django_user_model):
+    from elections.models import Election
+
+    election = Election.objects.create(
+        name="2024 Maryland General Election",
+        election_date=date(2024, 11, 5),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state="MD",
+        source_id="md-2024-general",
+        status=Election.Status.RESULTS_CERTIFIED,
+    )
+
+    county01 = _load_fixture("md_county01_us_senator.csv")
+    county02 = _load_fixture("md_county02_us_senator.csv")
+    # Fixtures only cover 2 of the 24 counties; the other 22 return the same
+    # county-02 text purely to exercise the full 24-file fetch loop.
+    responses = [county01, county02] + [county02] * 22
+    mock_client_cls.return_value.fetch_county_results.side_effect = responses
+
+    result = MarylandAdapter().fetch_results(election_date=election.election_date, election_id=election.pk)
+
+    assert result.mapping_confidence == "full"
+    senator_rows = [r for r in result.rows if r.office_title == "U.S. Senator"]
+    assert len(senator_rows) > 0
+    assert mock_client_cls.return_value.fetch_county_results.call_count == 24
+
+
+@pytest.mark.django_db
+@patch("results.adapters.md.MdSbeClient")
+def test_fetch_results_returns_unchanged_when_checksum_matches_cache(mock_client_cls):
+    from django.core.cache import cache
+
+    from elections.models import Election
+
+    election = Election.objects.create(
+        name="2024 Maryland General Election",
+        election_date=date(2024, 11, 5),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state="MD",
+        source_id="md-2024-general-2",
+        status=Election.Status.RESULTS_CERTIFIED,
+    )
+    county02 = _load_fixture("md_county02_us_senator.csv")
+    mock_client_cls.return_value.fetch_county_results.return_value = county02
+
+    adapter = MarylandAdapter()
+    first = adapter.fetch_results(election_date=election.election_date, election_id=election.pk)
+    cache.set(adapter.version_cache_key(election.pk), first.source_version)
+
+    second = adapter.fetch_results(election_date=election.election_date, election_id=election.pk)
+    assert second.unchanged is True
+    assert second.rows == []
+
+
+@pytest.mark.django_db
+def test_fetch_results_returns_empty_for_missing_election():
+    result = MarylandAdapter().fetch_results(election_date=date(2024, 11, 5), election_id=999999)
+    assert result.rows == []
+    assert result.mapping_confidence == "none"
+
+
+def test_md_is_registered_via_app_ready():
+    """MD must be in list_supported_states() so ingest_official_results picks it up
+    (results/apps.py ResultsConfig.ready() must import results.adapters.md)."""
+    from results.adapters.registry import get_adapter, list_supported_states
+
+    assert "MD" in list_supported_states()
+    assert get_adapter("MD") is MarylandAdapter
