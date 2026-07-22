@@ -2,6 +2,7 @@
 Unit tests for the Arkansas TotalVote/TotalResults results adapter.
 HTTP calls are mocked; tests marked django_db require a test database.
 """
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,6 +12,7 @@ from results.adapters.ar import (
     ArkansasAdapter,
     _build_name_map,
     _parse_download,
+    _resolve_totalvote_election_id,
     _safe_float,
     _safe_int,
 )
@@ -275,12 +277,20 @@ def test_build_name_map_empty_response():
 # ArkansasAdapter.fetch_results — mocked integration tests
 # ---------------------------------------------------------------------------
 
-def _make_election(source_metadata=None):
+def _make_election(source_metadata=None, election_date=None, election_type="primary"):
     e = MagicMock()
     e.pk = 42
     e.source_id = "ar_elect_test"
     e.source_metadata = source_metadata or {}
+    e.election_date = election_date or date(2026, 3, 3)
+    e.election_type = election_type
     return e
+
+
+def _registry_response(entries):
+    m = MagicMock()
+    m.json.return_value = entries
+    return m
 
 
 def _ver_response(last_updated="2026-04-29T16:33:00Z", is_official=True):
@@ -327,13 +337,127 @@ _RESULTS_RESPONSE_JSON = {
 @pytest.mark.django_db
 def test_fetch_results_no_totalvote_election_id():
     adapter = ArkansasAdapter()
-    with patch("elections.models.Election.objects") as mock_mgr:
+    with patch("elections.models.Election.objects") as mock_mgr, \
+         patch("results.adapters.ar.requests.get") as mock_get:
+
         mock_mgr.get.return_value = _make_election(source_metadata={})
+        # Registry has no election on this date — resolution fails, falls
+        # through to the original "set it manually" behavior.
+        mock_get.return_value = _registry_response([
+            {"electionID": "other", "electionDate": "2026-11-03T00:00:00", "electionName": "2026 General"},
+        ])
         result = adapter.fetch_results(None, election_id=42)
 
     assert result.mapping_confidence == "none"
     assert result.rows == []
     assert "totalvote_election_id" in result.notes
+
+
+# ---------------------------------------------------------------------------
+# _resolve_totalvote_election_id — TotalResults registry auto-discovery
+# ---------------------------------------------------------------------------
+
+def test_resolve_totalvote_election_id_unique_date_match():
+    election = _make_election(election_date=date(2026, 6, 2), election_type="primary")
+    with patch("results.adapters.ar.requests.get") as mock_get:
+        mock_get.return_value = _registry_response([
+            {
+                "electionID": "4dfe2063-3126-4eb4-ae59-1468c9d6c9cd",
+                "electionDate": "2026-06-02T00:00:00",
+                "electionName": "Special Primary House 44",
+            },
+        ])
+        result = _resolve_totalvote_election_id("arkansas", election)
+
+    assert result == "4dfe2063-3126-4eb4-ae59-1468c9d6c9cd"
+
+
+def test_resolve_totalvote_election_id_disambiguates_same_day_by_type():
+    """Arkansas ran both a primary and a 'Special General' on 2026-03-03."""
+    election = _make_election(election_date=date(2026, 3, 3), election_type="primary")
+    with patch("results.adapters.ar.requests.get") as mock_get:
+        mock_get.return_value = _registry_response([
+            {
+                "electionID": "7f77a178-af02-40ec-92db-c5cc50882c68",
+                "electionDate": "2026-03-03T00:00:00",
+                "electionName": "2026 Preferential Primary",
+            },
+            {
+                "electionID": "55355810-8dde-40ff-a1d2-5b8675226873",
+                "electionDate": "2026-03-03T00:00:00",
+                "electionName": "2026 Special General",
+            },
+        ])
+        result = _resolve_totalvote_election_id("arkansas", election)
+
+    assert result == "7f77a178-af02-40ec-92db-c5cc50882c68"
+
+
+def test_resolve_totalvote_election_id_no_date_match_returns_empty():
+    election = _make_election(election_date=date(2099, 1, 1), election_type="primary")
+    with patch("results.adapters.ar.requests.get") as mock_get:
+        mock_get.return_value = _registry_response([
+            {"electionID": "x", "electionDate": "2026-03-03T00:00:00", "electionName": "2026 Primary"},
+        ])
+        result = _resolve_totalvote_election_id("arkansas", election)
+
+    assert result == ""
+
+
+def test_resolve_totalvote_election_id_ambiguous_tie_returns_empty():
+    election = _make_election(election_date=date(2026, 3, 3), election_type="special")
+    with patch("results.adapters.ar.requests.get") as mock_get:
+        mock_get.return_value = _registry_response([
+            {"electionID": "a", "electionDate": "2026-03-03T00:00:00", "electionName": "2026 Primary"},
+            {"electionID": "b", "electionDate": "2026-03-03T00:00:00", "electionName": "2026 General"},
+        ])
+        result = _resolve_totalvote_election_id("arkansas", election)
+
+    assert result == ""
+
+
+def test_resolve_totalvote_election_id_registry_fetch_failed_returns_empty():
+    election = _make_election(election_date=date(2026, 3, 3), election_type="primary")
+    with patch("results.adapters.ar.requests.get") as mock_get:
+        mock_get.side_effect = req_lib.ConnectionError("network down")
+        result = _resolve_totalvote_election_id("arkansas", election)
+
+    assert result == ""
+
+
+@pytest.mark.django_db
+def test_fetch_results_auto_resolves_missing_election_id():
+    """End-to-end: no totalvote_election_id in metadata, but the registry
+    has an unambiguous date match — fetch_results should resolve it and
+    proceed to fetch results rather than giving up."""
+    adapter = ArkansasAdapter()
+
+    with patch("elections.models.Election.objects") as mock_mgr, \
+         patch("results.adapters.ar.requests.get") as mock_get, \
+         patch("results.adapters.ar.cache") as mock_cache:
+
+        mock_mgr.get.return_value = _make_election(
+            source_metadata={}, election_date=date(2026, 6, 2), election_type="primary",
+        )
+        mock_cache.get.return_value = None
+        mock_get.side_effect = [
+            _registry_response([
+                {
+                    "electionID": "4dfe2063-3126-4eb4-ae59-1468c9d6c9cd",
+                    "electionDate": "2026-06-02T00:00:00",
+                    "electionName": "Special Primary House 44",
+                },
+            ]),
+            _ver_response(),
+            _download_response(),
+        ]
+        result = adapter.fetch_results(None, election_id=1777)
+
+    assert result.mapping_confidence == "full"
+    assert len(result.rows) == 2
+    # Registry lookup, version check, then download
+    assert mock_get.call_count == 3
+    assert "4dfe2063" in mock_get.call_args_list[1][0][0]
 
 
 @pytest.mark.django_db
