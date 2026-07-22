@@ -25,7 +25,12 @@ from .exceptions import IowaSosError, IowaSosRetryableError
 
 logger = logging.getLogger(__name__)
 
-CALENDAR_PDF_URL = "https://sos.iowa.gov/elections/pdf/cal3yr.pdf"
+CALENDAR_PAGE_URL = "https://sos.iowa.gov/three-year-election-calendar"
+
+_CALENDAR_PDF_RE = re.compile(
+    r'href=["\']([^"\']*\.pdf)["\']',
+    re.IGNORECASE,
+)
 
 # Pages that link to versioned candidate list PDFs.
 # Keyed by election_type ('primary' / 'general').
@@ -118,10 +123,28 @@ class IowaSosClient:
     # Calendar PDF
     # ------------------------------------------------------------------
 
+    def _discover_calendar_pdf_url(self) -> str:
+        """
+        Scrape the Iowa SOS three-year-election-calendar landing page for the
+        current PDF link. Iowa re-uploads this PDF under a new dated path
+        (/sites/default/files/YYYY-MM/...) each time the calendar is revised,
+        so the URL cannot be hardcoded — same reasoning as candidate PDF
+        discovery below.
+        """
+        resp = self._get(CALENDAR_PAGE_URL)
+        match = _CALENDAR_PDF_RE.search(resp.text)
+        if not match:
+            raise IowaSosError(
+                f"No PDF link found on Iowa SOS calendar page: {CALENDAR_PAGE_URL}"
+            )
+        href = match.group(1)
+        return href if href.startswith("http") else f"https://sos.iowa.gov{href}"
+
     def fetch_calendar_pdf(self) -> bytes:
         """Download the 3-year election calendar PDF."""
-        resp = self._get(CALENDAR_PDF_URL)
-        logger.info("ia_sos.client.calendar_pdf bytes=%d", len(resp.content))
+        pdf_url = self._discover_calendar_pdf_url()
+        resp = self._get(pdf_url)
+        logger.info("ia_sos.client.calendar_pdf url=%s bytes=%d", pdf_url, len(resp.content))
         return resp.content
 
     # ------------------------------------------------------------------
