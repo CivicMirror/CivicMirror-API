@@ -4,7 +4,12 @@ from __future__ import annotations
 from datetime import date
 from unittest.mock import MagicMock, patch
 
-from results.adapters.pa import PennsylvaniaAdapter, _build_report_payload, _parse_report_csv
+from results.adapters.pa import (
+    PaElectionReturnsClient,
+    PennsylvaniaAdapter,
+    _build_report_payload,
+    _parse_report_csv,
+)
 
 SAMPLE_CSV = (
     '"Election Name","County Name","Office Name","District Name","Party Name","Candidate Name",'
@@ -162,7 +167,7 @@ def test_fetch_results_posts_generate_report_and_parses_csv(mock_client_cls, moc
     assert result.mapping_confidence == "full"
     assert len(result.rows) > 0
     assert result.source_version
-    client.warm_session.assert_called_once()
+    client.warm_session.assert_not_called()
     client.get_filter_data.assert_called_once_with(117, "P")
     client.generate_report.assert_called_once()
 
@@ -191,3 +196,116 @@ def test_fetch_results_unchanged_when_report_hash_matches_cache(mock_client_cls,
 
     assert result.unchanged is True
     assert result.rows == []
+
+
+def _mock_response(status_code=200, json_data=None, text=""):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = json_data
+    resp.text = text
+    resp.raise_for_status = MagicMock()
+    if status_code >= 400:
+        import requests
+
+        resp.raise_for_status.side_effect = requests.HTTPError(f"{status_code} error", response=resp)
+    return resp
+
+
+class TestPaElectionReturnsClientJsonDecoding:
+    """
+    electionreturns.pa.gov's JSON endpoints return the payload as a
+    JSON-encoded string (double-encoded), not the object directly.
+    """
+
+    def test_get_election_list_decodes_double_encoded_table(self):
+        client = PaElectionReturnsClient()
+        client.session = MagicMock()
+        client.session.request.return_value = _mock_response(
+            json_data='{"Table":[{"Electionid":117,"ElectionType":"P"}]}'
+        )
+
+        result = client.get_election_list()
+
+        assert result == [{"Electionid": 117, "ElectionType": "P"}]
+
+    def test_get_filter_data_decodes_double_encoded_object(self):
+        client = PaElectionReturnsClient()
+        client.session = MagicMock()
+        client.session.request.return_value = _mock_response(
+            json_data='{"Table":[{"OfficeID":3}],"Table1":[{"PartyID":4}]}'
+        )
+
+        result = client.get_filter_data(117, "P")
+
+        assert result == {"Table": [{"OfficeID": 3}], "Table1": [{"PartyID": 4}]}
+
+    def test_get_election_list_handles_already_decoded_dict(self):
+        """Defensive: if PA ever stops double-encoding, still works."""
+        client = PaElectionReturnsClient()
+        client.session = MagicMock()
+        client.session.request.return_value = _mock_response(
+            json_data={"Table": [{"Electionid": 117}]}
+        )
+
+        result = client.get_election_list()
+
+        assert result == [{"Electionid": 117}]
+
+
+class TestPaElectionReturnsClientWarmSessionRetry:
+    """
+    warm_session() (Playwright) must not run unconditionally — Imperva flags
+    the headless-browser session itself, so a warmed session can get 403'd
+    where a bare request succeeds. It should only kick in as a one-time,
+    lazy fallback after a real 403.
+    """
+
+    def test_plain_request_succeeds_without_warming_session(self):
+        client = PaElectionReturnsClient()
+        client.session = MagicMock()
+        client.session.request.return_value = _mock_response(json_data='{"Table":[]}')
+        client.warm_session = MagicMock()
+
+        client.get_election_list()
+
+        client.warm_session.assert_not_called()
+
+    def test_403_triggers_one_time_warm_session_retry(self):
+        client = PaElectionReturnsClient()
+        client.session = MagicMock()
+        client.session.request.side_effect = [
+            _mock_response(status_code=403),
+            _mock_response(json_data='{"Table":[{"Electionid":117}]}'),
+        ]
+
+        def _fake_warm():
+            client._session_warmed = True
+
+        client.warm_session = MagicMock(side_effect=_fake_warm)
+
+        result = client.get_election_list()
+
+        client.warm_session.assert_called_once()
+        assert result == [{"Electionid": 117}]
+        assert client.session.request.call_count == 2
+
+    def test_second_403_after_warming_does_not_retry_again(self):
+        client = PaElectionReturnsClient()
+        client.session = MagicMock()
+        client.session.request.side_effect = [
+            _mock_response(status_code=403),
+            _mock_response(status_code=403),
+        ]
+
+        def _fake_warm():
+            client._session_warmed = True
+
+        client.warm_session = MagicMock(side_effect=_fake_warm)
+
+        import pytest
+        import requests
+
+        with pytest.raises(requests.HTTPError):
+            client.get_election_list()
+
+        client.warm_session.assert_called_once()
