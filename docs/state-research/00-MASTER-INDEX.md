@@ -85,9 +85,14 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **AL** | Alabama | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (AL SOS ENR Excel export) | Results Adapter |
 | **AR** | Arkansas | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (TotalVote ENR) | Results Coverage Only |
 | **CT** | Connecticut | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (PCC EMS) | Results Coverage Only |
-| **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY** | Clarity sweep (20 states) | ✅ Available (Civic API) | ⚠️ Untested | ✅ Adapter available (Clarity) | Results Coverage Only |
+| **AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, WI, WY** | Clarity sweep (19 states) | ✅ Available (Civic API) | ⚠️ Untested | ✅ Adapter available (Clarity) | Results Coverage Only |
 | **OH** | Ohio | ✅ Available (Civic API) | ⚠️ Untested | ⚠️ Pending CF solver deploy (Clarity ENR) | Near Core (adapter built, CF solver required) |
 | **TN** | Tennessee | ✅ Complete | ✅ Complete | ⚠️ Certified XLSX adapter; live dashboard pending active-election transport capture | Near Core (partial) |
+| **VT** | Vermont | ✅ Complete (vt_sos) | ✅ Complete (vt_sos, incl. contest_variant primary disambiguation) | ✅ Complete (VT static JSON feed, statewide/district totals) | Full Core |
+| **MD** | Maryland | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (county CSVs, statewide offices; 2024 general historical snapshot only) | Results Coverage Only |
+| **MO** | Missouri | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (Grand Totals PDF via pdfplumber, statewide top-of-ticket; 2024 general only) | Results Coverage Only |
+| **NM** | New Mexico | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (BPro TotalVote election-wide CSV, hyper-local municipal election data; Civera ElectionStats deferred, issue #84) | Results Coverage Only |
+| **UT** | Utah | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (EnhancedVotingAdapter subclass, same platform as GA/VA/WA; statewide `ballotItems` only) | Results Coverage Only |
 | All others | — | ✅ Available (Civic API) | ⚠️ Untested | ❌ No adapter | Federal Only |
 
 ---
@@ -110,6 +115,7 @@ Stage 1 and Stage 2 complete for Federal and State offices. Election discovery, 
 - Pennsylvania (PA) — PA SOS candidate lists + electionreturns.pa.gov
 - South Carolina (SC) — SC VREMS + Clarity
 - Texas (TX) — GoElect ENR
+- Vermont (VT) — vt_sos (static JSON feed; statewide-only scope, local elections deferred)
 - Virginia (VA) — VA ELECT ENR
 - Washington (WA) — VoteWA ENR
 - West Virginia (WV) — Clarity
@@ -134,17 +140,23 @@ Stage 2 results adapter available. No dedicated Stage 1 adapter — elections an
 - Arkansas (AR) — TotalVote ENR
 - Alabama (AL) — Stage 2 ENR Excel export adapter; Stage 1 still Google Civic/manual until state candidate/race source is implemented. Requires `source_metadata["al_ecode"]` until ecode discovery is built.
 - Connecticut (CT) — PCC EMS
-- Clarity sweep states (AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, VT, WI, WY) — requires `results_url` set per election in Django admin
+- Maryland (MD) — county CSVs, statewide offices, 2024 general historical snapshot only (PR #82)
+- Missouri (MO) — Grand Totals PDF (pdfplumber), statewide top-of-ticket, 2024 general only (PR #83)
+- New Mexico (NM) — BPro TotalVote election-wide CSV, hyper-local municipal election data (PR #85); Civera ElectionStats deferred, issue #84
+- Utah (UT) — EnhancedVotingAdapter subclass (same platform as GA/VA/WA), statewide `ballotItems` only (PR #86)
+- Clarity sweep states (AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, WI, WY) — requires `results_url` set per election in Django admin
+
+**Current focus (issue #87):** migrate CA, NC, NY (results adapters already built, closest to Full Core) and then MD/MO/NM/UT up to Full Core by building native Stage 1 adapters, replacing Civic API's role in election/race creation — not by adding more Results-Coverage-Only states. Vermont (VT) completed this migration 2026-07-22 and has moved to Full Core above.
 
 ### Research/Build Scaffold
 
 Research or parser/client scaffolding exists, but a scheduled Stage 1 ingestion task and/or Stage 2 results adapter is not yet implemented.
 
-- Tennessee (TN) — SOS calendar/candidate/results parsers and client scaffold exist; scheduled Stage 1 ingestion and results adapter still need to be built.
+- (none currently — Tennessee moved to Near Core (partial) above once its certified-XLSX results adapter and Stage 1 sync tasks shipped, PR #43 2026-07-15; live dashboard polling still deferred until an active-election HAR capture)
 
-### Blocked
+### Pending External Deploy
 
-No adapter and no clear near-term path:
+Adapter(s) built and code-complete, blocked only on infrastructure/deploy rather than a missing data source:
 
 - **Ohio (OH)** — Stage 1 adapter built (`integrations/oh_sos/`) using CFDISCLOSURE `ACT_CAN_LIST.CSV` (765 candidates, daily). Stage 2 uses Clarity ENR (`liveresults.boe.ohio.gov`, added to `CLARITY_PROXY_HOSTS`). Both sources require the CF solver microservice (`cloudflare/cf-solver/`) deployed as a Cloud Run service with `CF_SOLVER_URL` + `CF_SOLVER_SECRET` set. CF bypass confirmed working (nodriver+xvfb, 2026-06-28). Task: `sync-oh-sos`. Federal races via Civic API (15-address config). See `docs/state-research/OH/OH-Election_Research.md`.
 
