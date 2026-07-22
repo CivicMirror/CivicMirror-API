@@ -1,0 +1,56 @@
+{
+  "electionDetails": {
+    "electionId": 7514,
+    "electionName": "AUGUST PRIMARY",
+    "electionDate": "2026-08-11T00:00:00",
+    "electionTypeCode": "P",
+    "electionCategoryCode": "S",
+    "isOfficial": false,
+    "isSync": true,
+    "isDefault": true,
+    "isReports": false,
+    "isSearch": false,
+    "isHomeLinks": false,
+    "electionType": "AUGUST PRIMARY",
+    "electionGuid": "a18f77e0-89f8-4a01-8d97-61a7c75ba200",
+    "electionDateWithName": "08/11/2026 AUGUST PRIMARY",
+    "isStateWideElection": true,
+    "isGeneralElection": false
+  },
+  "federal": {"isEnable": true, "path": "elections\\a18f77e0-89f8-4a01-8d97-61a7c75ba200-f-20260721220608.json"},
+  "stateWide": {"isEnable": true, "path": "elections\\a18f77e0-89f8-4a01-8d97-61a7c75ba200-s-20260721220608.json"},
+  "senate": {"isEnable": true, "path": "elections\\a18f77e0-89f8-4a01-8d97-61a7c75ba200-sn-20260721220608.json"},
+  "house": {"isEnable": true, "path": "elections\\a18f77e0-89f8-4a01-8d97-61a7c75ba200-h-20260721220608.json"},
+  "county": {"isEnable": true, "path": "elections\\a18f77e0-89f8-4a01-8d97-61a7c75ba200-cty-20260721220608.json"},
+  "town": {"isEnable": false, "path": "elections\\a18f77e0-89f8-4a01-8d97-61a7c75ba200-t-20260721220608.json"},
+  "turnOut": {"isEnable": true, "path": "elections\\a18f77e0-89f8-4a01-8d97-61a7c75ba200-turnout-20260721220608.json"},
+  "report": {"isEnable": false},
+  "search": {"isEnable": false},
+  "rss": {"isEnable": false, "electionSummary": "", "electionResultData": "", "turnOutData": ""},
+  "towns": [
+    {"townId": 16, "townName": "ADDISON"},
+    {"townId": 158, "townName": "ORWELL"}
+  ],
+  "townDistricts": [
+    {
+      "countyId": 1, "countyName": "ADDISON", "repDistrict": "ADDISON RUTLAND", "senateDistrict": "ADDISON_",
+      "repDistrictId": 3689, "senDistrictId": 3253, "repDistrictTypeCode": "REP", "senDistrictTypeCode": "SEN",
+      "repDistrictCode": "ADD RUT", "senDistrictCode": "ADD 1", "localDistrictTypeCode": null,
+      "localDistrictCode": null, "localDistrict": null, "localDistrictId": null,
+      "townId": 158, "townName": "ORWELL"
+    }
+  ],
+  "parties": [
+    {"pid": 162, "pn": "DEMOCRATIC", "pc": "D", "pco": "007ABC"},
+    {"pid": 178, "pn": "PROGRESSIVE", "pc": "PR", "pco": "c00000"},
+    {"pid": 182, "pn": "REPUBLICAN", "pc": "R", "pco": "ff2c2c"}
+  ],
+  "lastUpdatedDate": "07/21/2026 10:06 PM",
+  "townReportingPercent": 0,
+  "townsReportingFormat": "0 OF 247",
+  "townsReporting": "0/247",
+  "unorganisedTowns": [
+    {"townId": 263, "townName": "AVERILL (UNORGANIZED)"}
+  ],
+  "electionNotes": []
+}

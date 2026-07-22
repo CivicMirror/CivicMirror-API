@@ -1,0 +1,83 @@
+{
+  "d": [
+    {
+      "pid": 162, "pn": "DEMOCRATIC", "pc": "D", "pco": "007ABC",
+      "o": [
+        {
+          "oid": 4, "on": "REPRESENTATIVE TO CONGRESS", "vf": 1, "otc": "FED",
+          "cid1": 210001, "cn1": "BECCA BALINT", "cid2": null, "cn2": null, "cid3": null, "cn3": null,
+          "cs": [
+            {
+              "tid": 158, "ctyId": 1, "oid": 0, "sc": 0, "sv": 0, "bv": 0, "vf": 1,
+              "tn": "ORWELL", "repd": "ADDISON RUTLAND", "send": "ADDISON_", "ctyn": "ADDISON",
+              "distReported": null, "townsReported": "0/1", "distCode": "ADD RUT",
+              "rc": [
+                {"cid": 210001, "cn": "BECCA BALINT", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": "DEMOCRATIC", "pco": "007ABC"}
+              ],
+              "wc": [
+                {"cid": 0, "cn": "OTHER WRITE-IN", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": null, "pco": null}
+              ]
+            },
+            {
+              "tid": 0, "ctyId": 0, "oid": 0, "sc": 0, "sv": 0, "bv": 0, "vf": 1,
+              "tn": "STATE WIDE", "repd": null, "send": null, "ctyn": null,
+              "distReported": "0/0", "townsReported": null, "distCode": "",
+              "rc": [
+                {"cid": 210001, "cn": "BECCA BALINT", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": "DEMOCRATIC", "pco": "007ABC"}
+              ],
+              "wc": [
+                {"cid": 0, "cn": "OTHER WRITE-IN", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": null, "pco": null}
+              ]
+            }
+          ],
+          "cd": []
+        }
+      ]
+    },
+    {
+      "pid": 178, "pn": "PROGRESSIVE", "pc": "PR", "pco": "c00000",
+      "o": [
+        {
+          "oid": 4, "on": "REPRESENTATIVE TO CONGRESS", "vf": 1, "otc": "FED",
+          "cid1": null, "cn1": null, "cid2": null, "cn2": null, "cid3": null, "cn3": null,
+          "cs": [
+            {
+              "tid": 0, "ctyId": 0, "oid": 0, "sc": 0, "sv": 0, "bv": 0, "vf": 1,
+              "tn": "STATE WIDE", "repd": null, "send": null, "ctyn": null,
+              "distReported": "0/0", "townsReported": null, "distCode": "",
+              "rc": [],
+              "wc": [
+                {"cid": 0, "cn": "OTHER WRITE-IN", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": null, "pco": null}
+              ]
+            }
+          ],
+          "cd": []
+        }
+      ]
+    },
+    {
+      "pid": 182, "pn": "REPUBLICAN", "pc": "R", "pco": "ff2c2c",
+      "o": [
+        {
+          "oid": 4, "on": "REPRESENTATIVE TO CONGRESS", "vf": 1, "otc": "FED",
+          "cid1": 210002, "cn1": "MARK COESTER", "cid2": 210003, "cn2": "GERALD MALLOY", "cid3": null, "cn3": null,
+          "cs": [
+            {
+              "tid": 0, "ctyId": 0, "oid": 0, "sc": 0, "sv": 0, "bv": 0, "vf": 1,
+              "tn": "STATE WIDE", "repd": null, "send": null, "ctyn": null,
+              "distReported": "0/0", "townsReported": null, "distCode": "",
+              "rc": [
+                {"cid": 210002, "cn": "MARK COESTER", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": "REPUBLICAN", "pco": "ff2c2c"},
+                {"cid": 210003, "cn": "GERALD MALLOY", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": "REPUBLICAN", "pco": "ff2c2c"}
+              ],
+              "wc": [
+                {"cid": 0, "cn": "OTHER WRITE-IN", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": null, "pco": null}
+              ]
+            }
+          ],
+          "cd": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "d": [
+    {
+      "pid": 162, "pn": "DEMOCRATIC", "pc": "D", "pco": "007ABC",
+      "o": [
+        {
+          "oid": 11, "on": "STATE REPRESENTATIVE", "vf": 1, "otc": "HOU",
+          "dc": "ADD RUT", "dn": "ADDISON RUTLAND", "isrep": true,
+          "cid1": 210473, "cn1": "JONATHAN HESCOCK", "cid2": null, "cn2": null, "cid3": null, "cn3": null,
+          "cs": [
+            {
+              "tid": 158, "ctyId": 0, "oid": 0, "sc": 0, "sv": 0, "bv": 0, "vf": 1,
+              "tn": "ORWELL", "repd": "ADDISON RUTLAND", "send": "ADDISON_", "ctyn": null,
+              "distReported": null, "townsReported": "0/5", "distCode": "ADD RUT",
+              "rc": [
+                {"cid": 210473, "cn": "JONATHAN HESCOCK", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": "DEMOCRATIC", "pco": "007ABC"}
+              ],
+              "wc": [
+                {"cid": 0, "cn": "OTHER WRITE-IN", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": null, "pco": null}
+              ]
+            }
+          ],
+          "cd": []
+        },
+        {
+          "oid": 12, "on": "STATE REPRESENTATIVE", "vf": 2, "otc": "HOU",
+          "dc": "CHI 1", "dn": "CHITTENDEN 1", "isrep": true,
+          "cid1": 210500, "cn1": "PAT NORTH", "cid2": 210501, "cn2": "SAM SOUTH", "cid3": null, "cn3": null,
+          "cs": [
+            {
+              "tid": 200, "ctyId": 0, "oid": 0, "sc": 0, "sv": 0, "bv": 0, "vf": 2,
+              "tn": "COLCHESTER", "repd": "CHITTENDEN 1", "send": "CHITTENDEN_", "ctyn": null,
+              "distReported": null, "townsReported": "0/3", "distCode": "CHI 1",
+              "rc": [
+                {"cid": 210500, "cn": "PAT NORTH", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": "DEMOCRATIC", "pco": "007ABC"},
+                {"cid": 210501, "cn": "SAM SOUTH", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": "DEMOCRATIC", "pco": "007ABC"}
+              ],
+              "wc": [
+                {"cid": 0, "cn": "OTHER WRITE-IN", "vc": 0, "isWriteIn": false, "isWinner": false, "pn": null, "pco": null}
+              ]
+            }
+          ],
+          "cd": []
+        }
+      ]
+    }
+  ]
+}

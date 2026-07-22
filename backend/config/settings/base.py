@@ -171,6 +171,7 @@ INSTALLED_APPS += [
     'integrations.mi_sos',
     'integrations.al_sos',
     'integrations.md_sbe',
+    'integrations.vt_sos',
     'internal',
     'api',
     'accounts',
