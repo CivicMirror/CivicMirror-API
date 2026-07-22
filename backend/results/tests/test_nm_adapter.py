@@ -202,3 +202,51 @@ def test_fetch_results_returns_empty_for_missing_election():
     result = NewMexicoAdapter().fetch_results(election_date=date(2025, 11, 4), election_id=999999)
     assert result.rows == []
     assert result.mapping_confidence == "none"
+
+
+@pytest.mark.django_db
+def test_bootstrap_creates_separate_races_for_colliding_office_titles():
+    """The office-title qualification fix (Task 1) must hold up against real
+    Race/Candidate creation, not just the parser's in-memory ResultRow output —
+    this is the scenario results/tasks.py::_bootstrap_races_from_results hits
+    on NM's first-ever ingest for an election, since hyper-local municipal
+    races won't already exist via Google Civic API sync."""
+    from elections.models import Candidate, Election, Race
+    from results.adapters.base import AdapterResult
+    from results.adapters.nm_parse import parse_election_wide_csv
+    from results.tasks import _bootstrap_races_from_results
+
+    election = Election.objects.create(
+        name="2025 Regular Local Election",
+        election_date=date(2025, 11, 4),
+        jurisdiction_level=Election.JurisdictionLevel.LOCAL,
+        state="NM",
+        source_id="nm-2025-local-2897-bootstrap",
+        status=Election.Status.RESULTS_PENDING,
+    )
+    rows = parse_election_wide_csv(_load_fixture("nm_media_excerpt.csv"))
+    adapter_result = AdapterResult(rows=rows, source_url="https://example.test", mapping_confidence="full")
+
+    races = _bootstrap_races_from_results(election, adapter_result, "NM")
+
+    alamo_mayor = Race.objects.get(election=election, office_title="ALAMO CITY DISTRICT- ALL — Mayor")
+    abq_mayor = Race.objects.get(election=election, office_title="CITY OF ALBUQUERQUE — MAYOR")
+    assert alamo_mayor.pk != abq_mayor.pk
+
+    alamo_candidates = set(Candidate.objects.filter(race=alamo_mayor).values_list("name", flat=True))
+    abq_candidates = set(Candidate.objects.filter(race=abq_mayor).values_list("name", flat=True))
+    assert alamo_candidates == {"JASON R BALDWIN", "LATANYA M BOYCE", "SHARON A MCDONALD", "TED M MORGAN", "RICHARD R COTA"}
+    assert abq_candidates == {"DARREN WHITE", "DANIEL CHAVEZ", "LOUIE SANCHEZ", "TIMOTHY M KELLER", "ALEXANDER MAMORU MAX UBALLEZ", "MAYLING M ARMIJO", "EDDIE R VARELA"}
+    assert alamo_candidates.isdisjoint(abq_candidates)
+
+    dora_bond = Race.objects.get(
+        election=election,
+        office_title="DORA MUNICIPAL SCHOOL DISTRICT — Bond Question : Dora  General Obligation Bond Question",
+    )
+    assert dora_bond.race_type == Race.RaceType.MEASURE
+
+    municipal_judge = Race.objects.get(election=election, office_title="ALAMO CITY DISTRICT- ALL — Municipal Judge")
+    assert municipal_judge.race_type == Race.RaceType.CANDIDATE
+    assert Candidate.objects.get(race=municipal_judge).name == "DAVID MATTHEW OVERSTREET"
+
+    assert len(races) == Race.objects.filter(election=election).count()

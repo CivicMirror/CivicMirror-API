@@ -13,7 +13,7 @@ class ResultsConfig(AppConfig):
         adapter_modules = [
             "al", "ak", "ar", "az", "ca", "co", "ct", "de", "fl", "ga", "hi",
             "id", "ia", "il", "in", "ks", "ky", "la", "ma", "md", "me", "mi", "mn", "mo",
-            "ms", "mt", "nc", "nd", "ne", "nh", "nj", "nv", "ny", "oh",
+            "ms", "mt", "nc", "nd", "ne", "nh", "nj", "nm", "nv", "ny", "oh",
             "ok", "oregon", "pa", "ri", "sc", "sd", "tn", "tx", "va",
             "vt", "wa", "wi", "wv", "wy",
         ]
