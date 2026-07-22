@@ -1,5 +1,10 @@
 import os
+from datetime import date
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from results.adapters.nm import NewMexicoAdapter, NmBproRetryableError
 from results.adapters.nm_parse import parse_election_wide_csv
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -118,3 +123,82 @@ def test_parse_election_wide_csv_sets_contest_code_and_party_code_in_raw():
     rows = parse_election_wide_csv(text)
     overstreet = next(r for r in rows if r.raw["contest_code"] == "10087")
     assert overstreet.raw == {"contest_code": "10087", "party_code": ""}
+
+
+@patch("results.adapters.nm.requests.get")
+def test_fetch_csv_bytes_sends_browser_user_agent(mock_get):
+    response = MagicMock(status_code=200, content=b"RaceID,RaceName,PartyCode\n10083,Mayor,\n")
+    mock_get.return_value = response
+
+    result = NewMexicoAdapter()._fetch_csv_bytes("https://electionresults.sos.nm.gov/example.aspx")
+
+    assert result == b"RaceID,RaceName,PartyCode\n10083,Mayor,\n"
+    called_headers = mock_get.call_args.kwargs["headers"]
+    assert "Mozilla" in called_headers["User-Agent"]
+
+
+@patch("results.adapters.nm.requests.get")
+def test_fetch_csv_bytes_rejects_non_csv_content(mock_get):
+    """BPro's ASP.NET WebForms shell can return an HTML error page with a
+    200 status — must be detected by content (expected CSV header), never
+    trusted by status code alone."""
+    response = MagicMock(status_code=200, content=b"<!DOCTYPE html><html>Server Error</html>")
+    mock_get.return_value = response
+
+    with pytest.raises(NmBproRetryableError):
+        NewMexicoAdapter()._fetch_csv_bytes("https://electionresults.sos.nm.gov/example.aspx")
+
+
+@pytest.mark.django_db
+@patch("results.adapters.nm.NewMexicoAdapter._fetch_csv_bytes")
+def test_fetch_results_parses_real_fixture_into_rows(mock_fetch):
+    from elections.models import Election
+
+    election = Election.objects.create(
+        name="2025 Regular Local Election",
+        election_date=date(2025, 11, 4),
+        jurisdiction_level=Election.JurisdictionLevel.LOCAL,
+        state="NM",
+        source_id="nm-2025-local-2897",
+        status=Election.Status.RESULTS_PENDING,
+    )
+    mock_fetch.return_value = _load_fixture("nm_media_excerpt.csv").encode("utf-8")
+
+    result = NewMexicoAdapter().fetch_results(election_date=election.election_date, election_id=election.pk)
+
+    assert result.mapping_confidence == "full"
+    assert len(result.rows) == 20
+    assert any(r.office_title == "ALAMO CITY DISTRICT- ALL — Municipal Judge" for r in result.rows)
+
+
+@pytest.mark.django_db
+@patch("results.adapters.nm.NewMexicoAdapter._fetch_csv_bytes")
+def test_fetch_results_returns_unchanged_when_checksum_matches_cache(mock_fetch):
+    from django.core.cache import cache
+
+    from elections.models import Election
+
+    election = Election.objects.create(
+        name="2025 Regular Local Election",
+        election_date=date(2025, 11, 4),
+        jurisdiction_level=Election.JurisdictionLevel.LOCAL,
+        state="NM",
+        source_id="nm-2025-local-2897-b",
+        status=Election.Status.RESULTS_PENDING,
+    )
+    mock_fetch.return_value = _load_fixture("nm_media_excerpt.csv").encode("utf-8")
+
+    adapter = NewMexicoAdapter()
+    first = adapter.fetch_results(election_date=election.election_date, election_id=election.pk)
+    cache.set(adapter.version_cache_key(election.pk), first.source_version)
+
+    second = adapter.fetch_results(election_date=election.election_date, election_id=election.pk)
+    assert second.unchanged is True
+    assert second.rows == []
+
+
+@pytest.mark.django_db
+def test_fetch_results_returns_empty_for_missing_election():
+    result = NewMexicoAdapter().fetch_results(election_date=date(2025, 11, 4), election_id=999999)
+    assert result.rows == []
+    assert result.mapping_confidence == "none"
