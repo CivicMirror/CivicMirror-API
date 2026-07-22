@@ -20,7 +20,7 @@ from integrations.ky_sos.tasks import sync_ky_sos
 from integrations.ma_sos.tasks import sync_ma_elections
 from integrations.mi_sos.tasks import sync_mi_elections
 from integrations.mn_sos.tasks import discover_mn_elections, sync_mn_races
-from integrations.nc_sbe.tasks import sync_nc_elections
+from integrations.nc_sbe.tasks import sync_nc_candidates, sync_nc_elections
 from integrations.nj_elections.tasks import sync_nj_county_urls
 from integrations.oh_sos.tasks import sync_oh_elections
 from integrations.openstates.tasks import sync_openstates_all_states
@@ -183,6 +183,13 @@ def seed_election_calendar_trigger(request):
 @require_internal_task_token
 def sync_nc_sbe_trigger(request):
     return _trigger("sync_nc_sbe", sync_nc_elections, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_nc_candidates_trigger(request):
+    return _trigger("sync_nc_candidates", sync_nc_candidates, request)
 
 
 @csrf_exempt
