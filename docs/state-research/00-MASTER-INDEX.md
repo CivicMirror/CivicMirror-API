@@ -71,7 +71,7 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **FL** | Florida | ✅ Complete | ✅ Complete | ✅ Complete (FL Election Watch) | Full Core |
 | **TX** | Texas | ✅ Complete | ✅ Complete | ✅ Complete (GoElect ENR) | Full Core |
 | **IL** | Illinois | ✅ Complete | ✅ Complete | ✅ Complete (IL SBE CSV) | Full Core |
-| **NC** | North Carolina | ✅ Complete (`sync_nc_elections`, S3 ENRS/ folder listing) | ✅ Complete (`sync_nc_candidates`, Candidate Filing CSV; federal + state legislative + state executive scope) | ✅ Complete (NCSBE S3) | Full Core (pending scheduler reload) |
+| **NC** | North Carolina | ✅ Complete (`sync_nc_elections`, S3 ENRS/ folder listing) | ✅ Complete (`sync_nc_candidates`, Candidate Filing CSV; federal + state legislative + state executive scope) | ✅ Complete (NCSBE S3) | Full Core |
 | **NY** | New York | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (Flateau DB) | Near Core |
 | **CA** | California | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (CA SOS) | Near Core |
 | **NJ** | New Jersey | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (multi-county Clarity, ~16/21 counties) | Near Core (partial) |
@@ -115,7 +115,7 @@ Stage 1 and Stage 2 complete for Federal and State offices. Election discovery, 
 - Pennsylvania (PA) — PA SOS candidate lists + electionreturns.pa.gov
 - South Carolina (SC) — SC VREMS + Clarity
 - Texas (TX) — GoElect ENR
-- North Carolina (NC) — `nc_sbe`: `sync_nc_elections` (S3 ENRS/ folder listing) + `sync_nc_candidates` (Candidate Filing CSV, `Elections/{YEAR}/Candidate Filing/`); federal + state legislative + state executive scope, judicial/county/local out of scope. Built and tested 2026-07-22; production scheduler reload still needed to activate (crontab entries added, container not yet reloaded).
+- North Carolina (NC) — `nc_sbe`: `sync_nc_elections` (S3 ENRS/ folder listing) + `sync_nc_candidates` (Candidate Filing CSV, `Elections/{YEAR}/Candidate Filing/`); federal + state legislative + state executive scope, judicial/county/local out of scope. Built, tested, merged (PR #98) and live in production 2026-07-22.
 - Vermont (VT) — vt_sos (static JSON feed; statewide-only scope, local elections deferred)
 - Virginia (VA) — VA ELECT ENR
 - Washington (WA) — VoteWA ENR
@@ -145,7 +145,7 @@ Stage 2 results adapter available. No dedicated Stage 1 adapter — elections an
 - Utah (UT) — EnhancedVotingAdapter subclass (same platform as GA/VA/WA), statewide `ballotItems` only (PR #86)
 - Clarity sweep states (AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, WI, WY) — requires `results_url` set per election in Django admin
 
-**Current focus (issue #87):** migrate CA, NY (results adapters already built, closest to Full Core) and then MD/MO/NM/UT up to Full Core by building native Stage 1 adapters, replacing Civic API's role in election/race creation — not by adding more Results-Coverage-Only states. Vermont (VT) completed this migration 2026-07-22; North Carolina (NC) completed it 2026-07-22 (`sync_nc_candidates`, pending scheduler reload) — both have moved to Full Core above.
+**Current focus (issue #87):** migrate CA, NY (results adapters already built, closest to Full Core) and then MD/MO/NM/UT up to Full Core by building native Stage 1 adapters, replacing Civic API's role in election/race creation — not by adding more Results-Coverage-Only states. Vermont (VT) completed this migration 2026-07-22; North Carolina (NC) completed it 2026-07-22 (PR #98, merged; scheduler reloaded) — both have moved to Full Core above.
 
 ### Research/Build Scaffold
 
