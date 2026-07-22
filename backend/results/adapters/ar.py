@@ -26,6 +26,7 @@ Version caching:
 """
 from __future__ import annotations
 
+import datetime
 import logging
 from typing import Optional
 
@@ -41,6 +42,73 @@ _API_BASE = "https://enr-results-api.totalresults.com"
 _DEFAULT_CID = "arkansas"
 _TIMEOUT_SHORT = 15   # version poll
 _TIMEOUT_LONG = 90    # download / bulk contest results
+
+# Keywords used to disambiguate same-day elections in the TotalResults
+# registry (e.g. Arkansas has run a primary and a "Special General" on the
+# same date) when GetElectionList returns more than one candidate for a date.
+_TYPE_KEYWORDS: dict[str, list[str]] = {
+    'general': ['general'],
+    'primary': ['primary'],
+    'primary_runoff': ['primary', 'runoff'],
+    'general_runoff': ['general', 'runoff'],
+    'special': ['special'],
+    'municipal': ['municipal'],
+    'party': ['party'],
+}
+
+
+def _resolve_totalvote_election_id(cid: str, election) -> str:
+    """
+    Discover the TotalResults electionID for an Election that's missing
+    source_metadata['totalvote_election_id'], via TotalResults' own
+    Election/GetElectionList registry (matched on election_date, and
+    disambiguated by election_type keyword when multiple elections share
+    a date). Returns '' if no unambiguous match is found.
+    """
+    url = f"{_API_BASE}/Election/GetElectionList?cId={cid}"
+    try:
+        resp = requests.get(url, timeout=_TIMEOUT_SHORT)
+        resp.raise_for_status()
+        registry = resp.json()
+    except requests.RequestException as exc:
+        logger.warning("ar_elect.adapter.registry_fetch_failed cid=%s: %s", cid, exc)
+        return ''
+
+    if not isinstance(registry, list):
+        return ''
+
+    candidates = []
+    for item in registry:
+        date_text = (item.get('electionDate') or '').split('T', 1)[0]
+        try:
+            item_date = datetime.date.fromisoformat(date_text)
+        except ValueError:
+            continue
+        if item_date == election.election_date:
+            candidates.append(item)
+
+    if not candidates:
+        return ''
+    if len(candidates) == 1:
+        return str(candidates[0].get('electionID') or '')
+
+    keywords = _TYPE_KEYWORDS.get(election.election_type, [])
+    scored = [
+        (sum(1 for kw in keywords if kw in (item.get('electionName') or '').lower()), item)
+        for item in candidates
+    ]
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    top_score = scored[0][0]
+    top_matches = [item for score, item in scored if score == top_score]
+
+    if top_score > 0 and len(top_matches) == 1:
+        return str(top_matches[0].get('electionID') or '')
+
+    logger.warning(
+        "ar_elect.adapter.ambiguous_registry_match date=%s candidates=%s",
+        election.election_date, [c.get('electionName') for c in candidates],
+    )
+    return ''
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +233,14 @@ class ArkansasAdapter(StateResultsAdapter):
         meta = election.source_metadata or {}
         cid = (str(meta.get('totalvote_cid') or '') or _DEFAULT_CID).strip()
         tr_id = str(meta.get('totalvote_election_id', '')).strip()
+
+        if not tr_id:
+            tr_id = _resolve_totalvote_election_id(cid, election)
+            if tr_id:
+                logger.info(
+                    "ar_elect.adapter.resolved_election_id election=%s pk=%d tr_id=%s",
+                    getattr(election, 'source_id', '?'), election_id, tr_id,
+                )
 
         if not tr_id:
             logger.warning(
