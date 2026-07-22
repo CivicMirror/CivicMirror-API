@@ -64,7 +64,7 @@ class TestSyncVtElections:
         certified_row = dict(elections_index[0])
         certified_row["isOfficial"] = True
         with patch("integrations.vt_sos.tasks.VermontSosClient") as mock_client_cls, \
-             patch("integrations.vt_sos.tasks.sync_vt_races") as mock_stage2:
+             patch("integrations.vt_sos.tasks.sync_vt_races"):
             mock_client_cls.return_value.list_elections.return_value = [certified_row, elections_index[1]]
             result = sync_vt_elections.apply().get()
 
