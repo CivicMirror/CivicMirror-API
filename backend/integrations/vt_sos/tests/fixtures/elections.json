@@ -1,0 +1,50 @@
+[
+  {
+    "electionGuid": "a18f77e0-89f8-4a01-8d97-61a7c75ba200",
+    "electionName": "AUGUST PRIMARY",
+    "electionDate": "2026-08-11T00:00:00",
+    "electionDateWithName": "08/11/2026 -- AUGUST PRIMARY",
+    "isDefault": true,
+    "isStateWideElection": true,
+    "isGeneralElection": false,
+    "isSync": true,
+    "electionTypeCode": "P",
+    "electionCategoryCode": "S",
+    "isOfficial": false,
+    "electionYear": 2026,
+    "isHomeLinks": false,
+    "town": null
+  },
+  {
+    "electionGuid": "b29f88f1-9ff9-4a01-8d97-61a7c75ba201",
+    "electionName": "NOVEMBER GENERAL",
+    "electionDate": "2026-11-03T00:00:00",
+    "electionDateWithName": "11/03/2026 -- NOVEMBER GENERAL",
+    "isDefault": false,
+    "isStateWideElection": true,
+    "isGeneralElection": true,
+    "isSync": true,
+    "electionTypeCode": "G",
+    "electionCategoryCode": "S",
+    "isOfficial": false,
+    "electionYear": 2026,
+    "isHomeLinks": false,
+    "town": null
+  },
+  {
+    "electionGuid": "c30f99f2-a0fa-4a01-8d97-61a7c75ba202",
+    "electionName": "BRADFORD TOWN MEETING",
+    "electionDate": "2026-03-03T00:00:00",
+    "electionDateWithName": "03/03/2026 -- BRADFORD TOWN MEETING",
+    "isDefault": false,
+    "isStateWideElection": false,
+    "isGeneralElection": false,
+    "isSync": true,
+    "electionTypeCode": "L",
+    "electionCategoryCode": "L",
+    "isOfficial": true,
+    "electionYear": 2026,
+    "isHomeLinks": false,
+    "town": "BRADFORD"
+  }
+]

@@ -31,6 +31,7 @@ from integrations.sc_vrems.tasks import sync_sc_elections
 from integrations.tn_sos.tasks import sync_tn_elections
 from integrations.tx_goelect.tasks import sync_tx_elections as _sync_tx_elections
 from integrations.va_elect.tasks import sync_va_elections
+from integrations.vt_sos.tasks import sync_vt_elections
 from integrations.wa_votewa.tasks import sync_wa_elections
 from results.tasks import poll_pending_results
 
@@ -301,3 +302,10 @@ def sync_al_elections_trigger(request):
 @require_internal_task_token
 def sync_al_fcpa_trigger(request):
     return _trigger("sync_al_fcpa", sync_al_fcpa_candidates, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_vt_sos_trigger(request):
+    return _trigger("sync_vt_sos", sync_vt_elections, request)

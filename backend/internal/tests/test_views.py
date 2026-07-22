@@ -447,3 +447,24 @@ def test_sync_al_fcpa_has_lock():
     from internal.task_locks import TASK_LOCKS
 
     assert TASK_LOCKS["sync_al_fcpa"] == ("daily", 23 * 60 * 60)
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_vt_sos_valid_token(client, internal_token):
+    with patch("internal.views.sync_vt_elections") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "vt-sos-1"
+        mock_task.apply_async.return_value = mock_result
+        response = client.post(
+            "/internal/tasks/sync-vt-sos/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert response.status_code == 202
+    assert response.json()["task_id"] == "vt-sos-1"
+
+
+def test_sync_vt_sos_has_lock():
+    from internal.task_locks import TASK_LOCKS
+
+    assert TASK_LOCKS["sync_vt_sos"] == ("daily", 23 * 60 * 60)
