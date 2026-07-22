@@ -2,11 +2,17 @@
 
 ## Coverage Status
 
+**Updated 2026-07-22 — this section was stale (dated from the original March 2026 research pass, before any NC adapter existed). Actual status:**
+
 | Stage | Status | Notes |
 |---|---|---|
-| Stage 1 — Election Creation | ✅ Available | Google Civic API |
-| Stage 1 — Race Creation | ⚠️ Untested | Google Civic API |
-| Stage 2 — Results Ingestion | ❌ No adapter | FTP + GIS (own system) — no adapter built |
+| Stage 1 — Election Creation | ✅ Complete | `integrations/nc_sbe/tasks.py::sync_nc_elections` — lists `ENRS/` S3 folders, no Civic API dependency |
+| Stage 1 — Race/Candidate Creation | ✅ Complete | `integrations/nc_sbe/tasks.py::sync_nc_candidates` — `Elections/{YEAR}/Candidate Filing/Candidate_Listing_{YEAR}.csv` on the same public S3 bucket. Scope: federal + state legislative + state executive only (judicial and county/local out of scope, same convention as KY). Primary-vs-general contests for the same office are kept distinct via `contest_variant_key` (party_contest field), mirroring VT's contest_variant pattern. |
+| Stage 2 — Results Ingestion | ✅ Complete | `results/adapters/nc.py` — same S3 bucket's `ENRS/{date}/results_pct_{date}.zip` |
+
+Full Core Coverage as of 2026-07-22, pending the production scheduler reload to activate the two new crontab entries (`sync-nc-sbe`, `sync-nc-candidates`).
+
+**Candidate Filing CSV historical availability:** confirmed live via direct S3 listing. Naming is inconsistent before 2016 (`Candidate_listing_{YEAR}.csv` lowercase 2010–2013/2015, `Candidate_Listing_2014_rev1.csv` as an outlier); `Candidate_Listing_{YEAR}.csv` is stable from 2016 onward. The client lists the `Elections/{YEAR}/Candidate Filing/` prefix and takes whatever `.csv` key is returned rather than constructing the filename, so this doesn't need special-casing for the years CivicMirror actually syncs (2016+). No folder exists before 2010 (2010 is CivicMirror's coverage floor); 2008 has referendum PDFs only, no candidate filing; 2009 has no folder at all.
 
 ---
 

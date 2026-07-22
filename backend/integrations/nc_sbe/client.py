@@ -12,9 +12,11 @@ delimiter="/" to enumerate per-election subdirectory prefixes.
 """
 from __future__ import annotations
 
+import csv
 import io
 import re
 import zipfile
+from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
 import requests
@@ -23,6 +25,7 @@ from .exceptions import NcSbeRetryableError
 
 _S3_BASE = "https://s3.amazonaws.com/dl.ncsbe.gov"
 _ENRS_PREFIX = "ENRS/"
+_CANDIDATE_FILING_PREFIX = "Elections/{year}/Candidate Filing/"
 _S3_NS = "http://s3.amazonaws.com/doc/2006-03-01/"
 _TIMEOUT_LIST = 30
 _TIMEOUT_HEAD = 15
@@ -104,6 +107,37 @@ class NcSbeClient:
             raise NcSbeRetryableError(f"NC SBE ZIP fetch failed: {exc}") from exc
         return resp.content
 
+    def list_candidate_filing_csv_key(self, year: str) -> str | None:
+        """
+        List the Elections/{year}/Candidate Filing/ prefix and return the
+        first .csv key found, or None if the folder doesn't exist / has no
+        CSV. Listing (rather than constructing the filename) sidesteps the
+        inconsistent historical naming (Candidate_listing_2013.csv,
+        Candidate_Listing_2014_rev1.csv, Candidate_Listing_2016.csv onward).
+        """
+        prefix = f"{_CANDIDATE_FILING_PREFIX.format(year=year)}"
+        params = {
+            "list-type": "2",
+            "prefix": prefix,
+            "max-keys": "1000",
+        }
+        resp = self._get(_S3_BASE, params=params, timeout=_TIMEOUT_LIST)
+        root = ET.fromstring(resp.content)
+        for content in root.findall(f"{{{_S3_NS}}}Contents"):
+            key = content.findtext(f"{{{_S3_NS}}}Key") or ""
+            if key.lower().endswith(".csv"):
+                return key
+        return None
+
+    def fetch_candidate_filing_csv(self, key: str) -> bytes:
+        """Download the candidate filing CSV at the given S3 key."""
+        url = f"{_S3_BASE}/{quote(key)}"
+        try:
+            resp = self._get(url, timeout=_TIMEOUT_ZIP)
+        except requests.RequestException as exc:
+            raise NcSbeRetryableError(f"NC SBE candidate CSV fetch failed: {exc}") from exc
+        return resp.content
+
 
 def _results_zip_url(date_str: str) -> str:
     """Build the S3 URL for a results ZIP from a YYYY_MM_DD date string."""
@@ -144,3 +178,12 @@ def parse_results_tsv(zip_bytes: bytes) -> list[dict]:
         rows.append(row)
 
     return rows
+
+
+def parse_candidate_listing_csv(csv_bytes: bytes) -> list[dict]:
+    """Parse a Candidate_Listing_{YEAR}.csv file into a list of row dicts."""
+    if not csv_bytes:
+        return []
+    text = csv_bytes.decode("utf-8-sig", errors="replace")
+    reader = csv.DictReader(io.StringIO(text))
+    return [dict(row) for row in reader]

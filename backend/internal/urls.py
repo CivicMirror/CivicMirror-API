@@ -16,6 +16,7 @@ urlpatterns = [
     path("tasks/sync-ca-sos/", views.sync_ca_sos_trigger, name="internal-sync-ca-sos"),
     path("tasks/seed-election-calendar/", views.seed_election_calendar_trigger, name="internal-seed-election-calendar"),
     path("tasks/sync-nc-sbe/", views.sync_nc_sbe_trigger, name="internal-sync-nc-sbe"),
+    path("tasks/sync-nc-candidates/", views.sync_nc_candidates_trigger, name="internal-sync-nc-candidates"),
     path("tasks/sync-nj-elections/", views.sync_nj_elections_trigger, name="internal-sync-nj-elections"),
     path("tasks/sync-az-sos/", views.sync_az_sos_trigger, name="internal-sync-az-sos"),
     path("tasks/sync-ga-sos/", views.sync_ga_sos_trigger, name="internal-sync-ga-sos"),
