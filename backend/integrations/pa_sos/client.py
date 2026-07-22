@@ -2,6 +2,25 @@
 HTTP client for pavoterservices.beta.pa.gov using Playwright and Stealth.
 Requires passing WAF challenge via BasicSearch.aspx, then loading ElectionInfo.aspx
 to extract candidate listing JSON from the hidden input #dataJson.
+
+Two known site quirks, confirmed live (2026-07-22):
+
+1. ElectionInfo.aspx renders *two* <input id="dataJson"> elements — one
+   populated with real data, one empty. Playwright's default `.locator()`
+   requires exactly one match and raises a strict-mode violation on two.
+   The populated one is always first in DOM order, so `.first` resolves it.
+
+2. The site is Imperva-protected (same vendor as electionreturns.pa.gov,
+   see results/adapters/pa.py). Visiting BasicSearch.aspx first to warm the
+   session does not reliably clear the challenge — navigating to
+   ElectionInfo.aspx sometimes lands on an Imperva challenge/block page
+   instead of the real page, which then manifests as a vague "waiting for
+   locator ReportElectionDropDown" timeout with no indication of the actual
+   cause. Two variants confirmed live: a static "Pardon Our Interruption"
+   interstitial, and a JS-redirect challenge (`_Incapsula_Resource` iframe,
+   falling back to "Request unsuccessful. Incapsula incident ID: ..." text
+   if the iframe itself can't load). _goto() checks for either marker and
+   retries the navigation a few times before giving up.
 """
 from __future__ import annotations
 
@@ -13,6 +32,12 @@ from playwright_stealth import Stealth
 from .exceptions import PaSosError, PaSosRetryableError
 
 logger = logging.getLogger(__name__)
+
+_CHALLENGE_MARKERS = (
+    "Pardon Our Interruption",
+    "Incapsula incident ID",
+)
+_CHALLENGE_RETRY_ATTEMPTS = 3
 
 
 class PaSosClient:
@@ -58,6 +83,39 @@ class PaSosClient:
             except Exception:
                 pass
 
+    def _goto(self, url: str) -> None:
+        """
+        Navigate to url, retrying through an Imperva challenge/block page a
+        few times before giving up. See module docstring: warming the
+        session on BasicSearch.aspx doesn't reliably clear the challenge for
+        the next navigation, so each _goto() call re-checks for it directly.
+        """
+        for attempt in range(1, _CHALLENGE_RETRY_ATTEMPTS + 1):
+            try:
+                # The challenge script sometimes issues a client-side redirect
+                # mid-load, which aborts Playwright's own navigation
+                # (net::ERR_ABORTED) — that's an expected part of the
+                # challenge, not a real failure, so it counts as "still
+                # challenged" rather than raising immediately.
+                self._page.goto(url, timeout=self.timeout_ms)
+                self._page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
+                content = self._page.content() or ""
+            except Exception as exc:
+                logger.warning(
+                    "pa_sos.client.waf_challenge_nav_error url=%s attempt=%d/%d err=%s",
+                    url, attempt, _CHALLENGE_RETRY_ATTEMPTS, exc,
+                )
+                continue
+            if not any(marker in content for marker in _CHALLENGE_MARKERS):
+                return
+            logger.warning(
+                "pa_sos.client.waf_challenge url=%s attempt=%d/%d",
+                url, attempt, _CHALLENGE_RETRY_ATTEMPTS,
+            )
+        raise PaSosRetryableError(
+            f"WAF challenge/block page did not clear for {url} after {_CHALLENGE_RETRY_ATTEMPTS} attempts"
+        )
+
     def fetch_candidate_list(self, election_id: int = 153) -> str:
         """
         Fetch the hidden #dataJson field value from ElectionInfo.aspx.
@@ -67,14 +125,12 @@ class PaSosClient:
             # 1. Pass WAF challenge on BasicSearch
             search_url = f"{self.base_url}/electioninfo/BasicSearch.aspx"
             logger.info("Navigating to %s to pass WAF challenge", search_url)
-            self._page.goto(search_url, timeout=self.timeout_ms)
-            self._page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
+            self._goto(search_url)
 
             # 2. Go to ElectionInfo
             info_url = f"{self.base_url}/electioninfo/ElectionInfo.aspx"
             logger.info("Navigating to %s", info_url)
-            self._page.goto(info_url, timeout=self.timeout_ms)
-            self._page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
+            self._goto(info_url)
 
             # 3. Check selected election in dropdown and select if needed
             dropdown_selector = "#ctl00_ContentPlaceHolder1_ReportElectionDropDown"
@@ -88,8 +144,11 @@ class PaSosClient:
                 self._page.select_option(dropdown_selector, value=str(election_id))
                 self._page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
 
-            # 4. Extract dataJson input value
-            data_json = self._page.locator("#dataJson").get_attribute("value")
+            # 4. Extract dataJson input value. The page renders two
+            # #dataJson inputs (one populated, one empty) — .first is
+            # always the populated one; a bare .locator() strict-mode
+            # violates on the duplicate.
+            data_json = self._page.locator("#dataJson").first.get_attribute("value")
             if not data_json:
                 raise PaSosError("dataJson input value is empty or missing")
             return data_json
@@ -102,8 +161,7 @@ class PaSosClient:
         try:
             detail_url = f"{self.base_url}/ElectionInfo/CandidateInfo.aspx?ID={candidate_id}"
             logger.info("Navigating to candidate detail: %s", detail_url)
-            self._page.goto(detail_url, timeout=self.timeout_ms)
-            self._page.wait_for_load_state("networkidle", timeout=self.timeout_ms)
+            self._goto(detail_url)
             return self._page.content()
         except Exception as exc:
             raise PaSosRetryableError(f"Failed to fetch candidate detail for ID {candidate_id}: {exc}") from exc
