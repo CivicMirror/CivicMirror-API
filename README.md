@@ -42,11 +42,11 @@ Use this table to identify the next best integration target. States with multipl
 | **KY** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **LA** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **MA** | ✅ | ✅ | ⚠️ | ✅ | ❌ | ✅ | ✅ |
-| **MD** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **MD** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **ME** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **MI** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **MN** | ⚠️ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| **MO** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **MO** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **MS** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **MT** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **NC** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
@@ -54,7 +54,7 @@ Use this table to identify the next best integration target. States with multipl
 | **NE** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **NH** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **NJ** | ⚠️ | ⚠️ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| **NM** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **NM** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **NV** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **NY** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **OH** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
@@ -66,7 +66,7 @@ Use this table to identify the next best integration target. States with multipl
 | **SD** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **TN** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **TX** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| **UT** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **UT** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **VA** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **VT** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **WA** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
@@ -96,12 +96,15 @@ States closest to a full ✅ row based on available public data:
 
 | State | Opportunity | Source |
 |---|---|---|
+| **NC** | Results adapter built; add Stage 1 (native election/race creation) to drop Civic API reliance | NC SBE FTP site |
+| **NY** | Results adapter built; add Stage 1 | Flateau DB |
+| **CA** | Results adapter built; add Stage 1 | CA SOS |
 | **KY** | Add certified recap/live results ingestion to existing SOS race/candidate adapter | Kentucky SOS recaps / election-night portal |
 | **TN** | Stage 1 + certified results shipped; live election-night dashboard still needs endpoint discovery | Tennessee SOS / ENR |
-| **NC** | Existing adapter; Stage 1 race creation hardening | NC SBE FTP site |
 
+> Tracking issue [#87](https://github.com/CivicMirror/CivicMirror-API/issues/87) tracks the wave of migrations from Results-Coverage-Only / Near Core to Full Core Coverage.
 > See [`docs/state-research/COVERAGE-ANALYSIS-RESULTS.md`](docs/state-research/COVERAGE-ANALYSIS-RESULTS.md) for the full source analysis on all 48 researched states.
 
 ---
 
-*Last updated: 2026-07-15*
+*Last updated: 2026-07-22*
