@@ -72,6 +72,70 @@ def test_higher_precedence_source_wins_per_field(ca_precedence):
 
 
 @pytest.mark.django_db
+def test_ingest_race_without_contest_variant_merges_same_office(ca_precedence):
+    """Baseline: confirms the pre-existing collision this fix addresses —
+    without contest_variant, two ingests for the same office/ocd/race_type
+    merge into one Race (this is correct for non-partisan-primary sources
+    like civic_api, and the reason VT's feed needs contest_variant)."""
+    e, _ = ingest.ingest_election(source="ca_sos", source_id="x", identity=_election_identity(), fields={})
+    r1, created1 = ingest.ingest_race(
+        election=e, source="ca_sos",
+        identity={"office_title": "Governor", "ocd_division_id": "", "race_type": "candidate"},
+        fields={"office_title": "Governor"},
+    )
+    r2, created2 = ingest.ingest_race(
+        election=e, source="ca_sos",
+        identity={"office_title": "Governor", "ocd_division_id": "", "race_type": "candidate"},
+        fields={"office_title": "Governor"},
+    )
+    assert created1 is True
+    assert created2 is False
+    assert r1.pk == r2.pk
+
+
+@pytest.mark.django_db
+def test_ingest_race_contest_variant_keeps_primary_parties_distinct(ca_precedence):
+    """The bug contest_variant exists to fix: three primary parties running
+    the same office (same office_title, same OCD, same race_type) must
+    produce three distinct Races, not collapse into one."""
+    e, _ = ingest.ingest_election(source="ca_sos", source_id="x", identity=_election_identity(), fields={})
+
+    dem, dem_created = ingest.ingest_race(
+        election=e, source="vt_sos",
+        identity={
+            "office_title": "Representative to Congress", "ocd_division_id": "",
+            "race_type": "candidate", "contest_variant": "vt:federal:D:4:statewide",
+        },
+        fields={"office_title": "Representative to Congress", "ballot_type": "Democratic"},
+    )
+    rep, rep_created = ingest.ingest_race(
+        election=e, source="vt_sos",
+        identity={
+            "office_title": "Representative to Congress", "ocd_division_id": "",
+            "race_type": "candidate", "contest_variant": "vt:federal:R:4:statewide",
+        },
+        fields={"office_title": "Representative to Congress", "ballot_type": "Republican"},
+    )
+    # Re-ingesting the Democratic contest must resolve back to the same row,
+    # not create a third one.
+    dem_again, dem_again_created = ingest.ingest_race(
+        election=e, source="vt_sos",
+        identity={
+            "office_title": "Representative to Congress", "ocd_division_id": "",
+            "race_type": "candidate", "contest_variant": "vt:federal:D:4:statewide",
+        },
+        fields={"office_title": "Representative to Congress", "ballot_type": "Democratic"},
+    )
+
+    assert dem_created is True
+    assert rep_created is True
+    assert dem_again_created is False
+    assert dem.pk != rep.pk
+    assert dem.pk == dem_again.pk
+    assert Race.objects.filter(election=e).count() == 2
+
+
+@pytest.mark.django_db
 def test_candidate_matching_by_normalized_name_and_party(ca_precedence):
     e, _ = ingest.ingest_election(source="ca_sos", source_id="x", identity=_election_identity(), fields={})
     r, _ = ingest.ingest_race(

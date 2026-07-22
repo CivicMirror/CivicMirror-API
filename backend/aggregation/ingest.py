@@ -120,7 +120,10 @@ def ingest_race(*, election, source, identity, fields):
     office_title = identity["office_title"]
     ocd = identity.get("ocd_division_id", "") or ""
     race_type = identity["race_type"]
-    key = race_canonical_key(election.canonical_key or f"e{election.pk}", office_title, ocd, race_type)
+    contest_variant = identity.get("contest_variant", "") or ""
+    key = race_canonical_key(
+        election.canonical_key or f"e{election.pk}", office_title, ocd, race_type, contest_variant,
+    )
 
     race = Race.objects.select_for_update().filter(canonical_key=key).first()
     created = race is None
