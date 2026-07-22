@@ -18,7 +18,7 @@ def _load_fixture(name: str) -> str:
 def test_parse_election_wide_csv_extracts_all_rows():
     text = _load_fixture("nm_media_excerpt.csv")
     rows = parse_election_wide_csv(text)
-    assert len(rows) == 20
+    assert len(rows) == 22
 
 
 def test_parse_election_wide_csv_qualifies_colliding_office_titles():
@@ -65,8 +65,8 @@ def test_parse_election_wide_csv_routes_yes_no_ids_to_option_label():
 
     yes_rows = [r for r in rows if r.option_label == "Yes"]
     no_rows = [r for r in rows if r.option_label == "No"]
-    assert len(yes_rows) == 2
-    assert len(no_rows) == 2
+    assert len(yes_rows) == 3
+    assert len(no_rows) == 3
     for row in yes_rows + no_rows:
         assert row.candidate_name is None
 
@@ -86,6 +86,27 @@ def test_parse_election_wide_csv_falls_back_to_bare_race_name_when_area_num_blan
     assert " — " not in curry_yes.office_title[:5]
     assert curry_yes.jurisdiction_fragment == ""
     assert curry_yes.vote_count == 1987
+
+
+def test_parse_election_wide_csv_truncates_long_office_titles_to_fit_the_db_column():
+    """Race.office_title is a CharField(max_length=255). 108 of the 599 real
+    races in the full captured election have a RaceName exceeding that limit
+    (full ballot-measure legal text, up to 636 chars observed) — SQLite
+    doesn't enforce CharField length so this only bites against a real
+    Postgres database (confirmed: CI failed on this exact row with
+    psycopg2.errors.StringDataRightTruncation before the fix)."""
+    text = _load_fixture("nm_media_excerpt.csv")
+    rows = parse_election_wide_csv(text)
+    tatum_rows = [r for r in rows if r.raw["contest_code"] == "1304"]
+
+    assert len(tatum_rows) == 2
+    for row in tatum_rows:
+        assert len(row.office_title) == 255
+        assert row.office_title.startswith("TATUM MUNICIPAL SCHOOL DISTRICT — TATUM MUNICIPAL SCHOOLS")
+        assert row.office_title.endswith("…")
+
+    yes_row = next(r for r in tatum_rows if r.option_label == "Yes")
+    assert yes_row.vote_count == 189
 
 
 def test_parse_election_wide_csv_passes_through_named_write_in_without_aggregation():
@@ -170,7 +191,7 @@ def test_fetch_results_parses_real_fixture_into_rows(mock_fetch):
     result = NewMexicoAdapter().fetch_results(election_date=election.election_date, election_id=election.pk)
 
     assert result.mapping_confidence == "full"
-    assert len(result.rows) == 20
+    assert len(result.rows) == 22
     assert any(r.office_title == "ALAMO CITY DISTRICT- ALL — Municipal Judge" for r in result.rows)
 
 
