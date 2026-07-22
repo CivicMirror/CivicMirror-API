@@ -2,9 +2,22 @@
 Pennsylvania electionreturns.pa.gov results adapter.
 
 The Report Center export is the preferred source: one CSV contains all counties,
-offices, candidates, and vote-mode splits for an election. The site is Imperva
-cookie-gated, so the client warms a Playwright session, copies cookies into a
-requests session, then uses the JSON/CSV endpoints directly.
+offices, candidates, and vote-mode splits for an election.
+
+The JSON/CSV endpoints do not require a warmed session under normal conditions
+(verified 2026-07-22: a plain, cookie-less request succeeds). Imperva only
+gates the site occasionally; a Playwright-driven session actually gets *worse*
+treatment than a bare request — Imperva's bot fingerprinting flags the
+headless-browser session and 403s API calls made with its cookies, even though
+an unauthenticated request to the same endpoint succeeds. So the client no
+longer warms a session up front: it tries the plain request first and only
+falls back to a Playwright-warmed session (once, cached for the client's
+lifetime) if that plain request comes back 403.
+
+The JSON endpoints also return their payload as a JSON-encoded *string*
+(ASP.NET Web API action returning `string`, not the object itself) — e.g.
+`"{\"Table\":[...]}"` rather than `{"Table": [...]}` — so responses need a
+second `json.loads()` after `resp.json()`.
 """
 from __future__ import annotations
 
@@ -12,6 +25,7 @@ import csv
 import datetime
 import hashlib
 import io
+import json
 import logging
 from collections import OrderedDict
 from typing import Any
@@ -53,6 +67,7 @@ class PaElectionReturnsClient:
         self._playwright_ctx = None
         self._playwright = None
         self._browser = None
+        self._session_warmed = False
 
     def __enter__(self):
         return self
@@ -88,31 +103,60 @@ class PaElectionReturnsClient:
                 domain=cookie.get("domain"),
                 path=cookie.get("path", "/"),
             )
+        self._session_warmed = True
+
+    def _request_with_warm_retry(self, method: str, path: str, **kwargs: Any) -> requests.Response:
+        """
+        Try a plain (unwarmed) request first. Only pay for a Playwright session
+        — and only once per client lifetime — if the plain request is actually
+        blocked (403). Warming unconditionally is counterproductive: Imperva's
+        bot fingerprinting flags the headless-browser session itself, so a
+        Playwright-warmed session can get 403'd where a bare request succeeds.
+        """
+        url = f"{self.base_url}{path}"
+        resp = self.session.request(method, url, timeout=self.timeout, **kwargs)
+        if resp.status_code == 403 and not self._session_warmed:
+            logger.warning("pa_electionreturns.client.403_retry_with_warm_session path=%s", path)
+            self.warm_session()
+            resp = self.session.request(method, url, timeout=self.timeout, **kwargs)
+        resp.raise_for_status()
+        return resp
+
+    @staticmethod
+    def _decode_json(resp: requests.Response) -> Any:
+        """
+        electionreturns.pa.gov's ASP.NET Web API actions return `string`, so
+        the JSON body is itself a JSON-encoded string (e.g. '"{\\"Table\\":[]}"')
+        rather than the object directly — needs a second decode.
+        """
+        data = resp.json()
+        if isinstance(data, str):
+            data = json.loads(data)
+        return data
 
     def get_election_list(self) -> list[dict[str, Any]]:
-        resp = self.session.get(f"{self.base_url}/api/Reports/GetElectionList", timeout=self.timeout)
-        resp.raise_for_status()
-        data = resp.json()
+        resp = self._request_with_warm_retry("GET", "/api/Reports/GetElectionList")
+        data = self._decode_json(resp)
+        if isinstance(data, dict):
+            return data.get("Table") or []
         return data if isinstance(data, list) else []
 
     def get_filter_data(self, election_id: int, election_subtype: str) -> dict[str, Any]:
-        resp = self.session.get(
-            f"{self.base_url}/api/Reports/GetFilterData",
+        resp = self._request_with_warm_retry(
+            "GET",
+            "/api/Reports/GetFilterData",
             params={"electionId": election_id, "electionsubtype": election_subtype},
-            timeout=self.timeout,
         )
-        resp.raise_for_status()
-        data = resp.json()
+        data = self._decode_json(resp)
         return data if isinstance(data, dict) else {}
 
     def generate_report(self, payload: dict[str, Any]) -> str:
-        resp = self.session.post(
-            f"{self.base_url}/api/Reports/GenerateReport",
+        resp = self._request_with_warm_retry(
+            "POST",
+            "/api/Reports/GenerateReport",
             json=payload,
-            timeout=self.timeout,
             headers={"Content-Type": "application/json", **_HEADERS},
         )
-        resp.raise_for_status()
         return resp.text
 
 
@@ -360,8 +404,6 @@ class PennsylvaniaAdapter(StateResultsAdapter):
         source_url = f"{_BASE_URL}/ReportCenter/Reports"
         try:
             with PaElectionReturnsClient() as client:
-                client.warm_session()
-
                 if not pa_election_id or not election_subtype:
                     registry = client.get_election_list()
                     resolved = _resolve_from_registry(election, registry)
