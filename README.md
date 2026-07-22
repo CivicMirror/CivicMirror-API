@@ -107,4 +107,11 @@ States closest to a full ✅ row based on available public data:
 
 ---
 
+## MCP Server
+
+This repo includes a read-only Python MCP server for querying the CivicMirror DRF API from MCP clients.
+See [`mcp_server/README.md`](mcp_server/README.md) for setup, Claude Code stdio registration, and example queries.
+
+---
+
 *Last updated: 2026-07-22*
