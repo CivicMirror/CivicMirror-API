@@ -581,7 +581,9 @@ git commit -m "feat(nm): add NewMexicoAdapter fetching and parsing BPro's electi
 - Consumes: everything from Tasks 1–2, plus `results.tasks._bootstrap_races_from_results` (existing, read-only — do not modify `results/tasks.py`).
 - Produces: `NewMexicoAdapter` discoverable via `results.adapters.registry.get_adapter("NM")` at Django startup.
 
-This task's verification matters more here than it did for Maryland/Missouri's equivalent final task: `results.tasks.ingest_official_results` only calls `_process_race_results` against pre-existing `Race` rows and falls back to `_bootstrap_races_from_results` when `Race.objects.filter(election=election)` is empty. NM's hyper-local municipal races (mayors, school boards, water districts) are extremely unlikely to already exist via Google Civic API sync the way Maryland/Missouri's federal/statewide races plausibly do — so the bootstrap path is this adapter's *primary* real-world code path, not a rarely-hit fallback. Without directly testing it, the office-title collision fix from Task 1 would be verified only in the parser's in-memory output, never against real `Race`/`Candidate` creation where the collision actually bites.
+This task's verification matters more here than it did for Maryland/Missouri's equivalent final task: `results.tasks.ingest_official_results` only calls `_process_race_results` against pre-existing `Race` rows and falls back to `_bootstrap_races_from_results` when `Race.objects.filter(election=election)` is empty. NM's hyper-local municipal races (mayors, school boards, water districts) are extremely unlikely to already exist via Google Civic API sync the way Maryland/Missouri's federal/statewide races plausibly do — so the bootstrap path is this adapter's *primary* real-world code path, not a rarely-hit fallback. Without directly testing it, Task 1/2's parsing rules (office-title qualification, contest_code tagging, MEASURE/CANDIDATE classification) would be verified only in the parser's in-memory output, never against real `Race`/`Candidate` creation.
+
+Note on what disambiguates the two "Mayor" contests in this path specifically: `_bootstrap_races_from_results` groups rows by `(office_title, source_identity)`, and `source_identity` is derived from `row.raw["contest_code"]` (the BPro RaceID), which `nm_parse.py` sets distinctly on every row. So the two Mayor contests bootstrap as separate `Race`s by `contest_code` alone, independent of the office_title qualification. The office_title qualification's own defense-in-depth value is for a different path — `_process_race_results`'s fallback title-matching against *pre-existing* races lacking `contest_code` metadata — which this bootstrap test does not exercise (see "Follow-up work" below).
 
 - [ ] **Step 1: Register the adapter module**
 
@@ -604,11 +606,25 @@ Append to `backend/results/tests/test_nm_adapter.py`:
 ```python
 @pytest.mark.django_db
 def test_bootstrap_creates_separate_races_for_colliding_office_titles():
-    """The office-title qualification fix (Task 1) must hold up against real
-    Race/Candidate creation, not just the parser's in-memory ResultRow output —
-    this is the scenario results/tasks.py::_bootstrap_races_from_results hits
-    on NM's first-ever ingest for an election, since hyper-local municipal
-    races won't already exist via Google Civic API sync."""
+    """Exercises results/tasks.py::_bootstrap_races_from_results end-to-end
+    against real fixture data — the path NM hits on an election's first-ever
+    ingest, since hyper-local municipal races won't already exist via Google
+    Civic API sync. Verifies it produces correct, separate Race/Candidate/
+    MeasureOption rows, including for two contests that happen to share a
+    similar office name (Alamo's "Mayor" vs Albuquerque's "MAYOR").
+
+    Note: in this code path, what actually keeps the two Mayor contests from
+    merging is `_bootstrap_races_from_results` grouping rows by
+    `(office_title, source_identity)`, where `source_identity` is derived
+    from `row.raw["contest_code"]` (the BPro RaceID, e.g. 10083 vs 10144) —
+    nm_parse.py sets a distinct contest_code on every row, so the two contests
+    are disambiguated regardless of the office_title qualification. The
+    office_title qualification (`f"{AreaNum} — {RaceName}"`, Task 1) remains
+    valuable defense-in-depth for a different path — _process_race_results's
+    fallback title-matching against *pre-existing* races that lack
+    contest_code metadata — which this test does not exercise. That's an
+    accepted gap for now: no other NM race-creation adapter exists yet that
+    would populate such pre-existing races."""
     from elections.models import Candidate, Election, Race
     from results.adapters.base import AdapterResult
     from results.adapters.nm_parse import parse_election_wide_csv
@@ -697,6 +713,7 @@ git commit -m "feat(nm): register NewMexicoAdapter and verify the bootstrap-race
 
 ## Follow-up work (explicitly out of scope for this plan)
 
+- **Untested `_process_race_results` fallback title-matching against pre-existing races** — `results/tasks.py`'s fallback path (around `_office_title_key(r.office_title) == _office_title_key(race.office_title)`, tasks.py:264-273), which matches results against *pre-existing* `Race` rows lacking `contest_code` metadata, is not covered by any NM test. The office_title qualification from Task 1 is the real defense-in-depth mechanism for that path. Accepted as a deferred gap for now since no other NM race-creation adapter exists yet that would populate such pre-existing races; revisit if/when one does.
 - **Civera ElectionStats** — the entire historical GraphQL-backed system. Separate vendor, separate API, unrelated ID space. Tracked in GitHub issue #84; see `NM-Election_ResearchV4.md` Part III/V/VI for full findings and the recommended `CiveraElectionStatsAdapter` phase breakdown (C1–C5) when picked up.
 - **BPro precinct/county JSON drill-down** (`GetMapData`/`GetMapDataArchive`) — needs an HTML category-page scraping step to discover `raceid`/`officeseqno`/`countyid`; no clean metadata endpoint exists for that. Would unlock precinct-level results and the `Winner` field this build doesn't have access to.
 - **Live `eid` discovery** for the current/future election cycle — this plan hardcodes `eid=2897`. The research doc explicitly flags "how are `eid` values best discovered programmatically?" as unresolved.

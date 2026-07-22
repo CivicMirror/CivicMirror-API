@@ -206,11 +206,25 @@ def test_fetch_results_returns_empty_for_missing_election():
 
 @pytest.mark.django_db
 def test_bootstrap_creates_separate_races_for_colliding_office_titles():
-    """The office-title qualification fix (Task 1) must hold up against real
-    Race/Candidate creation, not just the parser's in-memory ResultRow output —
-    this is the scenario results/tasks.py::_bootstrap_races_from_results hits
-    on NM's first-ever ingest for an election, since hyper-local municipal
-    races won't already exist via Google Civic API sync."""
+    """Exercises results/tasks.py::_bootstrap_races_from_results end-to-end
+    against real fixture data — the path NM hits on an election's first-ever
+    ingest, since hyper-local municipal races won't already exist via Google
+    Civic API sync. Verifies it produces correct, separate Race/Candidate/
+    MeasureOption rows, including for two contests that happen to share a
+    similar office name (Alamo's "Mayor" vs Albuquerque's "MAYOR").
+
+    Note: in this code path, what actually keeps the two Mayor contests from
+    merging is `_bootstrap_races_from_results` grouping rows by
+    `(office_title, source_identity)`, where `source_identity` is derived
+    from `row.raw["contest_code"]` (the BPro RaceID, e.g. 10083 vs 10144) —
+    nm_parse.py sets a distinct contest_code on every row, so the two contests
+    are disambiguated regardless of the office_title qualification. The
+    office_title qualification (`f"{AreaNum} — {RaceName}"`, Task 1) remains
+    valuable defense-in-depth for a different path — _process_race_results's
+    fallback title-matching against *pre-existing* races that lack
+    contest_code metadata — which this test does not exercise. That's an
+    accepted gap for now: no other NM race-creation adapter exists yet that
+    would populate such pre-existing races."""
     from elections.models import Candidate, Election, Race
     from results.adapters.base import AdapterResult
     from results.adapters.nm_parse import parse_election_wide_csv
