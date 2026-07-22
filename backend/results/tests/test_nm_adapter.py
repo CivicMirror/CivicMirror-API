@@ -23,9 +23,12 @@ def test_parse_election_wide_csv_extracts_all_rows():
 
 def test_parse_election_wide_csv_qualifies_colliding_office_titles():
     """Two different RaceIDs both named 'Mayor'/'MAYOR' must not collapse into
-    one office_title — results/tasks.py::_bootstrap_races_from_results groups
-    by (office_title, source_identity) and would otherwise merge candidates
-    from unrelated cities into one Race."""
+    one office_title. On the bootstrap path this is redundant with contest_code
+    -based source_identity (see test_bootstrap_creates_separate_races_for_
+    colliding_office_titles's docstring), but results/tasks.py::
+    _process_race_results also falls back to matching pre-existing races by
+    office_title alone when they lack contest_code metadata — an unqualified
+    'Mayor' would genuinely collide there."""
     text = _load_fixture("nm_media_excerpt.csv")
     rows = parse_election_wide_csv(text)
 
