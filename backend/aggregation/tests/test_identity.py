@@ -133,3 +133,45 @@ def test_race_canonical_key_preserves_full_ocd_division_id():
     ocd = "ocd-division/country:us/state:ca/cd:1"
     key = race_canonical_key(ek, "U.S. Representative District 1", ocd, "candidate")
     assert key == f"{ek}|u.s. representative district 1|{ocd}|candidate"
+
+
+def test_race_canonical_key_omitted_variant_matches_pre_existing_key():
+    """Default behavior (no contest_variant) must be byte-identical to the
+    pre-extension key, so existing sources are unaffected."""
+    ek = "CA:primary:2026-06-02:state"
+    assert (
+        race_canonical_key(ek, "Governor", "", "candidate")
+        == race_canonical_key(ek, "Governor", "", "candidate", "")
+        == f"{ek}|governor|NO_OCD|candidate"
+    )
+
+
+def test_race_canonical_key_variant_appended_when_present():
+    ek = "VT:primary:2026-08-11:state"
+    key = race_canonical_key(ek, "Governor", "", "candidate", "vt:statewide:D:1:statewide")
+    assert key == f"{ek}|governor|NO_OCD|candidate|vt:statewide:d:1:statewide"
+
+
+def test_race_canonical_key_variant_disambiguates_primary_parties():
+    """The bug this fix exists for: VT publishes Democratic, Progressive, and
+    Republican REPRESENTATIVE TO CONGRESS as three separate contests sharing
+    the same office ID (oid=4). Without contest_variant, all three would
+    collapse into one Race; with it, they stay distinct."""
+    ek = "VT:primary:2026-08-11:state"
+    dem = race_canonical_key(ek, "Representative to Congress", "", "candidate", "vt:federal:D:4:statewide")
+    prog = race_canonical_key(ek, "Representative to Congress", "", "candidate", "vt:federal:PR:4:statewide")
+    rep = race_canonical_key(ek, "Representative to Congress", "", "candidate", "vt:federal:R:4:statewide")
+    assert len({dem, prog, rep}) == 3
+
+
+def test_race_canonical_key_variant_is_case_and_whitespace_normalized():
+    ek = "VT:primary:2026-08-11:state"
+    a = race_canonical_key(ek, "Governor", "", "candidate", "VT:Statewide:D:1:Statewide")
+    b = race_canonical_key(ek, "Governor", "", "candidate", "  vt:statewide:d:1:statewide  ")
+    assert a == b
+
+
+def test_race_canonical_key_blank_variant_after_normalization_is_omitted():
+    ek = "CA:primary:2026-06-02:state"
+    key = race_canonical_key(ek, "Governor", "", "candidate", "   ")
+    assert key == f"{ek}|governor|NO_OCD|candidate"

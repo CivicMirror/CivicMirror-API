@@ -114,12 +114,36 @@ def election_canonical_key(
     return f"{state}:{election_type}:{election_date.isoformat()}:{jurisdiction_level}"
 
 
+def _normalize_variant(contest_variant: str) -> str:
+    """Lowercase and collapse whitespace; preserve the field's own delimiters
+    (e.g. ':') so callers can build structured variant keys like
+    'vt:statewide:d:1:statewide'."""
+    return _squash(contest_variant or "").lower()
+
+
 def race_canonical_key(
-    election_key: str, office_title: str, ocd_division_id: str, race_type: str
+    election_key: str,
+    office_title: str,
+    ocd_division_id: str,
+    race_type: str,
+    contest_variant: str = "",
 ) -> str:
-    return "|".join([
+    """
+    contest_variant is an optional, source-supplied disambiguator for races
+    that the (election, office, ocd, race_type) tuple alone cannot tell apart
+    — e.g. a partisan primary where every party runs its own ballot for the
+    same office (same office title, same OCD, same race_type), or a
+    same-office-ID contest that repeats across many districts under one
+    umbrella feed. Omitted (the default), this is a no-op and produces the
+    exact same key as before, so existing sources are unaffected.
+    """
+    parts = [
         election_key,
         normalize_office_title(office_title, race_type),
         _normalize_ocd(ocd_division_id) or "NO_OCD",
         race_type,
-    ])
+    ]
+    normalized_variant = _normalize_variant(contest_variant)
+    if normalized_variant:
+        parts.append(normalized_variant)
+    return "|".join(parts)
