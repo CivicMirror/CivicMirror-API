@@ -20,6 +20,10 @@ def _mock_response(status_code=200, content=b"PDF", text="<html></html>", header
     return resp
 
 
+def _calendar_page_html(href="/sites/default/files/2026-01/Cal3yr2025-27_Final.pdf"):
+    return f'<html><body><p><a href="{href}">Printable Calendar</a></p></body></html>'
+
+
 @pytest.fixture
 def mock_proxy_request():
     """Patch proxy_request in ia_sos.client — no network calls made."""
@@ -29,9 +33,19 @@ def mock_proxy_request():
 
 class TestFetchCalendarPdf:
     def test_returns_bytes_on_success(self, mock_proxy_request):
-        mock_proxy_request.return_value = _mock_response(content=b"%PDF-1.4 calendar")
+        mock_proxy_request.side_effect = [
+            _mock_response(text=_calendar_page_html()),
+            _mock_response(content=b"%PDF-1.4 calendar"),
+        ]
         result = IowaSosClient().fetch_calendar_pdf()
         assert result == b"%PDF-1.4 calendar"
+
+    def test_raises_when_no_pdf_link_on_page(self, mock_proxy_request):
+        mock_proxy_request.return_value = _mock_response(
+            text="<html><body><p>No PDFs here</p></body></html>"
+        )
+        with pytest.raises(IowaSosError):
+            IowaSosClient().fetch_calendar_pdf()
 
     def test_retries_on_503(self, mock_proxy_request):
         mock_proxy_request.side_effect = [
@@ -102,16 +116,25 @@ class TestProxyRouting:
     """Verify that requests always use use_proxy=True and target sos.iowa.gov URLs."""
 
     def test_calendar_pdf_uses_proxy(self, mock_proxy_request):
-        mock_proxy_request.return_value = _mock_response(content=b"%PDF-1.4 calendar")
+        mock_proxy_request.side_effect = [
+            _mock_response(text=_calendar_page_html()),
+            _mock_response(content=b"%PDF-1.4 calendar"),
+        ]
         IowaSosClient().fetch_calendar_pdf()
         call = mock_proxy_request.call_args
         assert call[1].get("use_proxy") is True
 
-    def test_calendar_pdf_targets_correct_url(self, mock_proxy_request):
-        mock_proxy_request.return_value = _mock_response(content=b"%PDF-1.4 calendar")
+    def test_calendar_pdf_targets_discovered_url(self, mock_proxy_request):
+        mock_proxy_request.side_effect = [
+            _mock_response(text=_calendar_page_html()),
+            _mock_response(content=b"%PDF-1.4 calendar"),
+        ]
         IowaSosClient().fetch_calendar_pdf()
-        call = mock_proxy_request.call_args
-        assert call[0][1] == "https://sos.iowa.gov/elections/pdf/cal3yr.pdf"
+        first_call, second_call = mock_proxy_request.call_args_list
+        assert first_call[0][1] == "https://sos.iowa.gov/three-year-election-calendar"
+        assert second_call[0][1] == (
+            "https://sos.iowa.gov/sites/default/files/2026-01/Cal3yr2025-27_Final.pdf"
+        )
 
     def test_proxy_401_raises_config_error(self, mock_proxy_request):
         from core.http import ProxyAuthError
