@@ -178,7 +178,36 @@ def test_sync_pa_sos_valid_token(client, internal_token):
             HTTP_AUTHORIZATION=f"Bearer {internal_token}",
         )
     assert response.status_code == 202
-    assert response.json()["task_id"] == "pa-task"
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_ny_elections_valid_token(client, internal_token):
+    with patch("internal.views.sync_ny_elections") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "ny-elections-task"
+        mock_task.apply_async.return_value = mock_result
+        response = client.post(
+            "/internal/tasks/sync-ny-elections/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert response.status_code == 202
+    assert response.json()["task_id"] == "ny-elections-task"
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_sync_ny_races_valid_token(client, internal_token):
+    with patch("internal.views.sync_ny_races") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "ny-races-task"
+        mock_task.apply_async.return_value = mock_result
+        response = client.post(
+            "/internal/tasks/sync-ny-races/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert response.status_code == 202
+    assert response.json()["task_id"] == "ny-races-task"
 
 
 @pytest.mark.django_db

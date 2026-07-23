@@ -22,6 +22,7 @@ from integrations.mi_sos.tasks import sync_mi_elections
 from integrations.mn_sos.tasks import discover_mn_elections, sync_mn_races
 from integrations.nc_sbe.tasks import sync_nc_candidates, sync_nc_elections
 from integrations.nj_elections.tasks import sync_nj_county_urls
+from integrations.ny_boe.tasks import sync_ny_elections, sync_ny_races
 from integrations.oh_sos.tasks import sync_oh_elections
 from integrations.openstates.tasks import sync_openstates_all_states
 from integrations.or_sos.tasks import sync_or_elections
@@ -197,6 +198,20 @@ def sync_nc_candidates_trigger(request):
 @require_internal_task_token
 def sync_nj_elections_trigger(request):
     return _trigger("sync_nj_elections", sync_nj_county_urls, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_ny_elections_trigger(request):
+    return _trigger("sync_ny_elections", sync_ny_elections, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_ny_races_trigger(request):
+    return _trigger("sync_ny_races", sync_ny_races, request)
 
 
 @csrf_exempt
