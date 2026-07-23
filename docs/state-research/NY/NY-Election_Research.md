@@ -93,7 +93,7 @@ followed by a candidate table. The **Ballot Order** cell holds a number, `Uncont
 - **433 contests / 1,285 candidates** parsed — **433/433 fully clean** (0 empty candidate lists)
 - Parties: Democratic 142, Conservative 139, Working Families 80, Republican 72
 - Office types (9): Governor and Lt. Governor, Comptroller, Attorney General, Representative in Congress, State Senator, Member of Assembly, Judicial Delegate, Alt Judicial Del., State Committee
-- Parser: `ny_cert_parser.py` (pdfplumber, word-position clustering — required because candidate names wrap across two visual lines with the ballot-order token vertically centered between them; naive line parsing scrambles names). Emits contest key `office|district|district2|party` + ordered candidates.
+- Parser: `ny_cert_parser.py` (pdfplumber, word-position clustering — required because candidate names wrap across two visual lines with the ballot-order token vertically centered between them; naive line parsing scrambles names). Emits contest key `office|district|district2|party` + ordered candidates. Production hardening must append wrapped label continuations for fields such as `Counties:` and treat running-mate extraction as unverified until confirmed against the source PDF.
 - Output: `ny_cert_2026.json`
 
 **Parser bug fixed (June 6, 2026):** Page footer text ("Certification for the June 23...") at `x≈54` was left of the ballot-order column (`x≈87`). `order_x = min(x0 for all words)` pulled `order_x` to 54, so the `x ≤ order_x+30` guard rejected ballot-order numbers at `x≈87` by 3pt. Fixed by anchoring `order_x` on ORDER_TOKENS words only; also added a footer-row skip in `parse_contests`. Affected 11 contested races (Congress ×6, State Senator ×2, Assembly ×1, Judicial Delegate ×1, Alt Judicial Del. ×1); all now parse correctly.
@@ -351,7 +351,7 @@ Build a Flateau adapter targeting `/api/election-results`. Loop driver: fetch al
 | `2026-political-calendar-quad-fold-12.9.2025-final.pdf` | 2026 NY election calendar — `https://elections.ny.gov/system/files/documents/2025/12/2026-political-calendar-quad-fold-12.9.2025-final.pdf` |
 | `accessible-june-23-2026-primary-certification-amended-5.13.26_0.pdf` | June 23 2026 primary certification (amended 05.13.2026); 215 pages; Stage 1 source — `https://elections.ny.gov/system/files/documents/2026/05/accessible-june-23-2026-primary-certification-amended-5.13.26_0.pdf` |
 | `ny_cert_parser.py` | pdfplumber parser for the certification PDF → Stage 1 contest/candidate records + version-history changelog |
-| `ny_cert_2026.json` | Parsed output of the June 23 2026 cert (433 contests / 1,239 candidates) |
+| `ny_cert_2026.json` | Parsed output of the June 23 2026 cert (433 contests / 1,285 candidates) |
 
 ---
 
@@ -362,7 +362,7 @@ New York is among the more capable state sources, with a now-complete Stage 1 + 
 - **Stage 1 (upcoming races):** the NYSBOE **certification** pipeline is authoritative and parseable (~6–8 wk lead), with a built-in amendment changelog. Backed by Who Filed / county filings (early signal), Offices-to-be-Filled (general universe), and ENR (near-E-day structure). Google Civic is a supplement only (Representatives API gone April 2025; Elections endpoints VIP-fed and auto-expiring with thin NY local coverage).
 - **Stage 2 (results):** the Flateau Database (live April 2026) is the definitive long-term source — election-district-level certified results, poll sites, compliance data under statutory mandate — with OpenElections covering pre-2026 history.
 
-Current gaps: Flateau data coverage (counties still ramping up submissions), district-boundary GeoJSON (Flateau `district-maps` is a 404; source from Google Civic meanwhile), and the cert parser's 11 layout-variant contests. Programmatic access friction (domain-wide Cloudflare) is solved via a single stealth session. Candidate bio/platform/incumbency data should be supplemented with **Ballotpedia**, **OpenStates** (NY legislative), and **OpenFEC** (federal campaign finance).
+Current gaps: Flateau data coverage (counties still ramping up submissions), district-boundary GeoJSON (Flateau `district-maps` is a 404; source from Google Civic meanwhile), wrapped certification fields such as truncated `Counties:` continuations, and unverified joint-ticket running-mate extraction. Programmatic access friction (domain-wide Cloudflare) is solved via a single stealth session. Candidate bio/platform/incumbency data should be supplemented with **Ballotpedia**, **OpenStates** (NY legislative), and **OpenFEC** (federal campaign finance).
 
 ---
 
