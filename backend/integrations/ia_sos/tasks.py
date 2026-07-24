@@ -13,6 +13,8 @@ Stage 2 — sync_ia_candidates:
   Mark candidates absent from this run as WITHDRAWN.
 """
 import logging
+import re
+from urllib.parse import unquote
 
 from celery import shared_task
 from django.core.cache import cache
@@ -42,6 +44,18 @@ def _pdf_fingerprint(info: dict) -> str:
     return f"{info['url']}|{info['etag']}|{info['last_modified']}"
 
 
+def _candidate_pdf_year(info: dict) -> int | None:
+    decoded = unquote(str(info.get("url") or ""))
+    match = re.search(r"\b(20\d{2})\b", decoded)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def _candidate_election_key(election_type: str, election_year: int) -> tuple[str, int]:
+    return election_type, election_year
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_ia_elections(self):
     """
@@ -69,7 +83,7 @@ def sync_ia_elections(self):
             logger.error("ia_sos.sync_elections.calendar_fetch_failed: %s", exc)
             parsed_elections = []
 
-        election_objs_by_type: dict[str, object] = {}
+        election_objs_by_key: dict[tuple[str, int], object] = {}
 
         for parsed in parsed_elections:
             mapped = map_election(parsed)
@@ -87,11 +101,33 @@ def sync_ia_elections(self):
                 identity=identity,
                 fields=fields,
             )
+            try:
+                results_url = client.get_results_url(parsed["election_year"], mapped["election_type"])
+            except Exception as exc:
+                logger.warning(
+                    "ia_sos.sync_elections.results_url_error election_type=%s year=%s err=%s",
+                    mapped["election_type"],
+                    parsed["election_year"],
+                    exc,
+                )
+                results_url = None
+
+            if results_url and election_obj.results_url != results_url:
+                election_obj.results_url = results_url
+                election_obj.save(update_fields=["results_url"])
+                logger.info(
+                    "ia_sos.sync_elections.results_url_set election=%s url=%s",
+                    election_obj.pk,
+                    results_url,
+                )
             if was_created:
                 created_count += 1
             else:
                 updated_count += 1
-            election_objs_by_type[mapped["election_type"]] = election_obj
+            election_key = _candidate_election_key(
+                mapped["election_type"], parsed["election_year"]
+            )
+            election_objs_by_key[election_key] = election_obj
 
         logger.info(
             "ia_sos.sync_elections.calendar created=%d updated=%d",
@@ -125,12 +161,24 @@ def sync_ia_elections(self):
                 )
                 continue
 
-            election_obj = election_objs_by_type.get(election_type)
+            pdf_year = _candidate_pdf_year(info)
+            if pdf_year is None:
+                logger.warning(
+                    "ia_sos.sync_elections.no_pdf_year election_type=%s url=%s",
+                    election_type,
+                    info["url"],
+                )
+                continue
+
+            election_obj = election_objs_by_key.get(
+                _candidate_election_key(election_type, pdf_year)
+            )
             if election_obj is None:
                 logger.warning(
-                    "ia_sos.sync_elections.no_election_for_type election_type=%s "
+                    "ia_sos.sync_elections.no_election_for_type election_type=%s year=%s "
                     "— calendar parse may have missed it",
                     election_type,
+                    pdf_year,
                 )
                 continue
 

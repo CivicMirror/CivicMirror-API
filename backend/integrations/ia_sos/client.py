@@ -15,6 +15,7 @@ import logging
 import random
 import re
 import time
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -26,6 +27,9 @@ from .exceptions import IowaSosError, IowaSosRetryableError
 logger = logging.getLogger(__name__)
 
 CALENDAR_PAGE_URL = "https://sos.iowa.gov/three-year-election-calendar"
+RESULTS_PORTAL_URL = "https://electionresults.iowa.gov/IA/"
+
+_RESULTS_PATH_RE = re.compile(r"(/IA/\d+/)(?:web\.[^/]+/)?", re.IGNORECASE)
 
 _CALENDAR_PDF_RE = re.compile(
     r'href=["\']([^"\']*\.pdf)["\']',
@@ -118,6 +122,45 @@ class IowaSosClient:
             return resp
 
         raise IowaSosRetryableError("Iowa SOS GET retries exhausted")
+
+    def get_results_url(self, election_year: int, election_type: str) -> str | None:
+        """Return the Clarity base results URL for an IA election when discoverable."""
+        expected_year = str(election_year)
+        expected_type = election_type.lower()
+
+        try:
+            resp = self._get(urljoin(RESULTS_PORTAL_URL, "elections.json"))
+            elections = resp.json()
+        except (IowaSosError, requests.RequestException) as exc:
+            logger.warning("ia_sos.client.results_json_unavailable err=%s", exc)
+            elections = []
+        except (TypeError, ValueError) as exc:
+            logger.info("ia_sos.client.results_json_invalid err=%s", exc)
+            elections = []
+
+        if isinstance(elections, list):
+            for election in elections:
+                if not isinstance(election, dict):
+                    continue
+                label = str(election.get("ElectionName") or "").lower()
+                election_id = str(election.get("EID") or "").strip()
+                if expected_year in label and expected_type in label and election_id.isdigit():
+                    return urljoin(RESULTS_PORTAL_URL, f"{election_id}/")
+
+        resp = self._get(RESULTS_PORTAL_URL)
+        soup = BeautifulSoup(resp.text, "lxml")
+        for tag in soup.find_all("a", href=True):
+            label = tag.get_text(" ", strip=True).lower()
+            href = tag["href"]
+            combined = f"{label} {href}".lower()
+            if expected_year not in combined or expected_type not in combined:
+                continue
+            match = _RESULTS_PATH_RE.search(href)
+            if not match:
+                continue
+            return urljoin(RESULTS_PORTAL_URL, match.group(1)).rstrip("/") + "/"
+
+        return None
 
     # ------------------------------------------------------------------
     # Calendar PDF

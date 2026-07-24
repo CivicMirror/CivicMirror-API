@@ -1,15 +1,15 @@
 # Iowa Election Results — Research Notes
 
-> **Last Updated:** May 24, 2026 at 8:39 PM EDT
+> **Last Updated:** July 24, 2026
 
 ## Coverage Status
 
 | Stage | Status | Notes |
 |---|---|---|
-| Stage 1 — Election Creation | ✅ Available | 3-year calendar PDF (annual parse); Google Civic API |
-| Stage 1 — Race Creation (State/Federal) | ⚠️ Bootstrap only | SOS candidate list PDF (filing window); Google Civic API post-filing |
+| Stage 1 — Election Creation | ✅ Verified | Live calendar sync maintained 8 IA elections on July 24, 2026 |
+| Stage 1 — Race Creation (State/Federal) | ✅ Results bootstrap verified | 2026 primary Clarity ingest created 272 races and 555 candidates; SOS candidate PDF parser returned zero rows |
 | Stage 1 — Race Creation (County/Local) | ⚠️ Partial | ~12+ counties use Neapolitan Labs platform with structured candidate list PDFs; upload is optional per county; 2 known 403s; no single domain pattern |
-| Stage 2 — Results Ingestion | ✅ Adapter built | Clarity Elections adapter built (`results/adapters/ia.py`); needs `results_url` in admin |
+| Stage 2 — Results Ingestion | ✅ Live verified | 2026 primary (`Election` 1780) stored Clarity URL and ingested 555 `OfficialResult` rows |
 
 ---
 
@@ -209,3 +209,14 @@ No public REST API identified. Data access is through:
 ## Source Coverage Analysis
 
 Iowa's Secretary of State site offers precinct-level vote totals (Excel by county), archived historical results, and a live results portal at `electionresults.iowa.gov`. The 3-year calendar PDF is a reliable annual seed for election scheduling. The SOS candidate list PDF — updated throughout filing periods and finalized post-withdrawal — is the best source for State and Federal race bootstrap, with the April final version being the cleanest. County/local race ingestion is now partially addressable via the **Neapolitan Labs platform** used by 12+ Iowa county auditors: these sites expose structured candidate list PDFs covering city, school board, and county office races with rich contact data, but candidate list upload is optional per county, domain patterns are inconsistent, and two counties (Scott, Clinton) block access. The remaining ~85 counties have no structured local candidate data source identified. Geographic boundary data (Precinct and District Shapefiles) is listed as available; GeoJSON/FIPS format needs confirmation. **Google Civic Information API** and **Ballotpedia** should be used to fill candidate, ballot measure, and official gaps; **Clarity Elections** should be checked at the county level for live reporting.
+
+---
+
+## 2026-07-24 Production Wiring Repair Notes
+
+- IA candidate PDF matching was repaired to bind candidate PDFs by election type and year, preventing the 2026 primary/general PDFs from attaching to later same-type calendar rows.
+- IA municipal source IDs now include the election date so multiple municipal elections in the same year remain distinct.
+- Live verification used the 2026 primary: `Election` 1780 (`2026-06-02`), with `results_url` `https://electionresults.iowa.gov/IA/126082/`.
+- The direct Clarity ingest parsed 555 rows from 272 contests (version `377216`) and created 272 races, 555 candidates, and 555 `OfficialResult` rows. IA totals after the run were 8 elections, 272 races, 555 candidates, and 555 `OfficialResult` rows.
+- The live SOS primary candidate PDF downloaded (463,213 bytes) but produced zero parsed candidate rows; race/candidate creation above came from results bootstrap.
+- Unattended `sync_ia_elections` discovery remains blocked in the deployed proxy path because `electionresults.iowa.gov` is absent from the CF Worker `ALLOWED_HOSTS`. The public portal and its `elections.json` feed returned HTTP 200 directly; the client now uses that feed to discover the 2026 primary EID `126082` once the allowlist is updated.

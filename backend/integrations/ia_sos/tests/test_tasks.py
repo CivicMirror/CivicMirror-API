@@ -39,6 +39,7 @@ def test_sync_ia_elections_creates_election(MockCache, mock_parse, MockClient):
     """Stage 1 should create an Election record from the calendar PDF."""
     MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
     MockClient.return_value.get_candidate_pdf_info.return_value = None  # no PDFs
+    MockClient.return_value.get_results_url.return_value = None
     MockCache.get.return_value = None
 
     from integrations.ia_sos.tasks import sync_ia_elections
@@ -55,10 +56,49 @@ def test_sync_ia_elections_creates_election(MockCache, mock_parse, MockClient):
 @patch("integrations.ia_sos.tasks.IowaSosClient")
 @patch("integrations.ia_sos.tasks.parse_calendar_pdf", return_value=[PARSED_ELECTION])
 @patch("integrations.ia_sos.tasks.cache")
+def test_sync_ia_elections_sets_results_url(MockCache, mock_parse, MockClient):
+    MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
+    MockClient.return_value.get_candidate_pdf_info.return_value = None
+    MockClient.return_value.get_results_url.return_value = "https://electionresults.iowa.gov/IA/123456/"
+    MockCache.get.return_value = None
+
+    from integrations.ia_sos.tasks import sync_ia_elections
+
+    sync_ia_elections()
+
+    election = Election.objects.get(state="IA", election_type="primary", election_date=date(2026, 6, 2))
+    assert election.results_url == "https://electionresults.iowa.gov/IA/123456/"
+
+
+@pytest.mark.django_db
+@patch("integrations.ia_sos.tasks.IowaSosClient")
+@patch("integrations.ia_sos.tasks.parse_calendar_pdf", return_value=[PARSED_ELECTION])
+@patch("integrations.ia_sos.tasks.cache")
+def test_sync_ia_elections_continues_when_results_url_discovery_fails(MockCache, mock_parse, MockClient):
+    """A results portal error must not prevent calendar election ingestion."""
+    MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
+    MockClient.return_value.get_candidate_pdf_info.return_value = None
+    MockClient.return_value.get_results_url.side_effect = RuntimeError("Clarity unavailable")
+    MockCache.get.return_value = None
+
+    from integrations.ia_sos.tasks import sync_ia_elections
+
+    result = sync_ia_elections()
+
+    assert result["created"] == 1
+    election = Election.objects.get(state="IA", election_type="primary", election_date=date(2026, 6, 2))
+    assert election.results_url == ""
+
+
+@pytest.mark.django_db
+@patch("integrations.ia_sos.tasks.IowaSosClient")
+@patch("integrations.ia_sos.tasks.parse_calendar_pdf", return_value=[PARSED_ELECTION])
+@patch("integrations.ia_sos.tasks.cache")
 def test_sync_ia_elections_idempotent(MockCache, mock_parse, MockClient):
     """Running sync twice should increment updated, not created again."""
     MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
     MockClient.return_value.get_candidate_pdf_info.return_value = None
+    MockClient.return_value.get_results_url.return_value = None
     MockCache.get.return_value = None
 
     from integrations.ia_sos.tasks import sync_ia_elections
@@ -79,12 +119,13 @@ def test_sync_ia_elections_queues_candidate_sync_on_new_pdf(
 ):
     """Stage 1 should queue Stage 2 when the candidate PDF fingerprint is new."""
     pdf_info = {
-        "url": "https://sos.iowa.gov/elections/pdf/candidates_primary.pdf",
+        "url": "https://sos.iowa.gov/sites/default/files/2026-04/candidates_primary.pdf",
         "etag": '"abc123"',
         "last_modified": "Mon, 01 Jan 2026",
     }
     MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
     MockClient.return_value.get_candidate_pdf_info.return_value = pdf_info
+    MockClient.return_value.get_results_url.return_value = None
     MockCache.get.return_value = None  # no cached fingerprint → new PDF
 
     from integrations.ia_sos.tasks import sync_ia_elections
@@ -112,6 +153,7 @@ def test_sync_ia_elections_skips_unchanged_pdf(
     }
     MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
     MockClient.return_value.get_candidate_pdf_info.return_value = pdf_info
+    MockClient.return_value.get_results_url.return_value = None
     MockCache.get.return_value = existing_fingerprint  # cached → no change
 
     from integrations.ia_sos.tasks import sync_ia_elections
@@ -129,12 +171,85 @@ def test_sync_ia_elections_records_synclog(MockCache, mock_parse, MockClient):
     mock_parse.return_value = [PARSED_ELECTION]
     MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
     MockClient.return_value.get_candidate_pdf_info.return_value = None
+    MockClient.return_value.get_results_url.return_value = None
     MockCache.get.return_value = None
 
     from integrations.ia_sos.tasks import sync_ia_elections
     sync_ia_elections()
 
     assert SyncLog.objects.filter(source="ia_sos", status=SyncLog.Status.COMPLETED).exists()
+
+
+@pytest.mark.django_db
+@patch("integrations.ia_sos.tasks.IowaSosClient")
+@patch("integrations.ia_sos.tasks.parse_calendar_pdf")
+@patch("integrations.ia_sos.tasks.sync_ia_candidates")
+@patch("integrations.ia_sos.tasks.cache")
+def test_sync_ia_elections_queues_2026_primary_pdf_for_2026_primary(
+    MockCache, mock_sync_cands, mock_parse, MockClient
+):
+    parsed_2026_primary = {
+        "name": "2026 Iowa Primary Election",
+        "election_date": "2026-06-02",
+        "election_year": 2026,
+        "election_type": "primary",
+    }
+    parsed_2027_primary = {
+        "name": "2027 Iowa Primary Election",
+        "election_date": "2027-10-05",
+        "election_year": 2027,
+        "election_type": "primary",
+    }
+    pdf_info = {
+        "url": "https://sos.iowa.gov/sites/default/files/2026-04/2026%20Primary%20-%20Candidate%20List.pdf",
+        "etag": '"abc123"',
+        "last_modified": "Wed, 22 Apr 2026 21:27:05 GMT",
+    }
+    MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
+    MockClient.return_value.get_candidate_pdf_info.side_effect = [pdf_info, None]
+    MockClient.return_value.get_results_url.return_value = None
+    mock_parse.return_value = [parsed_2026_primary, parsed_2027_primary]
+    MockCache.get.return_value = None
+
+    from integrations.ia_sos.tasks import sync_ia_elections
+
+    result = sync_ia_elections()
+
+    assert result["queued"] == 1
+    queued_election_pk = mock_sync_cands.delay.call_args.args[0]
+    queued_election = Election.objects.get(pk=queued_election_pk)
+    assert queued_election.election_date == date(2026, 6, 2)
+    assert ElectionSourceLink.objects.filter(
+        election=queued_election,
+        source="ia_sos",
+        source_id="ia_sos_2026_primary",
+    ).exists()
+
+
+@pytest.mark.django_db
+@patch("integrations.ia_sos.tasks.IowaSosClient")
+@patch("integrations.ia_sos.tasks.parse_calendar_pdf", return_value=[PARSED_ELECTION])
+@patch("integrations.ia_sos.tasks.sync_ia_candidates")
+@patch("integrations.ia_sos.tasks.cache")
+def test_sync_ia_elections_skips_pdf_without_year_in_url(
+    MockCache, mock_sync_cands, mock_parse, MockClient
+):
+    pdf_info = {
+        "url": "https://sos.iowa.gov/elections/pdf/candidate-list.pdf",
+        "etag": '"abc123"',
+        "last_modified": "Wed, 22 Apr 2026 21:27:05 GMT",
+    }
+    MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
+    MockClient.return_value.get_candidate_pdf_info.side_effect = [pdf_info, None]
+    MockClient.return_value.get_results_url.return_value = None
+    MockCache.get.return_value = None
+
+    from integrations.ia_sos.tasks import sync_ia_elections
+
+    result = sync_ia_elections()
+
+    mock_sync_cands.delay.assert_not_called()
+    assert result["queued"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +380,7 @@ def test_sync_ia_candidates_handles_empty_pdf(MockCache, mock_parse, MockClient)
 
     assert result["created"] == 0
     assert result["withdrawn"] == 0
+    MockCache.set.assert_not_called()
 
 
 @pytest.mark.django_db
@@ -296,6 +412,7 @@ def test_sync_ia_elections_routes_through_ingest_service():
     ):
         MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
         MockClient.return_value.get_candidate_pdf_info.return_value = None
+        MockClient.return_value.get_results_url.return_value = None
         mock_cache.get.return_value = None
         sync_ia_elections()
 

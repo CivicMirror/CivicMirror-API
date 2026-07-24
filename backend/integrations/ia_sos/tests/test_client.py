@@ -105,6 +105,89 @@ class TestGetCandidatePdfInfo:
             IowaSosClient().get_candidate_pdf_info("municipal")
 
 
+@patch("integrations.ia_sos.client.IowaSosClient._get")
+def test_get_results_url_matches_year_and_type(mock_get):
+    html = """
+    <html><body>
+      <a href="/IA/123456/web.345435/#/summary">2026 Primary Election</a>
+      <a href="/IA/123457/web.345436/#/summary">2026 General Election</a>
+    </body></html>
+    """
+    json_response = MagicMock()
+    json_response.json.side_effect = ValueError("not JSON")
+    html_response = MagicMock()
+    html_response.text = html
+    mock_get.side_effect = [json_response, html_response]
+
+    from integrations.ia_sos.client import IowaSosClient
+
+    assert (
+        IowaSosClient().get_results_url(2026, "general")
+        == "https://electionresults.iowa.gov/IA/123457/"
+    )
+    assert mock_get.call_args_list == [
+        (("https://electionresults.iowa.gov/IA/elections.json",), {}),
+        (("https://electionresults.iowa.gov/IA/",), {}),
+    ]
+
+
+@patch("integrations.ia_sos.client.IowaSosClient._get")
+def test_get_results_url_falls_back_to_html_when_json_feed_request_fails(mock_get):
+    html_response = MagicMock()
+    html_response.text = '<a href="/IA/123456/web.345435/#/summary">2026 Primary Election</a>'
+    mock_get.side_effect = [IowaSosRetryableError("feed down"), html_response]
+
+    assert (
+        IowaSosClient().get_results_url(2026, "primary")
+        == "https://electionresults.iowa.gov/IA/123456/"
+    )
+    assert mock_get.call_args_list == [
+        (("https://electionresults.iowa.gov/IA/elections.json",), {}),
+        (("https://electionresults.iowa.gov/IA/",), {}),
+    ]
+
+
+@patch("integrations.ia_sos.client.IowaSosClient._get")
+def test_get_results_url_falls_back_to_html_when_json_feed_raises_http_error(mock_get):
+    html_response = MagicMock()
+    html_response.text = '<a href="/IA/123456/web.345435/#/summary">2026 Primary Election</a>'
+    mock_get.side_effect = [requests.HTTPError("not found"), html_response]
+
+    assert (
+        IowaSosClient().get_results_url(2026, "primary")
+        == "https://electionresults.iowa.gov/IA/123456/"
+    )
+    assert mock_get.call_args_list == [
+        (("https://electionresults.iowa.gov/IA/elections.json",), {}),
+        (("https://electionresults.iowa.gov/IA/",), {}),
+    ]
+
+
+@patch("integrations.ia_sos.client.IowaSosClient._get")
+def test_get_results_url_matches_election_from_json_feed(mock_get):
+    response = MagicMock()
+    response.json.return_value = [
+        {
+            "State": "IA",
+            "EID": "126082",
+            "ElectionName": "2026 Primary Election",
+            "Date": "6/2/2026 12:00:00 AM",
+        },
+        {
+            "State": "IA",
+            "EID": "126083",
+            "ElectionName": "2026 General Election",
+            "Date": "11/3/2026 12:00:00 AM",
+        },
+    ]
+    mock_get.return_value = response
+
+    assert (
+        IowaSosClient().get_results_url(2026, "primary")
+        == "https://electionresults.iowa.gov/IA/126082/"
+    )
+
+
 class TestFetchPdf:
     def test_returns_bytes(self, mock_proxy_request):
         mock_proxy_request.return_value = _mock_response(content=b"%PDF-1.4 candidates")
