@@ -2,7 +2,7 @@
 
 **Analysis date:** 2025  
 **Scope:** 48 state research files reviewed against `concept.md` data requirements  
-**Missing states:** TX and MA (no research files present in directory)
+**TX and MA excluded from this analysis's scope** (not in the original 48-file review); their research now lives at `docs/state-research/TX/` and `docs/state-research/MA/` respectively, not in this directory's `{STATE}-Election_Research.md` naming convention. Both states have shipped Full Core Coverage in production since (Stage 1 + Stage 2 complete; MA via MA SOS ElectionStats, `sync-ma-sos`; TX via CivixApps GoElect ENR, `sync-tx-goelect`) — see `docs/state-research/00-MASTER-INDEX.md` for the current per-state coverage table.
 
 ---
 
