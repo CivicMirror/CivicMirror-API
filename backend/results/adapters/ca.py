@@ -13,6 +13,15 @@ certified (following the same convention as the Clarity adapter).
 
 Version cache key: "ca_sos:version:{election_id}:{endpoint_path_hash}"
 Cache value: MD5 of raw JSON response body.
+
+Version writes are deferred: fetch_results() stages new hashes in
+self._pending_versions rather than writing them to cache immediately, since
+results.tasks.ingest_official_results() persists DB rows only after
+fetch_results() returns. Writing the cache eagerly would mark an endpoint as
+"unchanged" even when the following DB write never happened (e.g. a task
+exception mid-ingest), silently suppressing that endpoint's data until the
+upstream content next changes or the 7-day TTL expires. The task must call
+commit_versions() only after the corresponding rows have been persisted.
 """
 from __future__ import annotations
 
@@ -70,6 +79,17 @@ def _path_hash(endpoint_path: str) -> str:
 @register
 class CaliforniaAdapter(StateResultsAdapter):
     state = "CA"
+
+    def __init__(self):
+        # endpoint cache_key -> content hash, staged during fetch_results() and
+        # only written to cache by commit_versions() once the caller confirms
+        # the corresponding rows were persisted. See module docstring.
+        self._pending_versions: dict[str, str] = {}
+
+    def commit_versions(self) -> None:
+        for cache_key, content_hash in self._pending_versions.items():
+            cache.set(cache_key, content_hash, _CACHE_TTL)
+        self._pending_versions = {}
 
     def fetch_results(self, election_date, election_id: int) -> AdapterResult:
         try:
@@ -215,8 +235,10 @@ class CaliforniaAdapter(StateResultsAdapter):
                     },
                 ))
 
-        # Store hash after successful parse
-        cache.set(cache_key, current_hash, _CACHE_TTL)
+        # Stage hash after successful parse; commit_versions() writes it to
+        # cache once the caller confirms these rows were persisted (see
+        # module docstring — do NOT cache.set() here).
+        self._pending_versions[cache_key] = current_hash
 
         logger.info(
             "ca_sos.adapter.parsed endpoint=%s rows=%d reporting_pct=%.1f",
