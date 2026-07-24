@@ -45,14 +45,7 @@ def _pdf_fingerprint(info: dict) -> str:
 
 
 def _candidate_pdf_year(info: dict) -> int | None:
-    text = " ".join(
-        str(value or "")
-        for value in (
-            info.get("url"),
-            info.get("last_modified"),
-        )
-    )
-    decoded = unquote(text)
+    decoded = unquote(str(info.get("url") or ""))
     match = re.search(r"\b(20\d{2})\b", decoded)
     if not match:
         return None

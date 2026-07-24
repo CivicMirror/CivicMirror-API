@@ -226,6 +226,32 @@ def test_sync_ia_elections_queues_2026_primary_pdf_for_2026_primary(
     ).exists()
 
 
+@pytest.mark.django_db
+@patch("integrations.ia_sos.tasks.IowaSosClient")
+@patch("integrations.ia_sos.tasks.parse_calendar_pdf", return_value=[PARSED_ELECTION])
+@patch("integrations.ia_sos.tasks.sync_ia_candidates")
+@patch("integrations.ia_sos.tasks.cache")
+def test_sync_ia_elections_skips_pdf_without_year_in_url(
+    MockCache, mock_sync_cands, mock_parse, MockClient
+):
+    pdf_info = {
+        "url": "https://sos.iowa.gov/elections/pdf/candidate-list.pdf",
+        "etag": '"abc123"',
+        "last_modified": "Wed, 22 Apr 2026 21:27:05 GMT",
+    }
+    MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
+    MockClient.return_value.get_candidate_pdf_info.side_effect = [pdf_info, None]
+    MockClient.return_value.get_results_url.return_value = None
+    MockCache.get.return_value = None
+
+    from integrations.ia_sos.tasks import sync_ia_elections
+
+    result = sync_ia_elections()
+
+    mock_sync_cands.delay.assert_not_called()
+    assert result["queued"] == 0
+
+
 # ---------------------------------------------------------------------------
 # sync_ia_candidates
 # ---------------------------------------------------------------------------

@@ -113,9 +113,11 @@ def test_get_results_url_matches_year_and_type(mock_get):
       <a href="/IA/123457/web.345436/#/summary">2026 General Election</a>
     </body></html>
     """
-    response = MagicMock()
-    response.text = html
-    mock_get.return_value = response
+    json_response = MagicMock()
+    json_response.json.side_effect = ValueError("not JSON")
+    html_response = MagicMock()
+    html_response.text = html
+    mock_get.side_effect = [json_response, html_response]
 
     from integrations.ia_sos.client import IowaSosClient
 
@@ -123,6 +125,26 @@ def test_get_results_url_matches_year_and_type(mock_get):
         IowaSosClient().get_results_url(2026, "general")
         == "https://electionresults.iowa.gov/IA/123457/"
     )
+    assert mock_get.call_args_list == [
+        (("https://electionresults.iowa.gov/IA/elections.json",), {}),
+        (("https://electionresults.iowa.gov/IA/",), {}),
+    ]
+
+
+@patch("integrations.ia_sos.client.IowaSosClient._get")
+def test_get_results_url_falls_back_to_html_when_json_feed_request_fails(mock_get):
+    html_response = MagicMock()
+    html_response.text = '<a href="/IA/123456/web.345435/#/summary">2026 Primary Election</a>'
+    mock_get.side_effect = [IowaSosRetryableError("feed down"), html_response]
+
+    assert (
+        IowaSosClient().get_results_url(2026, "primary")
+        == "https://electionresults.iowa.gov/IA/123456/"
+    )
+    assert mock_get.call_args_list == [
+        (("https://electionresults.iowa.gov/IA/elections.json",), {}),
+        (("https://electionresults.iowa.gov/IA/",), {}),
+    ]
 
 
 @patch("integrations.ia_sos.client.IowaSosClient._get")

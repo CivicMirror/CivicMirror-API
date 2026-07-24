@@ -128,10 +128,14 @@ class IowaSosClient:
         expected_year = str(election_year)
         expected_type = election_type.lower()
 
-        resp = self._get(urljoin(RESULTS_PORTAL_URL, "elections.json"))
         try:
+            resp = self._get(urljoin(RESULTS_PORTAL_URL, "elections.json"))
             elections = resp.json()
-        except (TypeError, ValueError):
+        except IowaSosError as exc:
+            logger.warning("ia_sos.client.results_json_unavailable err=%s", exc)
+            elections = []
+        except (TypeError, ValueError) as exc:
+            logger.info("ia_sos.client.results_json_invalid err=%s", exc)
             elections = []
 
         if isinstance(elections, list):
