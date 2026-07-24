@@ -9,6 +9,27 @@ import pytest
 from django.test import override_settings
 
 # ---------------------------------------------------------------------------
+# _SYNC_STAGES
+# ---------------------------------------------------------------------------
+
+def test_sync_stages_party_slugs_precede_generic_primaries():
+    """Discovery dedupes by election_id keeping the first-seen row (see
+    sync_ma_elections). electionstats returns the same election_id under both
+    its party-specific stage and the generic "Primaries" stage, so the
+    party-specific stage must be queried first for the party label / Race
+    split (mappers.contest_variant_key) to survive dedup."""
+    from integrations.ma_sos.tasks import _SYNC_STAGES
+
+    assert "Primaries" in _SYNC_STAGES
+    party_stages = ["Democratic", "Republican", "Green-Rainbow", "Libertarian",
+                     "Working Families", "United Independent", "American", "Independent Voters"]
+    primaries_idx = _SYNC_STAGES.index("Primaries")
+    for stage in party_stages:
+        assert stage in _SYNC_STAGES
+        assert _SYNC_STAGES.index(stage) < primaries_idx
+
+
+# ---------------------------------------------------------------------------
 # sync_ma_elections
 # ---------------------------------------------------------------------------
 
@@ -38,12 +59,13 @@ def test_sync_ma_elections_discovers_and_queues(
     mock_client = MagicMock()
     mock_client_cls.return_value = mock_client
     mock_client.get_ocpf_schedule.return_value = {"generalElectionDate": "11/5/2024", "primaryElectionDate": "9/3/2024"}
-    mock_client.get_election_ids.side_effect = [
-        [{"election_id": 165300, "office": "President", "district": "", "stage": "General", "year": 2024}],
-        [],  # Primaries current year
-        [],  # General prior year
-        [],  # Primaries prior year
-    ]
+
+    def fake_get_election_ids(year, stage):
+        if year == 2024 and stage == "General":
+            return [{"election_id": 165300, "office": "President", "district": "", "stage": "General", "year": 2024}]
+        return []
+
+    mock_client.get_election_ids.side_effect = fake_get_election_ids
     mock_client.get_ballot_question_ids.return_value = [11620]
 
     # Mock the ingest service to return a fake election object
@@ -301,6 +323,61 @@ def test_sync_ma_races_routes_through_ingest_service():
     assert race.canonical_key.startswith("MA:general:2024-11-05:state|")
     assert "ma_sos" in race.contributing_sources
     assert Candidate.objects.filter(race=race).count() == 2
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+def test_sync_ma_races_splits_primary_by_party():
+    """A Democratic-stage and a Republican-stage primary for the same office
+    and date share one canonical Election (same type/date/jurisdiction) but
+    must land as two distinct Races, each with correctly-attributed party —
+    the merged-race bug from issue #105."""
+    from aggregation.models import SourcePrecedence
+    from elections.models import Candidate, Election, Race
+    from integrations.ma_sos.tasks import sync_ma_races
+
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
+
+    e = Election.objects.create(
+        name="2026 MA State Representative 5th Essex Special Primary",
+        election_date=date(2026, 9, 1),
+        election_type="primary",
+        jurisdiction_level="state",
+        state="MA",
+        canonical_key="MA:primary:2026-09-01:state",
+        contributing_sources=["ma_sos"],
+    )
+
+    dem_csv = (
+        b'City/Town,,,"Andrew Tarr","Sarah Wilkinson",All Others,Blanks,Total Votes Cast\n'
+        b',,,,,,,\n'
+        b'Boston,,,"2,194","879",30,23,"3,126"\n'
+        b'TOTALS,,,"2,194","879",30,23,"3,126"\n'
+    )
+    rep_csv = (
+        b'City/Town,,,"Christina Delisio","Ashley Sullivan",All Others,Blanks,Total Votes Cast\n'
+        b',,,,,,,\n'
+        b'Boston,,,"568","356",37,6,"967"\n'
+        b'TOTALS,,,"568","356",37,6,"967"\n'
+    )
+
+    with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient:
+        inst = MockClient.return_value
+        inst.download_election_csv.side_effect = [dem_csv, rep_csv]
+        sync_ma_races.run(e.pk, 171921, "State Representative", "5th Essex", "Democratic")
+        sync_ma_races.run(e.pk, 171922, "State Representative", "5th Essex", "Republican")
+
+    races = Race.objects.filter(election=e).order_by("canonical_key")
+    assert races.count() == 2
+
+    dem_race = next(r for r in races if r.candidates.filter(name="Andrew Tarr").exists())
+    rep_race = next(r for r in races if r.candidates.filter(name="Christina Delisio").exists())
+    assert dem_race.pk != rep_race.pk
+
+    assert Candidate.objects.get(race=dem_race, name="Andrew Tarr").party == "Democratic"
+    assert Candidate.objects.get(race=dem_race, name="Sarah Wilkinson").party == "Democratic"
+    assert Candidate.objects.get(race=rep_race, name="Christina Delisio").party == "Republican"
+    assert Candidate.objects.get(race=rep_race, name="Ashley Sullivan").party == "Republican"
 
 
 @pytest.mark.django_db
