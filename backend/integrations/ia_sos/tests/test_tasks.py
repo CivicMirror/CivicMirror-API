@@ -137,6 +137,51 @@ def test_sync_ia_elections_records_synclog(MockCache, mock_parse, MockClient):
     assert SyncLog.objects.filter(source="ia_sos", status=SyncLog.Status.COMPLETED).exists()
 
 
+@pytest.mark.django_db
+@patch("integrations.ia_sos.tasks.IowaSosClient")
+@patch("integrations.ia_sos.tasks.parse_calendar_pdf")
+@patch("integrations.ia_sos.tasks.sync_ia_candidates")
+@patch("integrations.ia_sos.tasks.cache")
+def test_sync_ia_elections_queues_2026_primary_pdf_for_2026_primary(
+    MockCache, mock_sync_cands, mock_parse, MockClient
+):
+    parsed_2026_primary = {
+        "name": "2026 Iowa Primary Election",
+        "election_date": "2026-06-02",
+        "election_year": 2026,
+        "election_type": "primary",
+    }
+    parsed_2027_primary = {
+        "name": "2027 Iowa Primary Election",
+        "election_date": "2027-10-05",
+        "election_year": 2027,
+        "election_type": "primary",
+    }
+    pdf_info = {
+        "url": "https://sos.iowa.gov/sites/default/files/2026-04/2026%20Primary%20-%20Candidate%20List.pdf",
+        "etag": '"abc123"',
+        "last_modified": "Wed, 22 Apr 2026 21:27:05 GMT",
+    }
+    MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
+    MockClient.return_value.get_candidate_pdf_info.side_effect = [pdf_info, None]
+    mock_parse.return_value = [parsed_2026_primary, parsed_2027_primary]
+    MockCache.get.return_value = None
+
+    from integrations.ia_sos.tasks import sync_ia_elections
+
+    result = sync_ia_elections()
+
+    assert result["queued"] == 1
+    queued_election_pk = mock_sync_cands.delay.call_args.args[0]
+    queued_election = Election.objects.get(pk=queued_election_pk)
+    assert queued_election.election_date == date(2026, 6, 2)
+    assert ElectionSourceLink.objects.filter(
+        election=queued_election,
+        source="ia_sos",
+        source_id="ia_sos_2026_primary",
+    ).exists()
+
+
 # ---------------------------------------------------------------------------
 # sync_ia_candidates
 # ---------------------------------------------------------------------------

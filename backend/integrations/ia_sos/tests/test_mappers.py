@@ -34,6 +34,20 @@ class TestBuildElectionSourceId:
     def test_general(self):
         assert build_election_source_id(2026, "general") == "ia_sos_2026_general"
 
+    def test_municipal_source_id_includes_date(self):
+        assert (
+            build_election_source_id(2025, "municipal", date(2025, 11, 4))
+            == "ia_sos_2025_municipal_2025_11_04"
+        )
+        assert (
+            build_election_source_id(2025, "municipal", "2025-12-02")
+            == "ia_sos_2025_municipal_2025_12_02"
+        )
+
+    def test_primary_and_general_source_ids_remain_stable(self):
+        assert build_election_source_id(2026, "primary", date(2026, 6, 2)) == "ia_sos_2026_primary"
+        assert build_election_source_id(2026, "general", date(2026, 11, 3)) == "ia_sos_2026_general"
+
 
 class TestBuildRaceCanonicalKey:
     def test_basic(self):

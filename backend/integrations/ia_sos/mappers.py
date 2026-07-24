@@ -44,9 +44,30 @@ def infer_election_status(election_date: date) -> str:
     return Election.Status.RESULTS_PENDING
 
 
-def build_election_source_id(year: int, election_type: str) -> str:
-    """e.g. 'ia_sos_2026_primary', 'ia_sos_2025_municipal'"""
-    return f"ia_sos_{year}_{election_type}"
+def _date_token(election_date: date | str | None) -> str:
+    if election_date is None:
+        return ""
+    if isinstance(election_date, str):
+        value = date.fromisoformat(election_date)
+    else:
+        value = election_date
+    return value.isoformat().replace("-", "_")
+
+
+def build_election_source_id(
+    year: int, election_type: str, election_date: date | str | None = None
+) -> str:
+    """Build stable IA SOS source IDs.
+
+    Statewide primary/general elections are unique per year. Municipal entries
+    are not, so include the date to avoid collapsing distinct elections.
+    """
+    base = f"ia_sos_{year}_{election_type}"
+    if election_type == "municipal":
+        token = _date_token(election_date)
+        if token:
+            return f"{base}_{token}"
+    return base
 
 
 def map_election(parsed: dict) -> dict:
@@ -63,7 +84,7 @@ def map_election(parsed: dict) -> dict:
     election_type = parsed["election_type"]
 
     return {
-        "source_id": build_election_source_id(year, election_type),
+        "source_id": build_election_source_id(year, election_type, election_date),
         "name": parsed["name"],
         "election_date": election_date,
         "election_type": election_type,
