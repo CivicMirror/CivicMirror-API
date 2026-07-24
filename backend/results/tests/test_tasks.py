@@ -180,6 +180,52 @@ def test_ingest_version_cache_written_after_db_success():
 
 
 @pytest.mark.django_db
+def test_ingest_version_cache_not_written_for_partial_rows():
+    election = make_election()
+    race = make_race(election)
+    _ = Candidate.objects.create(race=race, name="ALICE SMITH")
+
+    row = make_result_row(candidate_name="ALICE SMITH", office_title="U.S. Senate")
+    result = make_adapter_result(rows=[row], confidence="partial", source_version="partial-version")
+
+    mock_adapter_instance = MagicMock()
+    mock_adapter_instance.fetch_results.return_value = result
+    mock_adapter_instance.version_cache_key.return_value = f"clarity:ver:{election.pk}"
+    mock_adapter_instance.VERSION_CACHE_TIMEOUT = 86400 * 30
+    mock_adapter_class = MagicMock(return_value=mock_adapter_instance)
+
+    from results.tasks import ingest_official_results
+    with patch("results.tasks.get_adapter", return_value=mock_adapter_class), \
+         patch("results.tasks.cache") as mock_cache:
+        ingest_official_results("WV", election.pk)
+
+    mock_cache.set.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_ingest_version_cache_not_written_for_none_confidence():
+    election = make_election()
+    race = make_race(election)
+    _ = Candidate.objects.create(race=race, name="ALICE SMITH")
+
+    row = make_result_row(candidate_name="ALICE SMITH", office_title="U.S. Senate")
+    result = make_adapter_result(rows=[row], confidence="none", source_version="none-version")
+
+    mock_adapter_instance = MagicMock()
+    mock_adapter_instance.fetch_results.return_value = result
+    mock_adapter_instance.version_cache_key.return_value = f"clarity:ver:{election.pk}"
+    mock_adapter_instance.VERSION_CACHE_TIMEOUT = 86400 * 30
+    mock_adapter_class = MagicMock(return_value=mock_adapter_instance)
+
+    from results.tasks import ingest_official_results
+    with patch("results.tasks.get_adapter", return_value=mock_adapter_class), \
+         patch("results.tasks.cache") as mock_cache:
+        ingest_official_results("WV", election.pk)
+
+    mock_cache.set.assert_not_called()
+
+
+@pytest.mark.django_db
 def test_ingest_empty_rows_sets_results_pending():
     election = make_election()
     race = make_race(election, status=Race.CertificationStatus.UPCOMING)

@@ -84,7 +84,12 @@ def ingest_official_results(self, state: str, election_id: int):
 
     # Write version to cache only after successful DB work AND races were processed.
     # Gating on `races` prevents caching a version that corresponds to an empty-race state.
-    if races and result.source_version and hasattr(adapter, 'version_cache_key'):
+    if (
+        races
+        and result.mapping_confidence == 'full'
+        and result.source_version
+        and hasattr(adapter, 'version_cache_key')
+    ):
         cache.set(
             adapter.version_cache_key(election_id),
             result.source_version,

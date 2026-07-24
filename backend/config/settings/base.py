@@ -172,6 +172,7 @@ INSTALLED_APPS += [
     'integrations.al_sos',
     'integrations.md_sbe',
     'integrations.vt_sos',
+    'integrations.ny_boe',
     'internal',
     'api',
     'accounts',
