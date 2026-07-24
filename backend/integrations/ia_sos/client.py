@@ -131,7 +131,7 @@ class IowaSosClient:
         try:
             resp = self._get(urljoin(RESULTS_PORTAL_URL, "elections.json"))
             elections = resp.json()
-        except IowaSosError as exc:
+        except (IowaSosError, requests.RequestException) as exc:
             logger.warning("ia_sos.client.results_json_unavailable err=%s", exc)
             elections = []
         except (TypeError, ValueError) as exc:

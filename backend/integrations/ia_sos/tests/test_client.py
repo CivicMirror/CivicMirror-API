@@ -148,6 +148,22 @@ def test_get_results_url_falls_back_to_html_when_json_feed_request_fails(mock_ge
 
 
 @patch("integrations.ia_sos.client.IowaSosClient._get")
+def test_get_results_url_falls_back_to_html_when_json_feed_raises_http_error(mock_get):
+    html_response = MagicMock()
+    html_response.text = '<a href="/IA/123456/web.345435/#/summary">2026 Primary Election</a>'
+    mock_get.side_effect = [requests.HTTPError("not found"), html_response]
+
+    assert (
+        IowaSosClient().get_results_url(2026, "primary")
+        == "https://electionresults.iowa.gov/IA/123456/"
+    )
+    assert mock_get.call_args_list == [
+        (("https://electionresults.iowa.gov/IA/elections.json",), {}),
+        (("https://electionresults.iowa.gov/IA/",), {}),
+    ]
+
+
+@patch("integrations.ia_sos.client.IowaSosClient._get")
 def test_get_results_url_matches_election_from_json_feed(mock_get):
     response = MagicMock()
     response.json.return_value = [

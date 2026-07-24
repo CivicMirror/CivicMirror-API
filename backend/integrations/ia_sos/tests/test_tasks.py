@@ -119,7 +119,7 @@ def test_sync_ia_elections_queues_candidate_sync_on_new_pdf(
 ):
     """Stage 1 should queue Stage 2 when the candidate PDF fingerprint is new."""
     pdf_info = {
-        "url": "https://sos.iowa.gov/elections/pdf/candidates_primary.pdf",
+        "url": "https://sos.iowa.gov/sites/default/files/2026-04/candidates_primary.pdf",
         "etag": '"abc123"',
         "last_modified": "Mon, 01 Jan 2026",
     }
