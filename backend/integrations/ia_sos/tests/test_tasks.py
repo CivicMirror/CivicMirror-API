@@ -310,6 +310,7 @@ def test_sync_ia_candidates_handles_empty_pdf(MockCache, mock_parse, MockClient)
 
     assert result["created"] == 0
     assert result["withdrawn"] == 0
+    MockCache.set.assert_not_called()
 
 
 @pytest.mark.django_db
