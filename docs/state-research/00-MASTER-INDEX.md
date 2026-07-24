@@ -81,7 +81,7 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **MI** | Michigan | ✅ Complete | ✅ Complete | ✅ Complete (MVIC) | Full Core |
 | **PA** | Pennsylvania | ✅ Complete | ✅ Complete | ✅ Complete (electionreturns.pa.gov) | Full Core |
 | **KY** | Kentucky | ✅ Complete | ✅ Complete | ⚠️ Built + tested (`ky.py`, XML feed), blocked by Akamai bot-protection 403 pending KY SBE IP allowlisting (issue #44) | Near Core (blocked) |
-| **IA** | Iowa | ✅ Complete | ✅ Complete | ⚠️ Adapter built, needs production wiring | Near Core |
+| **IA** | Iowa | ✅ Calendar live (8 elections) | ✅ Results bootstrap verified (272 races / 555 candidates) | ✅ Clarity live (555 `OfficialResult` rows) | Near Core (CF allowlist pending) |
 | **AL** | Alabama | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (AL SOS ENR Excel export) | Results Adapter |
 | **AR** | Arkansas | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (TotalVote ENR) | Results Coverage Only |
 | **CT** | Connecticut | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (PCC EMS) | Results Coverage Only |
@@ -126,7 +126,7 @@ Stage 1 and Stage 2 complete for Federal and State offices. Election discovery, 
 Stage 2 results adapter is complete and active. Stage 1 race creation relies on Civic API (untested for all state offices) or has a production wiring gap.
 
 - California (CA) — results adapter built; race creation depends on Civic API
-- Iowa (IA) — Stage 1 complete; Stage 2 adapter built but production wiring incomplete
+- Iowa (IA) — 2026 primary verification created 272 races, 555 candidates, and 555 `OfficialResult` rows from Clarity. The SOS candidate PDF parser returned zero rows, and unattended results-URL discovery remains blocked until `electionresults.iowa.gov` is added to the CF proxy allowlist.
 - Minnesota (MN) — results adapter built for SOS semicolon-delimited flat files; `sync_mn_races` seeds the scoped federal/state race/candidate set from the same official files. Election discovery is still a POC/upsert path, not a full election-manifest adapter.
 - New Jersey (NJ) — results adapter built (multi-county Clarity sweep, ~16 of 21 counties); 5 off-platform counties (Bergen, Camden, Sussex, Warren, Hunterdon) deferred. Includes office/candidate name normalization to handle cross-county inconsistency. See `docs/state-research/NJ/NJ-Election_Research.md`.
 - New York (NY) — results adapter built (Flateau DB); race creation depends on Civic API
