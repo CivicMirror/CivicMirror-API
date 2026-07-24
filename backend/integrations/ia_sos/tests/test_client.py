@@ -125,6 +125,31 @@ def test_get_results_url_matches_year_and_type(mock_get):
     )
 
 
+@patch("integrations.ia_sos.client.IowaSosClient._get")
+def test_get_results_url_matches_election_from_json_feed(mock_get):
+    response = MagicMock()
+    response.json.return_value = [
+        {
+            "State": "IA",
+            "EID": "126082",
+            "ElectionName": "2026 Primary Election",
+            "Date": "6/2/2026 12:00:00 AM",
+        },
+        {
+            "State": "IA",
+            "EID": "126083",
+            "ElectionName": "2026 General Election",
+            "Date": "11/3/2026 12:00:00 AM",
+        },
+    ]
+    mock_get.return_value = response
+
+    assert (
+        IowaSosClient().get_results_url(2026, "primary")
+        == "https://electionresults.iowa.gov/IA/126082/"
+    )
+
+
 class TestFetchPdf:
     def test_returns_bytes(self, mock_proxy_request):
         mock_proxy_request.return_value = _mock_response(content=b"%PDF-1.4 candidates")

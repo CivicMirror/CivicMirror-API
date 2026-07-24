@@ -125,11 +125,26 @@ class IowaSosClient:
 
     def get_results_url(self, election_year: int, election_type: str) -> str | None:
         """Return the Clarity base results URL for an IA election when discoverable."""
-        resp = self._get(RESULTS_PORTAL_URL)
-        soup = BeautifulSoup(resp.text, "lxml")
         expected_year = str(election_year)
         expected_type = election_type.lower()
 
+        resp = self._get(urljoin(RESULTS_PORTAL_URL, "elections.json"))
+        try:
+            elections = resp.json()
+        except (TypeError, ValueError):
+            elections = []
+
+        if isinstance(elections, list):
+            for election in elections:
+                if not isinstance(election, dict):
+                    continue
+                label = str(election.get("ElectionName") or "").lower()
+                election_id = str(election.get("EID") or "").strip()
+                if expected_year in label and expected_type in label and election_id.isdigit():
+                    return urljoin(RESULTS_PORTAL_URL, f"{election_id}/")
+
+        resp = self._get(RESULTS_PORTAL_URL)
+        soup = BeautifulSoup(resp.text, "lxml")
         for tag in soup.find_all("a", href=True):
             label = tag.get_text(" ", strip=True).lower()
             href = tag["href"]
