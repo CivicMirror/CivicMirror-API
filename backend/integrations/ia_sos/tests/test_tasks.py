@@ -74,6 +74,26 @@ def test_sync_ia_elections_sets_results_url(MockCache, mock_parse, MockClient):
 @patch("integrations.ia_sos.tasks.IowaSosClient")
 @patch("integrations.ia_sos.tasks.parse_calendar_pdf", return_value=[PARSED_ELECTION])
 @patch("integrations.ia_sos.tasks.cache")
+def test_sync_ia_elections_continues_when_results_url_discovery_fails(MockCache, mock_parse, MockClient):
+    """A results portal error must not prevent calendar election ingestion."""
+    MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
+    MockClient.return_value.get_candidate_pdf_info.return_value = None
+    MockClient.return_value.get_results_url.side_effect = RuntimeError("Clarity unavailable")
+    MockCache.get.return_value = None
+
+    from integrations.ia_sos.tasks import sync_ia_elections
+
+    result = sync_ia_elections()
+
+    assert result["created"] == 1
+    election = Election.objects.get(state="IA", election_type="primary", election_date=date(2026, 6, 2))
+    assert election.results_url == ""
+
+
+@pytest.mark.django_db
+@patch("integrations.ia_sos.tasks.IowaSosClient")
+@patch("integrations.ia_sos.tasks.parse_calendar_pdf", return_value=[PARSED_ELECTION])
+@patch("integrations.ia_sos.tasks.cache")
 def test_sync_ia_elections_idempotent(MockCache, mock_parse, MockClient):
     """Running sync twice should increment updated, not created again."""
     MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
