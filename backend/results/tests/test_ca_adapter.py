@@ -131,3 +131,65 @@ class TestCaliforniaAdapter:
         from results.adapters.registry import get_adapter
         adapter_cls = get_adapter("CA")
         assert adapter_cls is CaliforniaAdapter
+
+    def test_fetch_results_does_not_write_cache_until_commit_versions(self, db):
+        """Regression test for issue #95: fetch_results() must stage the new
+        content hash rather than writing it to cache immediately, since the
+        caller (ingest_official_results) only persists rows *after*
+        fetch_results() returns. Writing eagerly would mark an endpoint as
+        'unchanged' even if the following DB write fails, silently
+        suppressing that endpoint's data for up to the 7-day cache TTL."""
+        from datetime import date
+
+        from elections.models import Election, Race
+
+        election = Election.objects.create(
+            source_id="ca_sos_test_deferred_cache",
+            name="CA Test Election",
+            election_date=date(2026, 11, 3),
+            jurisdiction_level="state",
+            state="CA",
+            status="results_pending",
+        )
+        Race.objects.create(
+            election=election,
+            office_title="Governor - Statewide Results",
+            canonical_key="ca_sos:test_deferred_cache:governor",
+            race_type="candidate",
+            jurisdiction="California",
+            geography_scope="statewide",
+            certification_status="results_pending",
+            source="ca_sos",
+            race_status="active",
+            vote_method="single_choice",
+            max_selections=1,
+            source_metadata={"ca_endpoint": "/returns/governor"},
+        )
+
+        adapter = CaliforniaAdapter()
+
+        with (
+            patch("results.adapters.ca.requests.get") as mock_get,
+            patch("results.adapters.ca.cache") as mock_cache,
+        ):
+            mock_resp = MagicMock()
+            mock_resp.content = b'[{"raceTitle":"Governor","Reporting":"100.0%","candidates":[{"Name":"Alice Smith","Votes":"1500000"}]}]'
+            mock_resp.json.return_value = SAMPLE_CONTEST_JSON
+            mock_get.return_value = mock_resp
+            mock_cache.get.return_value = None  # cache miss — content is "new"
+
+            result = adapter.fetch_results(date(2026, 11, 3), election.pk)
+
+            # Root cause of #95: cache.set must NOT be called during fetch_results.
+            assert result.rows
+            mock_cache.set.assert_not_called()
+
+            # Simulating the caller confirming DB persistence succeeded:
+            adapter.commit_versions()
+            mock_cache.set.assert_called_once()
+
+    def test_commit_versions_noop_when_nothing_pending(self, db):
+        adapter = CaliforniaAdapter()
+        with patch("results.adapters.ca.cache") as mock_cache:
+            adapter.commit_versions()
+        mock_cache.set.assert_not_called()

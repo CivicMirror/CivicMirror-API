@@ -180,6 +180,56 @@ def test_ingest_version_cache_written_after_db_success():
 
 
 @pytest.mark.django_db
+def test_ingest_commits_adapter_pending_versions_after_db_success():
+    """Adapters with their own finer-grained version cache (e.g. CaliforniaAdapter's
+    per-endpoint cache) expose commit_versions(); the task must call it only after
+    the DB writes above it succeed. Regression test for issue #95."""
+    election = make_election()
+    race = make_race(election)
+    _ = Candidate.objects.create(race=race, name="ALICE SMITH")
+
+    row = make_result_row(candidate_name="ALICE SMITH", office_title="U.S. Senate")
+    result = make_adapter_result(rows=[row])
+
+    mock_adapter_instance = MagicMock()
+    mock_adapter_instance.fetch_results.return_value = result
+    mock_adapter_class = MagicMock(return_value=mock_adapter_instance)
+
+    from results.tasks import ingest_official_results
+    with patch("results.tasks.get_adapter", return_value=mock_adapter_class):
+        ingest_official_results("WV", election.pk)
+
+    mock_adapter_instance.commit_versions.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_ingest_does_not_commit_adapter_versions_when_db_write_fails():
+    """If persisting a race's rows raises, commit_versions() must never be
+    called — otherwise the endpoint's content hash would be cached as
+    'processed' even though nothing was written to the DB, silently
+    suppressing that data until the upstream content next changes or the
+    cache TTL expires. Regression test for issue #95."""
+    election = make_election()
+    race = make_race(election)
+    _ = Candidate.objects.create(race=race, name="ALICE SMITH")
+
+    row = make_result_row(candidate_name="ALICE SMITH", office_title="U.S. Senate")
+    result = make_adapter_result(rows=[row])
+
+    mock_adapter_instance = MagicMock()
+    mock_adapter_instance.fetch_results.return_value = result
+    mock_adapter_class = MagicMock(return_value=mock_adapter_instance)
+
+    from results.tasks import ingest_official_results
+    with patch("results.tasks.get_adapter", return_value=mock_adapter_class), \
+         patch("results.tasks._process_race_results", side_effect=RuntimeError("db exploded")):
+        with pytest.raises(RuntimeError):
+            ingest_official_results("WV", election.pk)
+
+    mock_adapter_instance.commit_versions.assert_not_called()
+
+
+@pytest.mark.django_db
 def test_ingest_version_cache_not_written_for_partial_rows():
     election = make_election()
     race = make_race(election)

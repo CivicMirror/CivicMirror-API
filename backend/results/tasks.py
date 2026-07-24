@@ -82,6 +82,15 @@ def ingest_official_results(self, state: str, election_id: int):
     for race in races:
         _process_race_results(race, result, state)
 
+    # Adapters with their own (finer-grained, e.g. per-endpoint) version cache
+    # stage pending writes during fetch_results() and expose commit_versions()
+    # to flush them — called here so a version is only marked processed once
+    # the corresponding rows have actually been persisted above. If the loop
+    # above raises, this line is never reached and nothing gets staged as
+    # cached, so the next run re-fetches and re-persists it.
+    if hasattr(adapter, 'commit_versions'):
+        adapter.commit_versions()
+
     # Write version to cache only after successful DB work AND races were processed.
     # Gating on `races` prevents caching a version that corresponds to an empty-race state.
     if (
