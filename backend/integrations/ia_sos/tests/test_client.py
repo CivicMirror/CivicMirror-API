@@ -105,6 +105,26 @@ class TestGetCandidatePdfInfo:
             IowaSosClient().get_candidate_pdf_info("municipal")
 
 
+@patch("integrations.ia_sos.client.IowaSosClient._get")
+def test_get_results_url_matches_year_and_type(mock_get):
+    html = """
+    <html><body>
+      <a href="/IA/123456/web.345435/#/summary">2026 Primary Election</a>
+      <a href="/IA/123457/web.345436/#/summary">2026 General Election</a>
+    </body></html>
+    """
+    response = MagicMock()
+    response.text = html
+    mock_get.return_value = response
+
+    from integrations.ia_sos.client import IowaSosClient
+
+    assert (
+        IowaSosClient().get_results_url(2026, "general")
+        == "https://electionresults.iowa.gov/IA/123457/"
+    )
+
+
 class TestFetchPdf:
     def test_returns_bytes(self, mock_proxy_request):
         mock_proxy_request.return_value = _mock_response(content=b"%PDF-1.4 candidates")

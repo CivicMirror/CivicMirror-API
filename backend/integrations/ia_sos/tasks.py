@@ -108,6 +108,25 @@ def sync_ia_elections(self):
                 identity=identity,
                 fields=fields,
             )
+            try:
+                results_url = client.get_results_url(parsed["election_year"], mapped["election_type"])
+            except Exception as exc:
+                logger.warning(
+                    "ia_sos.sync_elections.results_url_error election_type=%s year=%s err=%s",
+                    mapped["election_type"],
+                    parsed["election_year"],
+                    exc,
+                )
+                results_url = None
+
+            if results_url and election_obj.results_url != results_url:
+                election_obj.results_url = results_url
+                election_obj.save(update_fields=["results_url"])
+                logger.info(
+                    "ia_sos.sync_elections.results_url_set election=%s url=%s",
+                    election_obj.pk,
+                    results_url,
+                )
             if was_created:
                 created_count += 1
             else:

@@ -39,6 +39,7 @@ def test_sync_ia_elections_creates_election(MockCache, mock_parse, MockClient):
     """Stage 1 should create an Election record from the calendar PDF."""
     MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
     MockClient.return_value.get_candidate_pdf_info.return_value = None  # no PDFs
+    MockClient.return_value.get_results_url.return_value = None
     MockCache.get.return_value = None
 
     from integrations.ia_sos.tasks import sync_ia_elections
@@ -55,10 +56,29 @@ def test_sync_ia_elections_creates_election(MockCache, mock_parse, MockClient):
 @patch("integrations.ia_sos.tasks.IowaSosClient")
 @patch("integrations.ia_sos.tasks.parse_calendar_pdf", return_value=[PARSED_ELECTION])
 @patch("integrations.ia_sos.tasks.cache")
+def test_sync_ia_elections_sets_results_url(MockCache, mock_parse, MockClient):
+    MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
+    MockClient.return_value.get_candidate_pdf_info.return_value = None
+    MockClient.return_value.get_results_url.return_value = "https://electionresults.iowa.gov/IA/123456/"
+    MockCache.get.return_value = None
+
+    from integrations.ia_sos.tasks import sync_ia_elections
+
+    sync_ia_elections()
+
+    election = Election.objects.get(state="IA", election_type="primary", election_date=date(2026, 6, 2))
+    assert election.results_url == "https://electionresults.iowa.gov/IA/123456/"
+
+
+@pytest.mark.django_db
+@patch("integrations.ia_sos.tasks.IowaSosClient")
+@patch("integrations.ia_sos.tasks.parse_calendar_pdf", return_value=[PARSED_ELECTION])
+@patch("integrations.ia_sos.tasks.cache")
 def test_sync_ia_elections_idempotent(MockCache, mock_parse, MockClient):
     """Running sync twice should increment updated, not created again."""
     MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
     MockClient.return_value.get_candidate_pdf_info.return_value = None
+    MockClient.return_value.get_results_url.return_value = None
     MockCache.get.return_value = None
 
     from integrations.ia_sos.tasks import sync_ia_elections
@@ -85,6 +105,7 @@ def test_sync_ia_elections_queues_candidate_sync_on_new_pdf(
     }
     MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
     MockClient.return_value.get_candidate_pdf_info.return_value = pdf_info
+    MockClient.return_value.get_results_url.return_value = None
     MockCache.get.return_value = None  # no cached fingerprint → new PDF
 
     from integrations.ia_sos.tasks import sync_ia_elections
@@ -112,6 +133,7 @@ def test_sync_ia_elections_skips_unchanged_pdf(
     }
     MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
     MockClient.return_value.get_candidate_pdf_info.return_value = pdf_info
+    MockClient.return_value.get_results_url.return_value = None
     MockCache.get.return_value = existing_fingerprint  # cached → no change
 
     from integrations.ia_sos.tasks import sync_ia_elections
@@ -129,6 +151,7 @@ def test_sync_ia_elections_records_synclog(MockCache, mock_parse, MockClient):
     mock_parse.return_value = [PARSED_ELECTION]
     MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
     MockClient.return_value.get_candidate_pdf_info.return_value = None
+    MockClient.return_value.get_results_url.return_value = None
     MockCache.get.return_value = None
 
     from integrations.ia_sos.tasks import sync_ia_elections
@@ -164,6 +187,7 @@ def test_sync_ia_elections_queues_2026_primary_pdf_for_2026_primary(
     }
     MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
     MockClient.return_value.get_candidate_pdf_info.side_effect = [pdf_info, None]
+    MockClient.return_value.get_results_url.return_value = None
     mock_parse.return_value = [parsed_2026_primary, parsed_2027_primary]
     MockCache.get.return_value = None
 
@@ -342,6 +366,7 @@ def test_sync_ia_elections_routes_through_ingest_service():
     ):
         MockClient.return_value.fetch_calendar_pdf.return_value = b"%PDF"
         MockClient.return_value.get_candidate_pdf_info.return_value = None
+        MockClient.return_value.get_results_url.return_value = None
         mock_cache.get.return_value = None
         sync_ia_elections()
 
