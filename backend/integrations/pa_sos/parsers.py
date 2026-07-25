@@ -58,19 +58,19 @@ def parse_candidate_list(json_str: str) -> list[PaCandidateListEntry]:
         entries.append(
             PaCandidateListEntry(
                 candidate_id=cand_id,
-                candidate_id_num=row.get("CandidateIDNum", "").strip(),
-                name=row.get("CandidateName", "").strip(),
-                party=row.get("PartyName", "").strip(),
-                status=row.get("CandidateStatusValue", "").strip(),
-                type_val=row.get("CandidateTypeValue", "").strip(),
-                office=row.get("OfficeName", "").strip(),
-                district=row.get("DistrictName", "").strip(),
-                election_name=row.get("ElectionName", "").strip(),
-                municipality=row.get("Municipality", "").strip(),
-                county=row.get("CountyName", "").strip(),
+                candidate_id_num=(row.get("CandidateIDNum") or "").strip(),
+                name=(row.get("CandidateName") or "").strip(),
+                party=(row.get("PartyName") or "").strip(),
+                status=(row.get("CandidateStatusValue") or "").strip(),
+                type_val=(row.get("CandidateTypeValue") or "").strip(),
+                office=(row.get("OfficeName") or "").strip(),
+                district=(row.get("DistrictName") or "").strip(),
+                election_name=(row.get("ElectionName") or "").strip(),
+                municipality=(row.get("Municipality") or "").strip(),
+                county=(row.get("CountyName") or "").strip(),
                 primary_result=p_res,
                 general_result=g_res,
-                cf_online_url=row.get("CFOnlineURL", "").strip(),
+                cf_online_url=(row.get("CFOnlineURL") or "").strip(),
             )
         )
     return entries

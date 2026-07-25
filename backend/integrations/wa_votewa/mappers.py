@@ -152,8 +152,8 @@ def map_race(
 def map_candidate(ballot_option: dict) -> dict:
     """Map a VoteWA ballotOptions[] entry → Candidate model field values."""
     party_data = ballot_option.get("party") or {}
-    party_abbr = party_data.get("abbreviation", "")
-    party_name_raw = party_data.get("name", "")
+    party_abbr = party_data.get("abbreviation") or ""
+    party_name_raw = party_data.get("name") or ""
     if isinstance(party_name_raw, list):
         party_name = _get_text(party_name_raw)
     else:
