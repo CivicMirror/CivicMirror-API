@@ -338,8 +338,7 @@ def test_enrich_does_not_overwrite_existing_race_ocd_division_id(base_race):
 
 
 @pytest.mark.django_db
-def test_enrich_returns_ambiguous_when_multiple_external_id_matches(base_race):
-    Candidate.objects.create(race=base_race, name='Alex Smith', fec_candidate_id='H1')
+def _make_other_ca_race(canonical_key='ca-senate-5-2028'):
     other_election = Election.objects.create(
         name='Other Election',
         election_date=date(2028, 11, 7),
@@ -348,7 +347,7 @@ def test_enrich_returns_ambiguous_when_multiple_external_id_matches(base_race):
         source_id='ca-2028-general',
         status=Election.Status.UPCOMING,
     )
-    other_race = Race.objects.create(
+    return Race.objects.create(
         election=other_election,
         race_type=Race.RaceType.CANDIDATE,
         office_title='State Senate District 5',
@@ -356,16 +355,45 @@ def test_enrich_returns_ambiguous_when_multiple_external_id_matches(base_race):
         geography_scope='district',
         source=Race.Source.CIVIC_API,
         vote_method=Race.VoteMethod.SINGLE_CHOICE,
-        canonical_key='ca-senate-5-2028',
+        canonical_key=canonical_key,
         normalized_office_title='state senate district 5',
     )
+
+
+@pytest.mark.django_db
+def test_enrich_returns_ambiguous_when_multiple_external_id_matches_cross_race(base_race):
+    """race=None (no pre-resolved race, as fec/openstates cross-race matching
+    uses) — a genuinely ambiguous external id must still bail out rather
+    than guess which of two different people it belongs to."""
+    Candidate.objects.create(race=base_race, name='Alex Smith', fec_candidate_id='H1')
+    other_race = _make_other_ca_race()
     Candidate.objects.create(race=other_race, name='Alex Smith', fec_candidate_id='H1')
     matcher = CandidateMatcher()
 
-    matched, action = matcher.enrich(base_race, 'fec', 'H1', {'fec_candidate_id': 'H1', 'name': 'Alex Smith'})
+    matched, action = matcher.enrich(None, 'fec', 'H1', {'fec_candidate_id': 'H1', 'name': 'Alex Smith'})
 
     assert matched is None
     assert action == 'ambiguous'
+
+
+@pytest.mark.django_db
+def test_enrich_external_id_match_is_scoped_to_given_race(base_race):
+    """When a specific race is given, external-id matching must be scoped to
+    it — not global. Otherwise a legitimate case (the same external id
+    correctly belonging to two different Candidate rows for the same real
+    person, e.g. OCPF's cpfId across a primary Race and a general Race) would
+    make matching that id in EITHER race falsely ambiguous forever, and once
+    one row got the id set, matching would keep re-resolving to that same
+    row instead of ever reaching the other race's within-race name match."""
+    candidate = Candidate.objects.create(race=base_race, name='Alex Smith', fec_candidate_id='H1')
+    other_race = _make_other_ca_race()
+    Candidate.objects.create(race=other_race, name='Alex Smith', fec_candidate_id='H1')
+    matcher = CandidateMatcher()
+
+    matched, action = matcher.enrich(base_race, 'fec', 'H1', {'fec_candidate_id': 'H1', 'party': 'Independent'})
+
+    assert matched == candidate
+    assert action == 'enriched'
 
 
 # ---------------------------------------------------------------------------
