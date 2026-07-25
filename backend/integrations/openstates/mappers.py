@@ -30,6 +30,14 @@ def _first_value(items: list[dict] | None, key: str) -> str:
     return ''
 
 
+def _extract_other_names(other_names: list[dict] | None) -> list[str]:
+    names = []
+    for item in other_names or []:
+        if isinstance(item, dict) and item.get('name'):
+            names.append(str(item['name']).strip())
+    return names
+
+
 def map_person(raw: dict) -> dict:
     current_role = raw.get('current_role') or {}
     incumbent = bool(current_role)
@@ -47,6 +55,8 @@ def map_person(raw: dict) -> dict:
         'chamber': (current_role.get('org_classification') or '').lower(),
         'district': str(current_role.get('district') or ''),
         'display_name': (raw.get('name') or '').strip(),
+        'other_names': _extract_other_names(raw.get('other_names')),
+        'ocd_division_id': current_role.get('division_id') or '',
         'source_metadata': {
             'openstates': {
                 'person_id': str(raw.get('id') or ''),

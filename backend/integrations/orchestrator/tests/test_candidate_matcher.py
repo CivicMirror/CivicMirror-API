@@ -175,6 +175,76 @@ def test_enrich_matches_cross_race_from_payload_for_state_legislature():
 
 
 @pytest.mark.django_db
+def test_enrich_matches_by_other_names_when_primary_name_differs(base_race):
+    """OpenStates' primary `name` can be a display nickname (e.g. 'Dru Tarr')
+    while the ballot/legal name ('Andrew Tarr') only appears in other_names."""
+    candidate = Candidate.objects.create(race=base_race, name='Andrew Tarr')
+    matcher = CandidateMatcher()
+
+    matched, action = matcher.enrich(
+        base_race, 'openstates', 'os-1',
+        {
+            'name': 'Dru Tarr',
+            'other_names': ['A. Tarr', 'Andrew Tarr'],
+            'openstates_person_id': 'os-1',
+        },
+    )
+
+    assert matched == candidate
+    assert action == 'enriched'
+
+
+@pytest.mark.django_db
+def test_enrich_ignores_other_names_when_primary_name_already_matches(base_race):
+    """Primary name is tried first; other_names shouldn't cause a second,
+    unnecessary lookup when the first one already matched."""
+    candidate = Candidate.objects.create(race=base_race, name='Alex Smith')
+    matcher = CandidateMatcher()
+
+    matched, action = matcher.enrich(
+        base_race, 'openstates', 'os-1',
+        {'name': 'Alex Smith', 'other_names': ['Someone Else'], 'openstates_person_id': 'os-1'},
+    )
+
+    assert matched == candidate
+    assert action == 'enriched'
+
+
+@pytest.mark.django_db
+def test_enrich_backfills_blank_race_ocd_division_id(base_race):
+    assert base_race.ocd_division_id == ''
+    Candidate.objects.create(race=base_race, name='Alex Smith')
+    matcher = CandidateMatcher()
+
+    matcher.enrich(
+        base_race, 'openstates', 'os-1',
+        {
+            'name': 'Alex Smith',
+            'ocd_division_id': 'ocd-division/country:us/state:ca/sldu:5',
+        },
+    )
+
+    base_race.refresh_from_db()
+    assert base_race.ocd_division_id == 'ocd-division/country:us/state:ca/sldu:5'
+
+
+@pytest.mark.django_db
+def test_enrich_does_not_overwrite_existing_race_ocd_division_id(base_race):
+    base_race.ocd_division_id = 'ocd-division/country:us/state:ca/sldu:5-original'
+    base_race.save(update_fields=['ocd_division_id'])
+    Candidate.objects.create(race=base_race, name='Alex Smith')
+    matcher = CandidateMatcher()
+
+    matcher.enrich(
+        base_race, 'openstates', 'os-1',
+        {'name': 'Alex Smith', 'ocd_division_id': 'ocd-division/country:us/state:ca/sldu:5-different'},
+    )
+
+    base_race.refresh_from_db()
+    assert base_race.ocd_division_id == 'ocd-division/country:us/state:ca/sldu:5-original'
+
+
+@pytest.mark.django_db
 def test_enrich_returns_ambiguous_when_multiple_external_id_matches(base_race):
     Candidate.objects.create(race=base_race, name='Alex Smith', fec_candidate_id='H1')
     other_election = Election.objects.create(

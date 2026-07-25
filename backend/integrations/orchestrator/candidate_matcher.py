@@ -38,6 +38,11 @@ class CandidateMatcher:
         if candidate is None:
             return None, 'no_match'
 
+        ocd_division_id = enrichment_payload.get('ocd_division_id')
+        if ocd_division_id and candidate.race_id and not candidate.race.ocd_division_id:
+            candidate.race.ocd_division_id = ocd_division_id
+            candidate.race.save(update_fields=['ocd_division_id'])
+
         updates = get_fields_to_update(candidate, source, enrichment_payload)
         metadata_updates = {'external_id': str(external_id)}
         source_metadata_payload = enrichment_payload.get('source_metadata') or {}
@@ -150,14 +155,18 @@ class CandidateMatcher:
         if candidate is not None or ambiguous:
             return candidate, ambiguous
 
-        name = self._payload_name(payload)
-        if race is not None:
-            candidate, ambiguous = self._match_by_name_within_race(race, name)
+        for name in self._payload_names(payload):
+            if race is not None:
+                candidate, ambiguous = self._match_by_name_within_race(race, name)
+                if candidate is not None or ambiguous:
+                    return candidate, ambiguous
+                candidate, ambiguous = self._match_cross_race(race, name)
+            else:
+                candidate, ambiguous = self._match_cross_race_from_payload(payload, name)
             if candidate is not None or ambiguous:
                 return candidate, ambiguous
-            return self._match_cross_race(race, name)
 
-        return self._match_cross_race_from_payload(payload, name)
+        return None, False
 
     def _match_by_external_ids(self, payload: dict) -> tuple[Candidate | None, bool]:
         for field in self.external_id_fields:
@@ -293,6 +302,16 @@ class CandidateMatcher:
         first_name = str(payload.get('first_name') or '').strip()
         last_name = str(payload.get('last_name') or '').strip()
         return f'{first_name} {last_name}'.strip()
+
+    def _payload_names(self, payload: dict) -> list[str]:
+        """Primary payload name, plus any alternate names (e.g. OpenStates
+        other_names), tried in order until one produces a match."""
+        names = [self._payload_name(payload)]
+        for alt in payload.get('other_names') or []:
+            alt_name = str(alt or '').strip()
+            if alt_name and alt_name not in names:
+                names.append(alt_name)
+        return [n for n in names if n]
 
     @staticmethod
     def _normalize_district(value) -> str:

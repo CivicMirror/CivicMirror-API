@@ -45,6 +45,7 @@ class OpenStatesClient:
             ('api_key', self.api_key),
             ('include', 'offices'),
             ('include', 'links'),
+            ('include', 'other_names'),
         ]
         url = f'{self.base_url}/people'
 
