@@ -264,6 +264,7 @@ class TestExtVoteTallyRoutes:
 # Community race submission
 # ---------------------------------------------------------------------------
 
+@pytest.mark.django_db
 class TestCommunityRaceSubmission:
     def _payload(self, election):
         return {
@@ -273,6 +274,7 @@ class TestCommunityRaceSubmission:
             'geography_scope': 'municipal',
             'race_type': Race.RaceType.CANDIDATE,
             'vote_method': Race.VoteMethod.SINGLE_CHOICE,
+            'candidates': [{'name': 'Jane Doe', 'candidate_type': 'running'}],
         }
 
     def test_create_community_race(self, authed_client, election):
@@ -342,6 +344,95 @@ class TestCommunityRaceSubmission:
             content_type='application/json',
         )
         assert resp.status_code == 401
+
+    def test_create_candidate_race_auto_creates_election(self, authed_client):
+        payload = {
+            'race_type': Race.RaceType.CANDIDATE,
+            'office_title': 'City Council',
+            'jurisdiction': 'city',
+            'election_date': '2026-11-03',
+            'location_name': 'Springfield',
+            'candidates': [{'name': 'Jane Doe', 'candidate_type': 'running'}],
+        }
+        with _mock_verify(FAKE_UID):
+            resp = authed_client.post(
+                '/api/v1/races/community/',
+                data=payload,
+                content_type='application/json',
+            )
+        assert resp.status_code == 201
+        data = resp.json()
+        race = Race.objects.get(pk=data['id'])
+        assert race.election.election_date.isoformat() == '2026-11-03'
+        assert race.election.name == 'Springfield Local Election'
+        assert race.location_name == 'Springfield'
+        assert race.geography_scope == 'city'
+        assert race.candidates.count() == 1
+
+    def test_create_candidate_race_without_candidates_returns_400(self, authed_client):
+        payload = {
+            'race_type': Race.RaceType.CANDIDATE,
+            'office_title': 'City Council',
+            'jurisdiction': 'city',
+            'election_date': '2026-11-03',
+            'location_name': 'Springfield',
+            'candidates': [],
+        }
+        with _mock_verify(FAKE_UID):
+            resp = authed_client.post(
+                '/api/v1/races/community/',
+                data=payload,
+                content_type='application/json',
+            )
+        assert resp.status_code == 400
+
+    def test_create_measure_race_auto_creates_yes_no_options(self, authed_client):
+        payload = {
+            'race_type': Race.RaceType.MEASURE,
+            'question_title': 'Should the town build a new park?',
+            'ballot_type': 'Citizen-Initiated',
+            'election_date': '2026-11-03',
+            'location_name': 'Springfield',
+            'yes_vote_details': 'A yes vote supports building the park.',
+            'no_vote_details': 'A no vote opposes building the park.',
+            'source_links': ['https://example.com/measure'],
+        }
+        with _mock_verify(FAKE_UID):
+            resp = authed_client.post(
+                '/api/v1/races/community/',
+                data=payload,
+                content_type='application/json',
+            )
+        assert resp.status_code == 201
+        data = resp.json()
+        race = Race.objects.get(pk=data['id'])
+        assert race.office_title == 'Should the town build a new park?'
+        assert race.ballot_type == 'Citizen-Initiated'
+        assert set(race.measure_options.values_list('option_label', flat=True)) == {'Yes', 'No'}
+        assert race.source_links == ['https://example.com/measure']
+
+    def test_create_reuses_election_for_same_date_and_location(self, authed_client):
+        payload = {
+            'race_type': Race.RaceType.CANDIDATE,
+            'office_title': 'City Council Seat 1',
+            'jurisdiction': 'city',
+            'election_date': '2026-11-03',
+            'location_name': 'Springfield',
+            'candidates': [{'name': 'Jane Doe', 'candidate_type': 'running'}],
+        }
+        other_payload = {**payload, 'office_title': 'City Council Seat 2'}
+        with _mock_verify(FAKE_UID):
+            first = authed_client.post(
+                '/api/v1/races/community/', data=payload, content_type='application/json',
+            )
+            second = authed_client.post(
+                '/api/v1/races/community/', data=other_payload, content_type='application/json',
+            )
+        assert first.status_code == 201
+        assert second.status_code == 201
+        race_one = Race.objects.get(pk=first.json()['id'])
+        race_two = Race.objects.get(pk=second.json()['id'])
+        assert race_one.election_id == race_two.election_id
 
 
 # ---------------------------------------------------------------------------

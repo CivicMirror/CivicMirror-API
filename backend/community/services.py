@@ -5,6 +5,7 @@ import uuid
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
+from django.utils.dateparse import parse_date
 
 from elections.models import Candidate, MeasureOption, Race
 
@@ -215,32 +216,93 @@ def get_or_create_profile(uid: str) -> UserProfile:
 # Community race creation
 # ---------------------------------------------------------------------------
 
-def create_community_race(*, uid: str, payload: dict):
+def _resolve_election(payload: dict):
     """
-    Create a community-submitted race.
-
-    Returns (race_instance, error_dict, http_status).
+    Return (election, error_dict). If election_id is given, attach to that
+    existing election. Otherwise auto-create one from election_date +
+    location_name so community submitters never need to pick from a list.
     """
     from elections.models import Election
 
-    required = ['office_title', 'jurisdiction', 'geography_scope', 'race_type', 'election_id', 'vote_method']
-    for field in required:
-        if not payload.get(field):
-            return None, {'error': f'{field} is required.'}, 400
+    if payload.get('election_id'):
+        try:
+            return Election.objects.get(pk=int(payload['election_id'])), None
+        except (Election.DoesNotExist, ValueError, TypeError):
+            return None, {'error': 'Invalid election_id.'}
 
-    try:
-        election = Election.objects.get(pk=int(payload['election_id']))
-    except (Election.DoesNotExist, ValueError, TypeError):
-        return None, {'error': 'Invalid election_id.'}, 400
+    election_date = parse_date(str(payload.get('election_date') or ''))
+    if not election_date:
+        return None, {'error': 'election_date is required.'}
 
-    race_type = payload['race_type']
+    location_name = (payload.get('location_name') or '').strip()
+    if not location_name:
+        return None, {'error': 'location_name is required.'}
+
+    election, _ = Election.objects.get_or_create(
+        election_date=election_date,
+        name=f'{location_name} Local Election',
+        defaults={'jurisdiction_level': Election.JurisdictionLevel.LOCAL},
+    )
+    return election, None
+
+
+def create_community_race(*, uid: str, payload: dict):
+    """
+    Create a community-submitted race, auto-creating its Election from the
+    submitted election_date/location_name when no election_id is supplied.
+
+    Returns (race_instance, error_dict, http_status).
+    """
+    race_type = payload.get('race_type')
     if race_type not in (Race.RaceType.CANDIDATE, Race.RaceType.MEASURE):
         return None, {'error': f'Invalid race_type: {race_type}'}, 400
 
-    vote_method = payload['vote_method']
+    election, error = _resolve_election(payload)
+    if error:
+        return None, error, 400
+
+    location_name = (payload.get('location_name') or '').strip()
+    candidates_data = payload.get('candidates') or []
+
+    if race_type == Race.RaceType.CANDIDATE:
+        office_title = (payload.get('office_title') or '').strip()
+        if not office_title:
+            return None, {'error': 'office_title is required.'}, 400
+
+        geography_scope = payload.get('geography_scope') or payload.get('jurisdiction') or ''
+        if not geography_scope:
+            return None, {'error': 'jurisdiction is required.'}, 400
+
+        if not any(isinstance(c, dict) and c.get('name') for c in candidates_data):
+            return None, {'error': 'At least one candidate is required.'}, 400
+
+        vote_method = payload.get('vote_method') or Race.VoteMethod.SINGLE_CHOICE
+        ballot_type = ''
+        yes_vote_details = ''
+        no_vote_details = ''
+        source_links = [payload['source_url']] if payload.get('source_url') else []
+    else:
+        office_title = (payload.get('office_title') or payload.get('question_title') or '').strip()
+        if not office_title:
+            return None, {'error': 'question_title is required.'}, 400
+
+        yes_vote_details = payload.get('yes_vote_details') or ''
+        no_vote_details = payload.get('no_vote_details') or ''
+        if not yes_vote_details or not no_vote_details:
+            return None, {'error': 'yes_vote_details and no_vote_details are required.'}, 400
+
+        geography_scope = payload.get('geography_scope') or 'local'
+        ballot_type = payload.get('ballot_type') or ''
+        vote_method = payload.get('vote_method') or Race.VoteMethod.YES_NO
+        source_links = list(payload.get('source_links') or [])
+
     valid_methods = [c[0] for c in Race.VoteMethod.choices]
     if vote_method not in valid_methods:
         return None, {'error': f'Invalid vote_method: {vote_method}'}, 400
+
+    jurisdiction = (location_name or payload.get('jurisdiction') or '').strip()
+    if not jurisdiction:
+        return None, {'error': 'jurisdiction is required.'}, 400
 
     canonical_key = f'community:{uuid.uuid4().hex}'
 
@@ -248,30 +310,45 @@ def create_community_race(*, uid: str, payload: dict):
         race = Race.objects.create(
             election=election,
             race_type=race_type,
-            office_title=payload['office_title'],
-            jurisdiction=payload['jurisdiction'],
-            geography_scope=payload['geography_scope'],
+            office_title=office_title,
+            jurisdiction=jurisdiction,
+            geography_scope=geography_scope,
+            location_name=location_name,
+            ballot_type=ballot_type,
+            yes_vote_details=yes_vote_details,
+            no_vote_details=no_vote_details,
             vote_method=vote_method,
             source=Race.Source.COMMUNITY,
             race_status=Race.RaceStatus.PENDING_REVIEW,
             submitted_by_uid=uid,
             canonical_key=canonical_key,
-            source_links=[payload['source_url']] if payload.get('source_url') else [],
+            source_links=source_links,
         )
 
-        candidates_data = payload.get('candidates') or []
-        for c in candidates_data:
-            if not isinstance(c, dict) or not c.get('name'):
-                continue
-            Candidate.objects.create(
-                race=race,
-                name=c['name'],
-                party=c.get('party', ''),
-                website_url=c.get('website_url', ''),
-            )
+        if race_type == Race.RaceType.CANDIDATE:
+            for c in candidates_data:
+                if not isinstance(c, dict) or not c.get('name'):
+                    continue
+                Candidate.objects.create(
+                    race=race,
+                    name=c['name'],
+                    party=c.get('party', ''),
+                    description=c.get('description', ''),
+                    image_url=c.get('image_url', ''),
+                    website_url=c.get('website_url', ''),
+                    candidate_status=(
+                        Candidate.CandidateStatus.WRITE_IN
+                        if c.get('candidate_type') == 'write_in'
+                        else Candidate.CandidateStatus.RUNNING
+                    ),
+                )
+        else:
+            MeasureOption.objects.create(race=race, option_label='Yes')
+            MeasureOption.objects.create(race=race, option_label='No')
 
         _get_or_create_profile(uid)
 
     race.refresh_from_db()
     race.candidates.all()  # warm cache
+    race.measure_options.all()  # warm cache
     return race, None, 201
