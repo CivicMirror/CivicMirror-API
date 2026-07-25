@@ -585,3 +585,113 @@ def test_sync_ocpf_ma_candidates_no_match_is_skipped_not_error():
 
     assert result["updated"] == 0
     assert result["skipped"] == 1
+
+
+@pytest.mark.django_db
+def test_sync_ocpf_ma_candidates_enriches_both_primary_and_general_rows():
+    """
+    Regression test for the real production gap this fix closes: a candidate
+    who wins a contested primary has two separate Candidate rows for the
+    same office (primary Race + general Race). OCPF's per-year depository
+    doesn't distinguish between them, so matching state+chamber-wide (the
+    old behavior) always called this ambiguous and enriched neither row.
+    Confirmed live for Andrew Tarr / Christina Delisio (issue #26) before
+    this fix — both were skipped as ambiguous in production.
+    """
+    from elections.models import Candidate, Election, Race
+    from integrations.ma_sos.tasks import sync_ocpf_ma_candidates
+
+    primary_election = Election.objects.create(
+        name="2026 MA State Representative 5th Essex Primary",
+        election_date=date(2026, 9, 1),
+        election_type="primary",
+        jurisdiction_level="state",
+        state="MA",
+        source_id="ma-2026-5th-essex-primary",
+    )
+    primary_race = Race.objects.create(
+        election=primary_election,
+        race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative",
+        jurisdiction="5th Essex",
+        geography_scope="district",
+        source=Race.Source.MA_SOS,
+        vote_method=Race.VoteMethod.SINGLE_CHOICE,
+        canonical_key="ma-house-5th-essex-primary",
+        normalized_office_title="state representative",
+    )
+    general_election = Election.objects.create(
+        name="2026 MA State Representative 5th Essex",
+        election_date=date(2026, 11, 3),
+        election_type="general",
+        jurisdiction_level="state",
+        state="MA",
+        source_id="ma-2026-5th-essex-general",
+    )
+    general_race = Race.objects.create(
+        election=general_election,
+        race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative",
+        jurisdiction="5th Essex",
+        geography_scope="district",
+        source=Race.Source.MA_SOS,
+        vote_method=Race.VoteMethod.SINGLE_CHOICE,
+        canonical_key="ma-house-5th-essex-general",
+        normalized_office_title="state representative",
+    )
+    primary_candidate = Candidate.objects.create(race=primary_race, name="Andrew Francis Robert Tarr")
+    general_candidate = Candidate.objects.create(race=general_race, name="Andrew Francis Robert Tarr")
+
+    with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient:
+        inst = MockClient.return_value
+        inst.get_legislative_depository.return_value = [_TARR_DEPOSITORY_ROW]
+        inst.get_filer_detail.return_value = _TARR_FILER_DETAIL
+
+        result = sync_ocpf_ma_candidates.run(2026)
+
+    primary_candidate.refresh_from_db()
+    general_candidate.refresh_from_db()
+    assert result["updated"] == 2
+    assert result["warnings"] == 0
+    assert primary_candidate.party == "Democratic"
+    assert general_candidate.party == "Democratic"
+    assert primary_candidate.ocpf_filer_id == "19580"
+    assert general_candidate.ocpf_filer_id == "19580"
+
+
+@pytest.mark.django_db
+def test_sync_ocpf_ma_candidates_scopes_to_year():
+    """A same-district race from a different year must not match."""
+    from elections.models import Candidate, Election, Race
+    from integrations.ma_sos.tasks import sync_ocpf_ma_candidates
+
+    old_election = Election.objects.create(
+        name="2022 MA State Representative 5th Essex",
+        election_date=date(2022, 11, 8),
+        election_type="general",
+        jurisdiction_level="state",
+        state="MA",
+        source_id="ma-2022-5th-essex",
+    )
+    old_race = Race.objects.create(
+        election=old_election,
+        race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative",
+        jurisdiction="5th Essex",
+        geography_scope="district",
+        source=Race.Source.MA_SOS,
+        vote_method=Race.VoteMethod.SINGLE_CHOICE,
+        canonical_key="ma-house-5th-essex-2022",
+        normalized_office_title="state representative",
+    )
+    Candidate.objects.create(race=old_race, name="Andrew Francis Robert Tarr")
+
+    with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient:
+        inst = MockClient.return_value
+        inst.get_legislative_depository.return_value = [_TARR_DEPOSITORY_ROW]
+        inst.get_filer_detail.return_value = _TARR_FILER_DETAIL
+
+        result = sync_ocpf_ma_candidates.run(2026)
+
+    assert result["updated"] == 0
+    assert result["skipped"] == 1

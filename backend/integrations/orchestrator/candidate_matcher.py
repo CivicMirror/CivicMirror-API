@@ -165,11 +165,11 @@ class CandidateMatcher:
         return matches[0] if len(matches) == 1 else None
 
     def _find_candidate(self, race: Race | None, payload: dict) -> tuple[Candidate | None, bool]:
-        candidate, ambiguous = self._match_by_external_ids(payload)
+        candidate, ambiguous = self._match_by_external_ids(race, payload)
         if candidate is not None or ambiguous:
             return candidate, ambiguous
 
-        candidate, ambiguous = self._match_by_cross_reference(payload)
+        candidate, ambiguous = self._match_by_cross_reference(race, payload)
         if candidate is not None or ambiguous:
             return candidate, ambiguous
 
@@ -205,23 +205,36 @@ class CandidateMatcher:
 
         return None, False
 
-    def _match_by_external_ids(self, payload: dict) -> tuple[Candidate | None, bool]:
+    def _match_by_external_ids(self, race: Race | None, payload: dict) -> tuple[Candidate | None, bool]:
         for field in self.external_id_fields:
             value = payload.get(field)
             if not value:
                 continue
-            matches = list(Candidate.objects.filter(**{field: value})[:2])
+            qs = Candidate.objects.filter(**{field: value})
+            if race is not None:
+                # Scoped to the given race: an external id (e.g. an OCPF
+                # cpfId) can legitimately belong to two different Candidate
+                # rows for the same real person — a primary Race and a
+                # general Race for the same office. An unscoped lookup would
+                # find whichever row already has the id set first and keep
+                # re-matching that one forever, never reaching the other row's
+                # within-race name match.
+                qs = qs.filter(race=race)
+            matches = list(qs[:2])
             if len(matches) == 1:
                 return matches[0], False
             if len(matches) > 1:
                 return None, True
         return None, False
 
-    def _match_by_cross_reference(self, payload: dict) -> tuple[Candidate | None, bool]:
+    def _match_by_cross_reference(self, race: Race | None, payload: dict) -> tuple[Candidate | None, bool]:
         fec_ids = payload.get('fec_candidate_ids') or payload.get('fec_ids') or []
         if isinstance(fec_ids, str):
             fec_ids = [fec_ids]
-        matches = list(Candidate.objects.filter(fec_candidate_id__in=fec_ids).distinct()[:2])
+        qs = Candidate.objects.filter(fec_candidate_id__in=fec_ids)
+        if race is not None:
+            qs = qs.filter(race=race)
+        matches = list(qs.distinct()[:2])
         if len(matches) == 1:
             return matches[0], False
         if len(matches) > 1:
