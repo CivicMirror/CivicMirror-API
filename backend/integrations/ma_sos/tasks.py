@@ -29,9 +29,10 @@ import logging
 from datetime import date
 
 from celery import shared_task
+from django.db.models import Q
 from django.utils import timezone
 
-from elections.models import Election, MeasureOption
+from elections.models import Election, MeasureOption, Race
 from integrations.orchestrator.candidate_matcher import CandidateMatcher
 from integrations.orchestrator.exceptions import AmbiguousMatchError
 from ops.models import SyncLog
@@ -485,6 +486,43 @@ def _get_or_create_bq_election(date_str: str, year: int) -> Election | None:
     return stub
 
 
+_CHAMBER_OFFICE_KEYWORDS = {
+    "lower": r"house|represent",
+    "upper": r"senate",
+}
+
+
+def _find_ma_races(chamber: str, district: str, year: int) -> list[Race]:
+    """
+    Resolve the MA legislative Race(s) an OCPF depository row's
+    chamber+district refers to, scoped to `year` so an old race with the
+    same office/district text can't match.
+
+    Deliberately returns *every* match, not just one: the same real person
+    can have two separate Candidate rows for the same office/district in
+    one cycle — a primary Race and a general Race — and OCPF's per-year
+    depository doesn't distinguish between them. Enriching within each
+    resolved race individually (instead of one state+chamber-wide match)
+    lets both rows get updated safely, since within-race name matching
+    only has to disambiguate candidates who are actually on the same
+    ballot, not two rows that are the same candidate on two ballots.
+    """
+    keywords = _CHAMBER_OFFICE_KEYWORDS.get(chamber)
+    if not keywords:
+        return []
+
+    qs = Race.objects.filter(
+        election__state="MA",
+        election__election_date__year=year,
+        office_title__iregex=keywords,
+    ).select_related("election")
+
+    if district:
+        qs = qs.filter(Q(jurisdiction__icontains=district) | Q(office_title__icontains=district))
+
+    return list(qs)
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_ocpf_ma_candidates(self, year: int | None = None):
     """
@@ -496,6 +534,14 @@ def sync_ocpf_ma_candidates(self, year: int | None = None):
     is the source of truth for who's running; OCPF only fills gaps (legal
     name confirmation via matching, party, address, photo, ballot-status
     tags, and $ totals) on records that already exist.
+
+    Races are resolved explicitly via _find_ma_races (chamber+district+year)
+    before matching, rather than matching cross-race by state+chamber alone:
+    a candidate who won a contested primary has two separate Candidate rows
+    for the same office (primary Race + general Race), and OCPF's per-year
+    depository doesn't distinguish between them — matching state-wide would
+    correctly-but-uselessly call that ambiguous every time. Enriching within
+    each resolved race individually lets both rows get updated.
 
     No SourceRecordStore checksum caching: candidate metadata/finances
     change often enough, and the candidate pool is small enough (~200 MA
@@ -535,28 +581,38 @@ def sync_ocpf_ma_candidates(self, year: int | None = None):
                 skipped_count += 1
                 continue
 
-            try:
-                candidate, action = matcher.enrich(
-                    race=None, source="ocpf", external_id=str(cpf_id), enrichment_payload=payload,
-                )
-            except AmbiguousMatchError as exc:
-                warning_count += 1
-                last_warning = str(exc)
+            races = _find_ma_races(payload.get("chamber", ""), payload.get("district", ""), year)
+            if not races:
                 skipped_count += 1
                 continue
 
-            if action == "enriched":
-                updated_count += 1
-                sources = list(candidate.contributing_sources or [])
-                if "ocpf" not in sources:
-                    sources.append("ocpf")
-                    candidate.contributing_sources = sources
-                    candidate.save(update_fields=["contributing_sources"])
-            else:
-                skipped_count += 1
-                if action == "ambiguous":
+            matched_any = False
+            for race in races:
+                try:
+                    candidate, action = matcher.enrich(
+                        race=race, source="ocpf", external_id=str(cpf_id), enrichment_payload=payload,
+                    )
+                except AmbiguousMatchError as exc:
                     warning_count += 1
-                    last_warning = f"Ambiguous candidate match for ocpf:{cpf_id}"
+                    last_warning = str(exc)
+                    continue
+
+                if action == "enriched":
+                    matched_any = True
+                    updated_count += 1
+                    sources = list(candidate.contributing_sources or [])
+                    if "ocpf" not in sources:
+                        sources.append("ocpf")
+                        candidate.contributing_sources = sources
+                        candidate.save(update_fields=["contributing_sources"])
+                elif action == "ambiguous":
+                    warning_count += 1
+                    last_warning = f"Ambiguous candidate match for ocpf:{cpf_id} in race={race.pk}"
+                elif action == "skipped":
+                    matched_any = True  # matched, just nothing new to write
+
+            if not matched_any:
+                skipped_count += 1
 
         sync_log.records_updated = updated_count
         sync_log.records_skipped = skipped_count
