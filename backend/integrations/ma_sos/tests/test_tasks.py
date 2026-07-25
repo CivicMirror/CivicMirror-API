@@ -422,3 +422,166 @@ def test_sync_ma_ballot_question_routes_through_ingest_service():
     # Yes/No options are still created via get_or_create (outside the merge layer).
     labels = set(MeasureOption.objects.filter(race=race).values_list("option_label", flat=True))
     assert {"Yes", "No"}.issubset(labels)
+
+
+# ---------------------------------------------------------------------------
+# sync_ocpf_ma_candidates
+# ---------------------------------------------------------------------------
+
+_TARR_DEPOSITORY_ROW = {
+    "cpfId": 19580,
+    "filerName": "Tarr, Andrew",
+    "officeSought": "5th Essex",
+    "receiptsYtdNumeric": 28366.76,
+    "expendituresYtdNumeric": 32967.91,
+    "currentCashOnHandNumeric": 9824.71,
+    "partyAffiliation": "Democratic",
+    "isWinner": False,
+}
+
+_TARR_FILER_DETAIL = {
+    "cpfId": 19580,
+    "candidateLastName": "Tarr",
+    "fullName": "Andrew F. Tarr",
+    "committeeName": "Tarr Committee",
+    "candidate": {"fullAddress": "215 Washington St Gloucester, MA  01930"},
+    "officeSought": {"officeDescription": "House", "districtDescription": "5th Essex"},
+    "partyAffiliation": "Democratic",
+    "tags": [{"tagTypeDescription": "On Ballot", "year": 2026}],
+    "filerPhotoUrl": "",
+}
+
+
+@pytest.mark.django_db
+def test_sync_ocpf_ma_candidates_enriches_existing_candidate():
+    from elections.models import Candidate, Election, Race
+    from integrations.ma_sos.tasks import sync_ocpf_ma_candidates
+    from ops.models import SyncLog
+
+    election = Election.objects.create(
+        name="2026 MA State Representative 5th Essex",
+        election_date=date(2026, 11, 3),
+        election_type="general",
+        jurisdiction_level="state",
+        state="MA",
+        source_id="ma-2026-5th-essex",
+    )
+    race = Race.objects.create(
+        election=election,
+        race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative",
+        jurisdiction="5th Essex",
+        geography_scope="district",
+        source=Race.Source.MA_SOS,
+        vote_method=Race.VoteMethod.SINGLE_CHOICE,
+        canonical_key="ma-house-5th-essex",
+        normalized_office_title="state representative",
+    )
+    candidate = Candidate.objects.create(race=race, name="Andrew Francis Robert Tarr")
+
+    with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient:
+        inst = MockClient.return_value
+        inst.get_legislative_depository.return_value = [_TARR_DEPOSITORY_ROW]
+        inst.get_filer_detail.return_value = _TARR_FILER_DETAIL
+
+        result = sync_ocpf_ma_candidates.run(2026)
+
+    candidate.refresh_from_db()
+    sync_log = SyncLog.objects.get(task_name="sync_ocpf_ma_candidates")
+    assert result["updated"] == 1
+    assert candidate.ocpf_filer_id == "19580"
+    assert candidate.party == "Democratic"
+    assert candidate.contact_office == "215 Washington St Gloucester, MA  01930"
+    assert "ocpf" in candidate.contributing_sources
+    assert candidate.source_metadata["ocpf"]["on_ballot"] is True
+    assert sync_log.records_updated == 1
+    assert sync_log.status == SyncLog.Status.COMPLETED
+
+
+@pytest.mark.django_db
+def test_sync_ocpf_ma_candidates_incumbent_office_not_overwritten():
+    """Confirms the incumbent-conditional priority is actually wired through
+    the real task, not just unit-tested in isolation on CandidateMatcher."""
+    from elections.models import Candidate, Election, Race
+    from integrations.ma_sos.tasks import sync_ocpf_ma_candidates
+
+    election = Election.objects.create(
+        name="2026 MA State Representative 5th Essex",
+        election_date=date(2026, 11, 3),
+        election_type="general",
+        jurisdiction_level="state",
+        state="MA",
+        source_id="ma-2026-5th-essex-2",
+    )
+    race = Race.objects.create(
+        election=election,
+        race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative",
+        jurisdiction="5th Essex",
+        geography_scope="district",
+        source=Race.Source.MA_SOS,
+        vote_method=Race.VoteMethod.SINGLE_CHOICE,
+        canonical_key="ma-house-5th-essex-2",
+        normalized_office_title="state representative",
+    )
+    candidate = Candidate.objects.create(
+        race=race, name="Andrew Francis Robert Tarr", incumbent=True,
+    )
+    # Simulate openstates having already set the real Capitol office.
+    from integrations.orchestrator.candidate_matcher import CandidateMatcher
+    CandidateMatcher().enrich(race, "openstates", "os-1", {"name": "Andrew Francis Robert Tarr", "contact_office": "Room 39, State House"})
+
+    with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient:
+        inst = MockClient.return_value
+        inst.get_legislative_depository.return_value = [_TARR_DEPOSITORY_ROW]
+        inst.get_filer_detail.return_value = _TARR_FILER_DETAIL
+
+        sync_ocpf_ma_candidates.run(2026)
+
+    candidate.refresh_from_db()
+    assert candidate.contact_office == "Room 39, State House"
+
+
+@pytest.mark.django_db
+def test_sync_ocpf_ma_candidates_skips_row_without_cpf_id():
+    from integrations.ma_sos.tasks import sync_ocpf_ma_candidates
+
+    with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient:
+        inst = MockClient.return_value
+        inst.get_legislative_depository.return_value = [{"filerName": "No, Id"}]
+
+        result = sync_ocpf_ma_candidates.run(2026)
+
+    assert result["skipped"] == 1
+    assert result["updated"] == 0
+
+
+@pytest.mark.django_db
+def test_sync_ocpf_ma_candidates_empty_depository_returns_warning():
+    from integrations.ma_sos.tasks import sync_ocpf_ma_candidates
+    from ops.models import SyncLog
+
+    with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient:
+        inst = MockClient.return_value
+        inst.get_legislative_depository.return_value = []
+
+        result = sync_ocpf_ma_candidates.run(2026)
+
+    sync_log = SyncLog.objects.get(task_name="sync_ocpf_ma_candidates")
+    assert result == {"updated": 0, "skipped": 0, "warnings": 0}
+    assert sync_log.status == SyncLog.Status.COMPLETED_WITH_WARNINGS
+
+
+@pytest.mark.django_db
+def test_sync_ocpf_ma_candidates_no_match_is_skipped_not_error():
+    from integrations.ma_sos.tasks import sync_ocpf_ma_candidates
+
+    with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient:
+        inst = MockClient.return_value
+        inst.get_legislative_depository.return_value = [_TARR_DEPOSITORY_ROW]
+        inst.get_filer_detail.return_value = _TARR_FILER_DETAIL
+
+        result = sync_ocpf_ma_candidates.run(2026)
+
+    assert result["updated"] == 0
+    assert result["skipped"] == 1

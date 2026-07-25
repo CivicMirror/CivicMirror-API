@@ -181,3 +181,35 @@ class MaSosClient:
         except (MaSosRetryableError, MaSosError, ValueError) as exc:
             logger.warning("ma_sos.client.ocpf_municipalities_failed: %s", exc)
             return []
+
+    def get_legislative_depository(self, year: int) -> list[dict]:
+        """
+        Fetch OCPF's state-legislative-race financial depository for a year.
+
+        One row per legislative candidate committee: cpfId, filerName ("Last,
+        First"), officeSought ("5th Essex" — office type is not included here,
+        see get_all_candidate_filers/get_filer_detail for that), party, and
+        YTD receipts/expenditures/cash-on-hand.
+        """
+        url = f"{_OCPF_BASE}/reports/legislative/race/depository/{year}"
+        try:
+            resp = self._get(url, timeout=60)
+            return resp.json()
+        except (MaSosRetryableError, MaSosError, ValueError) as exc:
+            logger.warning("ma_sos.client.ocpf_legislative_depository_failed year=%d: %s", year, exc)
+            return []
+
+    def get_filer_detail(self, cpf_id: int) -> dict:
+        """
+        Fetch full OCPF filer detail: candidate legal name/address, office
+        sought/held, party, ballot-status tags, and photo URL if on file.
+
+        Returns {} on failure (non-fatal — this is enrichment, not creation).
+        """
+        url = f"{_OCPF_BASE}/filer/{cpf_id}"
+        try:
+            resp = self._get(url, timeout=20)
+            return resp.json()
+        except (MaSosRetryableError, MaSosError, ValueError) as exc:
+            logger.warning("ma_sos.client.ocpf_filer_detail_failed cpf_id=%d: %s", cpf_id, exc)
+            return {}

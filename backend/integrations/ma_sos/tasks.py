@@ -17,7 +17,13 @@ Stage 3 — sync_ma_ballot_question:
   Download BQ CSV, parse Yes/No totals.
   Upsert Race + MeasureOption records.
 
+Enrichment — sync_ocpf_ma_candidates:
+  Fetch OCPF's legislative-race financial depository (one call/year) + full
+  filer detail per candidate. Enriches Candidate records already created by
+  sync_ma_races via CandidateMatcher — never creates candidates itself.
+
 Trigger endpoint: POST /internal/tasks/sync-ma-sos/
+                  POST /internal/tasks/sync-ocpf-ma/
 """
 import logging
 from datetime import date
@@ -26,12 +32,14 @@ from celery import shared_task
 from django.utils import timezone
 
 from elections.models import Election, MeasureOption
+from integrations.orchestrator.candidate_matcher import CandidateMatcher
+from integrations.orchestrator.exceptions import AmbiguousMatchError
 from ops.models import SyncLog
 
 from . import parsers
 from .client import MaSosClient
 from .exceptions import MaSosError, MaSosRetryableError
-from .mappers import map_ballot_question, map_candidate, map_election, map_race
+from .mappers import map_ballot_question, map_candidate, map_election, map_ocpf_filer, map_race
 
 logger = logging.getLogger(__name__)
 
@@ -475,3 +483,96 @@ def _get_or_create_bq_election(date_str: str, year: int) -> Election | None:
         },
     )
     return stub
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def sync_ocpf_ma_candidates(self, year: int | None = None):
+    """
+    Enrichment: fetch OCPF's legislative-race financial depository for `year`
+    (current year by default) plus full filer detail per candidate, and
+    enrich already-ingested MA Candidate records via CandidateMatcher.
+
+    Never creates candidates — sync_ma_races (the electionstats ballot CSV)
+    is the source of truth for who's running; OCPF only fills gaps (legal
+    name confirmation via matching, party, address, photo, ballot-status
+    tags, and $ totals) on records that already exist.
+
+    No SourceRecordStore checksum caching: candidate metadata/finances
+    change often enough, and the candidate pool is small enough (~200 MA
+    legislative seats), that re-matching every row every run is cheap and
+    keeps the logic simple — CandidateMatcher.enrich() already no-ops
+    cheaply ('skipped') when nothing has actually changed.
+    """
+    year = year or date.today().year
+    sync_log = SyncLog.objects.create(
+        source="ocpf",
+        task_name="sync_ocpf_ma_candidates",
+        status=SyncLog.Status.STARTED,
+    )
+    client = MaSosClient()
+    matcher = CandidateMatcher()
+    updated_count = skipped_count = warning_count = 0
+    last_warning = ""
+
+    try:
+        depository_rows = client.get_legislative_depository(year)
+        if not depository_rows:
+            sync_log.notes = f"No OCPF legislative depository rows returned for {year}"
+            sync_log.status = SyncLog.Status.COMPLETED_WITH_WARNINGS
+            sync_log.completed_at = timezone.now()
+            sync_log.save(update_fields=["notes", "status", "completed_at"])
+            return {"updated": 0, "skipped": 0, "warnings": 0}
+
+        for row in depository_rows:
+            cpf_id = row.get("cpfId")
+            if not cpf_id:
+                skipped_count += 1
+                continue
+
+            detail = client.get_filer_detail(cpf_id)
+            payload = map_ocpf_filer(row, detail)
+            if not payload.get("name"):
+                skipped_count += 1
+                continue
+
+            try:
+                candidate, action = matcher.enrich(
+                    race=None, source="ocpf", external_id=str(cpf_id), enrichment_payload=payload,
+                )
+            except AmbiguousMatchError as exc:
+                warning_count += 1
+                last_warning = str(exc)
+                skipped_count += 1
+                continue
+
+            if action == "enriched":
+                updated_count += 1
+                sources = list(candidate.contributing_sources or [])
+                if "ocpf" not in sources:
+                    sources.append("ocpf")
+                    candidate.contributing_sources = sources
+                    candidate.save(update_fields=["contributing_sources"])
+            else:
+                skipped_count += 1
+                if action == "ambiguous":
+                    warning_count += 1
+                    last_warning = f"Ambiguous candidate match for ocpf:{cpf_id}"
+
+        sync_log.records_updated = updated_count
+        sync_log.records_skipped = skipped_count
+        sync_log.error_count = warning_count
+        sync_log.last_error = last_warning
+        sync_log.status = SyncLog.Status.COMPLETED_WITH_WARNINGS if warning_count else SyncLog.Status.COMPLETED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(
+            update_fields=["records_updated", "records_skipped", "error_count", "last_error", "status", "completed_at"]
+        )
+        return {"updated": updated_count, "skipped": skipped_count, "warnings": warning_count}
+    except Exception as exc:
+        logger.exception("ocpf.sync_ma_candidates_failed year=%s", year)
+        sync_log.error_count = 1
+        sync_log.last_error = str(exc)
+        sync_log.status = SyncLog.Status.FAILED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+        raise

@@ -213,6 +213,7 @@ class Candidate(models.Model):
     fec_candidate_id = models.CharField(max_length=20, blank=True, db_index=True)
     bioguide_id = models.CharField(max_length=20, blank=True, db_index=True)
     openstates_person_id = models.CharField(max_length=50, blank=True)
+    ocpf_filer_id = models.CharField(max_length=20, blank=True, db_index=True)
     source_metadata = models.JSONField(default=dict, blank=True)
     contact_phone = models.CharField(max_length=30, blank=True)
     contact_office = models.CharField(max_length=255, blank=True)

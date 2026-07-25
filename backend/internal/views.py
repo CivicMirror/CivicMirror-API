@@ -17,7 +17,7 @@ from integrations.ga_sos.tasks import sync_ga_elections
 from integrations.ia_sos.tasks import sync_ia_elections
 from integrations.il_sbe.tasks import sync_il_elections
 from integrations.ky_sos.tasks import sync_ky_sos
-from integrations.ma_sos.tasks import sync_ma_elections
+from integrations.ma_sos.tasks import sync_ma_elections, sync_ocpf_ma_candidates
 from integrations.mi_sos.tasks import sync_mi_elections
 from integrations.mn_sos.tasks import discover_mn_elections, sync_mn_races
 from integrations.nc_sbe.tasks import sync_nc_candidates, sync_nc_elections
@@ -149,6 +149,13 @@ def sync_va_elect_trigger(request):
 @require_internal_task_token
 def sync_ma_sos_trigger(request):
     return _trigger("sync_ma_sos", sync_ma_elections, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_ocpf_ma_trigger(request):
+    return _trigger("sync_ocpf_ma", sync_ocpf_ma_candidates, request)
 
 
 @csrf_exempt

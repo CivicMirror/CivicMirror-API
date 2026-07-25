@@ -370,3 +370,78 @@ def map_ballot_question(metadata: dict, election_obj: Election) -> dict:
             "full_question_text": question_text,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# OCPF candidate enrichment mapper
+# ---------------------------------------------------------------------------
+
+_OCPF_OFFICE_TO_CHAMBER = {"house": "lower", "senate": "upper"}
+
+
+def map_ocpf_filer(depository_row: dict, detail: dict) -> dict:
+    """
+    Map an OCPF legislative-depository row + /filer/{cpfId} detail →
+    CandidateMatcher enrichment payload.
+
+    depository_row: from MaSosClient.get_legislative_depository(year) — has
+        cpfId, filerName, YTD $ totals.
+    detail: from MaSosClient.get_filer_detail(cpfId) — has the candidate's
+        legal name, address, office sought (with office type), party, ballot
+        tags, and photo. May be {} if the detail fetch failed; depository_row
+        alone is still enough to attempt a name/office match, just without
+        the office-type chamber signal or address/tags/photo.
+
+    Matching itself needs no new logic in CandidateMatcher — office_sought's
+    "House"/"Senate" maps onto the same chamber-branch cross-race matching
+    already used for other state-legislature sources (see
+    _match_cross_race_from_payload / _match_last_name_cross_race_from_payload).
+    """
+    from django.utils import timezone as tz
+
+    office_sought = detail.get("officeSought") or {}
+    office_description = (office_sought.get("officeDescription") or "").strip().lower()
+    chamber = _OCPF_OFFICE_TO_CHAMBER.get(office_description, "")
+    district = (office_sought.get("districtDescription") or depository_row.get("officeSought") or "").strip()
+
+    candidate_info = detail.get("candidate") or {}
+    full_name = (detail.get("fullName") or "").strip()
+    if not full_name:
+        # depository_row.filerName is "Last, First" — reverse it for a usable name.
+        reversed_name = (depository_row.get("filerName") or "").strip()
+        if "," in reversed_name:
+            last, _, first = reversed_name.partition(",")
+            full_name = f"{first.strip()} {last.strip()}".strip()
+        else:
+            full_name = reversed_name
+
+    cpf_id = str(detail.get("cpfId") or depository_row.get("cpfId") or "")
+
+    tags = detail.get("tags") or []
+    on_ballot = any(t.get("tagTypeDescription") == "On Ballot" for t in tags)
+    is_winner = any(t.get("tagTypeDescription") == "Winner" for t in tags)
+
+    return {
+        "ocpf_filer_id": cpf_id,
+        "name": full_name,
+        "family_name": (detail.get("candidateLastName") or "").strip(),
+        "state": "MA",
+        "chamber": chamber,
+        "district": district,
+        "party": (detail.get("partyAffiliation") or depository_row.get("partyAffiliation") or "").strip(),
+        "contact_office": (candidate_info.get("fullAddress") or "").strip(),
+        "image_url": (detail.get("filerPhotoUrl") or "").strip(),
+        "source_metadata": {
+            "ocpf": {
+                "cpf_id": cpf_id,
+                "committee_name": detail.get("committeeName") or "",
+                "on_ballot": on_ballot,
+                "is_winner": is_winner,
+                "tags": tags,
+                "receipts_ytd": depository_row.get("receiptsYtdNumeric"),
+                "expenditures_ytd": depository_row.get("expendituresYtdNumeric"),
+                "cash_on_hand": depository_row.get("currentCashOnHandNumeric"),
+                "last_synced": tz.now().isoformat(),
+            }
+        },
+    }

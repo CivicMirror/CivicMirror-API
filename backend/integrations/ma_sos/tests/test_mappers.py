@@ -323,3 +323,136 @@ def test_map_ballot_question_local():
     result = mappers.map_ballot_question(metadata, mock_election)
     assert result["geography_scope"] == "district"
     assert result["certification_status"] == Race.CertificationStatus.UPCOMING
+
+
+# ---------------------------------------------------------------------------
+# map_ocpf_filer
+# ---------------------------------------------------------------------------
+
+_TARR_DEPOSITORY_ROW = {
+    "cpfId": 19580,
+    "filerName": "Tarr, Andrew",
+    "officeSought": "5th Essex",
+    "districtCodeSought": 227,
+    "districtCodeHeld": 227,
+    "receiptsYtdNumeric": 28366.76,
+    "expendituresYtdNumeric": 32967.91,
+    "currentCashOnHandNumeric": 9824.71,
+    "partyAffiliation": "Democratic",
+    "isWinner": False,
+}
+
+_TARR_FILER_DETAIL = {
+    "cpfId": 19580,
+    "candidateFirstName": "Andrew",
+    "candidateLastName": "Tarr",
+    "fullNameReverse": "Tarr, Andrew",
+    "fullName": "Andrew F. Tarr",
+    "committeeName": "Tarr Committee",
+    "candidate": {
+        "fullAddress": "215 Washington St Gloucester, MA  01930",
+    },
+    "officeSought": {
+        "districtCode": 227,
+        "officeDescription": "House",
+        "districtDescription": "5th Essex",
+    },
+    "partyAffiliation": "Democratic",
+    "tags": [
+        {"tagTypeDescription": "On Ballot", "year": 2026},
+        {"tagTypeDescription": "On Ballot", "year": 2026, "isSpecialElection": True},
+    ],
+    "filerPhotoUrl": "",
+}
+
+
+def test_map_ocpf_filer_extracts_core_fields():
+    mapped = mappers.map_ocpf_filer(_TARR_DEPOSITORY_ROW, _TARR_FILER_DETAIL)
+
+    assert mapped["ocpf_filer_id"] == "19580"
+    assert mapped["name"] == "Andrew F. Tarr"
+    assert mapped["family_name"] == "Tarr"
+    assert mapped["state"] == "MA"
+    assert mapped["chamber"] == "lower"
+    assert mapped["district"] == "5th Essex"
+    assert mapped["party"] == "Democratic"
+    assert mapped["contact_office"] == "215 Washington St Gloucester, MA  01930"
+    assert mapped["image_url"] == ""
+
+
+def test_map_ocpf_filer_extracts_finance_and_ballot_metadata():
+    mapped = mappers.map_ocpf_filer(_TARR_DEPOSITORY_ROW, _TARR_FILER_DETAIL)
+
+    ocpf_meta = mapped["source_metadata"]["ocpf"]
+    assert ocpf_meta["cpf_id"] == "19580"
+    assert ocpf_meta["committee_name"] == "Tarr Committee"
+    assert ocpf_meta["on_ballot"] is True
+    assert ocpf_meta["is_winner"] is False
+    assert ocpf_meta["receipts_ytd"] == 28366.76
+    assert ocpf_meta["expenditures_ytd"] == 32967.91
+    assert ocpf_meta["cash_on_hand"] == 9824.71
+
+
+def test_map_ocpf_filer_senate_chamber():
+    detail = {**_TARR_FILER_DETAIL, "officeSought": {"officeDescription": "Senate", "districtDescription": "1st Essex & Middlesex"}}
+    mapped = mappers.map_ocpf_filer(_TARR_DEPOSITORY_ROW, detail)
+    assert mapped["chamber"] == "upper"
+    assert mapped["district"] == "1st Essex & Middlesex"
+
+
+def test_map_ocpf_filer_falls_back_to_depository_name_when_detail_missing():
+    """If the /filer/{cpfId} call failed (detail={}), depository_row's
+    "Last, First" filerName should still produce a usable name for matching."""
+    mapped = mappers.map_ocpf_filer(_TARR_DEPOSITORY_ROW, {})
+
+    assert mapped["name"] == "Andrew Tarr"
+    assert mapped["chamber"] == ""
+    assert mapped["contact_office"] == ""
+    assert mapped["ocpf_filer_id"] == "19580"
+
+
+def test_map_ocpf_filer_no_photo_is_empty_string_not_none():
+    mapped = mappers.map_ocpf_filer(_TARR_DEPOSITORY_ROW, _TARR_FILER_DETAIL)
+    assert mapped["image_url"] == ""
+
+
+def test_map_ocpf_filer_with_photo():
+    detail = {**_TARR_FILER_DETAIL, "filerPhotoUrl": "https://ocpf2.blob.core.windows.net/filers-photos/thumbnail/11916_thumbnail.jpg"}
+    mapped = mappers.map_ocpf_filer(_TARR_DEPOSITORY_ROW, detail)
+    assert mapped["image_url"].startswith("https://ocpf2.blob.core.windows.net")
+
+
+def test_map_ocpf_filer_challenger_no_office_held():
+    """Christina Delisio: on-ballot challenger, no officeHeld — same shape,
+    should map cleanly with no incumbency-related fields required."""
+    depository_row = {
+        "cpfId": 19596,
+        "filerName": "Delisio, Christina",
+        "officeSought": "5th Essex",
+        "receiptsYtdNumeric": 15630.83,
+        "expendituresYtdNumeric": 17963.49,
+        "currentCashOnHandNumeric": 1510.95,
+        "partyAffiliation": "Republican",
+        "isWinner": False,
+    }
+    detail = {
+        "cpfId": 19596,
+        "candidateFirstName": "Christina",
+        "candidateLastName": "Delisio",
+        "fullName": "Christina S. Delisio",
+        "committeeName": "Delisio Committee",
+        "candidate": {"fullAddress": "6 Lincoln Ave Manchester, MA  01944"},
+        "officeSought": {"officeDescription": "House", "districtDescription": "5th Essex"},
+        "officeHeld": {"districtCode": 0, "officeDescription": "N/A"},
+        "partyAffiliation": "Republican",
+        "tags": [{"tagTypeDescription": "On Ballot", "year": 2026}],
+        "filerPhotoUrl": "",
+    }
+
+    mapped = mappers.map_ocpf_filer(depository_row, detail)
+
+    assert mapped["name"] == "Christina S. Delisio"
+    assert mapped["family_name"] == "Delisio"
+    assert mapped["party"] == "Republican"
+    assert mapped["contact_office"] == "6 Lincoln Ave Manchester, MA  01944"
+    assert mapped["source_metadata"]["ocpf"]["on_ballot"] is True
