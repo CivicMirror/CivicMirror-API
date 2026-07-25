@@ -5,7 +5,9 @@ All HTTP calls are mocked — no network access required.
 from __future__ import annotations
 
 import io
+import logging
 import zipfile
+from contextlib import contextmanager
 from datetime import date
 from unittest.mock import MagicMock, patch
 
@@ -15,6 +17,8 @@ from results.adapters.nc import (
     NorthCarolinaAdapter,
     _aggregate_rows,
     _date_str_from_url,
+    _is_no_data_placeholder,
+    _is_permanently_missing,
 )
 
 # ---------------------------------------------------------------------------
@@ -242,3 +246,168 @@ def test_nc_adapter_is_registered():
     from results.adapters import list_supported_states
 
     assert "NC" in list_supported_states()
+
+
+# ---------------------------------------------------------------------------
+# _is_no_data_placeholder / _is_permanently_missing
+# (see issue #39 — NC publishes a real, valid, tiny ZIP for historical
+#  elections it never digitized precinct results for, rather than omitting
+#  the file; and outright deletes the file — confirmed via S3 delete marker —
+#  for at least one past election.)
+# ---------------------------------------------------------------------------
+
+def _make_placeholder_zip() -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED) as z:
+        z.writestr("Readme.txt", "Data Unavailable")
+    return buf.getvalue()
+
+
+@contextmanager
+def _capture_nc_logs(caplog, level=logging.INFO):
+    """
+    The 'results' logger is configured with propagate=False (see
+    config/settings/base.py LOGGING), so pytest's caplog handler — attached
+    to the root logger — never sees records from results.adapters.nc.
+    Attach caplog's handler directly to bypass that.
+    """
+    logger = logging.getLogger("results.adapters.nc")
+    caplog.set_level(level)
+    logger.addHandler(caplog.handler)
+    prior_level = logger.level
+    logger.setLevel(level)
+    try:
+        yield
+    finally:
+        logger.removeHandler(caplog.handler)
+        logger.setLevel(prior_level)
+
+
+def test_is_no_data_placeholder_true_for_nc_placeholder():
+    assert _is_no_data_placeholder(_make_placeholder_zip()) is True
+
+
+def test_is_no_data_placeholder_false_for_real_results_zip():
+    assert _is_no_data_placeholder(_SAMPLE_ZIP) is False
+
+
+def test_is_no_data_placeholder_false_for_garbage_bytes():
+    assert _is_no_data_placeholder(b"not a zip file") is False
+
+
+def test_is_permanently_missing_true_for_old_election():
+    assert _is_permanently_missing(date(2020, 1, 1)) is True
+
+
+def test_is_permanently_missing_false_for_recent_election():
+    assert _is_permanently_missing(date.today()) is False
+
+
+def test_adapter_empty_zip_logs_placeholder_message_not_warning(caplog):
+    from elections.models import Election
+
+    election = Election(
+        id=54321,
+        pk=54321,
+        name="2013 NC Municipal",
+        state="NC",
+        election_type="municipal",
+        election_date=date(2013, 11, 5),
+        status="results_pending",
+        jurisdiction_level="state",
+        source_metadata={
+            "nc_date_str": "2013_11_05",
+            "results_url": "https://s3.amazonaws.com/dl.ncsbe.gov/ENRS/2013_11_05/results_pct_20131105.zip",
+        },
+    )
+
+    adapter = NorthCarolinaAdapter()
+
+    with patch("results.adapters.nc.cache") as mock_cache, \
+         patch("elections.models.Election.objects.get", return_value=election), \
+         patch("results.adapters.nc.NcSbeClient") as MockClient, \
+         patch("results.adapters.nc._fetch_zip", return_value=_make_placeholder_zip()), \
+         _capture_nc_logs(caplog):
+        mock_cache.get.return_value = None
+        MockClient.return_value.fetch_results_etag.return_value = "some-etag"
+
+        result = adapter.fetch_results(election.election_date, election.pk)
+
+    assert result.rows == []
+    assert "no precinct-level data" in (result.notes or "").lower()
+    assert "no_precinct_data_published" in caplog.text
+    assert not any(r.levelname == "WARNING" for r in caplog.records)
+
+
+def test_adapter_missing_zip_downgrades_to_info_when_permanently_missing(caplog):
+    from elections.models import Election
+
+    election = Election(
+        id=12346,
+        pk=12346,
+        name="2024 NC Primary Runoff",
+        state="NC",
+        election_type="primary",
+        election_date=date(2024, 5, 14),
+        status="results_pending",
+        jurisdiction_level="state",
+        source_metadata={
+            "nc_date_str": "2024_05_14",
+            "results_url": "https://s3.amazonaws.com/dl.ncsbe.gov/ENRS/2024_05_14/results_pct_20240514.zip",
+        },
+    )
+
+    adapter = NorthCarolinaAdapter()
+
+    with patch("results.adapters.nc.cache") as mock_cache, \
+         patch("elections.models.Election.objects.get", return_value=election), \
+         patch("results.adapters.nc.NcSbeClient") as MockClient, \
+         patch("results.adapters.nc._fetch_zip") as mock_fetch_zip, \
+         _capture_nc_logs(caplog):
+        mock_cache.get.return_value = None
+        MockClient.return_value.fetch_results_etag.return_value = None
+
+        result = adapter.fetch_results(election.election_date, election.pk)
+
+    assert result.rows == []
+    assert "results_zip_permanently_unavailable" in caplog.text
+    assert not any(r.levelname == "WARNING" for r in caplog.records)
+    mock_fetch_zip.assert_not_called()
+
+
+def test_adapter_missing_zip_still_warns_when_recent(caplog):
+    from elections.models import Election
+
+    election = Election(
+        id=12347,
+        pk=12347,
+        name="2026 NC Upcoming Election",
+        state="NC",
+        election_type="general",
+        election_date=date.today(),
+        status="results_pending",
+        jurisdiction_level="state",
+        source_metadata={
+            "nc_date_str": "2026_07_25",
+            "results_url": "https://s3.amazonaws.com/dl.ncsbe.gov/ENRS/2026_07_25/results_pct_20260725.zip",
+        },
+    )
+
+    adapter = NorthCarolinaAdapter()
+
+    with patch("results.adapters.nc.cache") as mock_cache, \
+         patch("elections.models.Election.objects.get", return_value=election), \
+         patch("results.adapters.nc.NcSbeClient") as MockClient, \
+         patch("results.adapters.nc._fetch_zip") as mock_fetch_zip, \
+         _capture_nc_logs(caplog):
+        mock_cache.get.return_value = None
+        MockClient.return_value.fetch_results_etag.return_value = None
+
+        adapter.fetch_results(election.election_date, election.pk)
+
+    mock_fetch_zip.assert_not_called()
+
+    assert any(
+        r.levelname == "WARNING" and "results_zip_not_found" in r.message
+        for r in caplog.records
+    )
