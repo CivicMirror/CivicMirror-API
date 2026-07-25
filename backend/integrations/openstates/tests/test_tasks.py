@@ -7,7 +7,7 @@ from celery.exceptions import Retry
 from elections.models import Candidate, Election, Race
 from integrations.openstates.client import OpenStatesError, OpenStatesForbiddenError, OpenStatesRateLimitError
 from integrations.openstates.tasks import US_STATES, sync_openstates_all_states, sync_openstates_legislators
-from ops.models import SyncLog
+from ops.models import SourceRecord, SyncLog
 
 
 @pytest.mark.django_db
@@ -28,7 +28,7 @@ def test_sync_openstates_legislators_skips_unchanged_records():
         patch('integrations.openstates.tasks.CandidateMatcher') as mock_matcher_cls,
     ):
         mock_client_cls.return_value.list_people_all_pages.return_value = [raw_person]
-        mock_store_cls.return_value.upsert.return_value = (Mock(), False)
+        mock_store_cls.return_value.upsert.return_value = (Mock(linked_candidate_id=99), False)
 
         result = sync_openstates_legislators('CA')
 
@@ -37,6 +37,35 @@ def test_sync_openstates_legislators_skips_unchanged_records():
     assert sync_log.records_updated == 0
     assert sync_log.records_skipped == 1
     mock_matcher_cls.return_value.enrich_or_create.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_sync_openstates_legislators_retries_unchanged_but_unlinked_records():
+    """An unchanged payload only proves it's safe to skip re-fetching — it
+    doesn't prove the last attempt found a match (e.g. the candidate for this
+    cycle may not have existed yet). Without a linked_candidate, keep trying."""
+    raw_person = {
+        'id': 'os-1',
+        'name': 'Alex Smith',
+        'current_role': {
+            'org_classification': 'upper',
+            'district': '5',
+            'jurisdiction': 'ocd-division/country:us/state:ca/sldu:5',
+        },
+    }
+
+    with (
+        patch('integrations.openstates.tasks.OpenStatesClient') as mock_client_cls,
+        patch('integrations.openstates.tasks.SourceRecordStore') as mock_store_cls,
+        patch('integrations.openstates.tasks.CandidateMatcher') as mock_matcher_cls,
+    ):
+        mock_client_cls.return_value.list_people_all_pages.return_value = [raw_person]
+        mock_store_cls.return_value.upsert.return_value = (Mock(linked_candidate_id=None), False)
+        mock_matcher_cls.return_value.enrich_or_create.return_value = (None, 'no_match')
+
+        sync_openstates_legislators('CA')
+
+    mock_matcher_cls.return_value.enrich_or_create.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -72,6 +101,7 @@ def test_sync_openstates_legislators_updates_matching_candidate(mock_client_cls)
                 'org_classification': 'upper',
                 'district': '5',
                 'jurisdiction': 'ocd-division/country:us/state:ca/sldu:5',
+                'division_id': 'ocd-division/country:us/state:ca/sldu:5',
             },
             'image': 'https://example.com/alex.jpg',
             'links': [{'url': 'https://alex.example.com'}],
@@ -83,7 +113,9 @@ def test_sync_openstates_legislators_updates_matching_candidate(mock_client_cls)
     result = sync_openstates_legislators('CA')
 
     candidate.refresh_from_db()
+    race.refresh_from_db()
     sync_log = SyncLog.objects.get(task_name='sync_openstates_legislators', address_label='CA')
+    source_record = SourceRecord.objects.get(source='openstates', external_id='os-1')
     assert result['updated'] == 1
     assert result['created'] == 0
     assert candidate.openstates_person_id == 'os-1'
@@ -91,6 +123,8 @@ def test_sync_openstates_legislators_updates_matching_candidate(mock_client_cls)
     assert candidate.party == 'Democratic'
     assert candidate.website_url == 'https://alex.example.com'
     assert candidate.source_metadata['openstates']['person_id'] == 'os-1'
+    assert race.ocd_division_id == 'ocd-division/country:us/state:ca/sldu:5'
+    assert source_record.linked_candidate_id == candidate.pk
     assert sync_log.records_updated == 1
     assert sync_log.records_skipped == 0
 

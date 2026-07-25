@@ -175,6 +175,169 @@ def test_enrich_matches_cross_race_from_payload_for_state_legislature():
 
 
 @pytest.mark.django_db
+def test_enrich_matches_by_other_names_when_primary_name_differs(base_race):
+    """OpenStates' primary `name` can be a display nickname (e.g. 'Dru Tarr')
+    while the ballot/legal name ('Andrew Tarr') only appears in other_names."""
+    candidate = Candidate.objects.create(race=base_race, name='Andrew Tarr')
+    matcher = CandidateMatcher()
+
+    matched, action = matcher.enrich(
+        base_race, 'openstates', 'os-1',
+        {
+            'name': 'Dru Tarr',
+            'other_names': ['A. Tarr', 'Andrew Tarr'],
+            'openstates_person_id': 'os-1',
+        },
+    )
+
+    assert matched == candidate
+    assert action == 'enriched'
+
+
+@pytest.mark.django_db
+def test_enrich_ignores_other_names_when_primary_name_already_matches(base_race):
+    """Primary name is tried first; other_names shouldn't cause a second,
+    unnecessary lookup when the first one already matched."""
+    candidate = Candidate.objects.create(race=base_race, name='Alex Smith')
+    matcher = CandidateMatcher()
+
+    matched, action = matcher.enrich(
+        base_race, 'openstates', 'os-1',
+        {'name': 'Alex Smith', 'other_names': ['Someone Else'], 'openstates_person_id': 'os-1'},
+    )
+
+    assert matched == candidate
+    assert action == 'enriched'
+
+
+@pytest.mark.django_db
+def test_enrich_matches_by_last_name_when_full_name_and_other_names_fail(base_race):
+    """Real case behind issue #26: OpenStates' name ('Dru Tarr') and every
+    other_names variant ('A. Tarr', 'A.F.R. Tarr', 'D. Tarr') still don't
+    exact-match the ballot name ('Andrew Francis Robert Tarr') — only the
+    structured family_name field ('Tarr') does."""
+    candidate = Candidate.objects.create(race=base_race, name='Andrew Francis Robert Tarr')
+    matcher = CandidateMatcher()
+
+    matched, action = matcher.enrich(
+        base_race, 'openstates', 'os-1',
+        {
+            'name': 'Dru Tarr',
+            'other_names': ['A. Tarr', 'A.F.R. Tarr', 'D. Tarr'],
+            'family_name': 'Tarr',
+            'openstates_person_id': 'os-1',
+        },
+    )
+
+    assert matched == candidate
+    assert action == 'enriched'
+
+
+@pytest.mark.django_db
+def test_enrich_returns_ambiguous_when_last_name_collides_within_race(base_race):
+    """Two candidates sharing a surname in the same race must not be guessed
+    at — same safety net as the existing full-name ambiguity checks."""
+    Candidate.objects.create(race=base_race, name='Andrew Tarr')
+    Candidate.objects.create(race=base_race, name='Elizabeth Tarr')
+    matcher = CandidateMatcher()
+
+    matched, action = matcher.enrich(
+        base_race, 'openstates', 'os-1',
+        {'name': 'Dru Tarr', 'family_name': 'Tarr', 'openstates_person_id': 'os-1'},
+    )
+
+    assert matched is None
+    assert action == 'ambiguous'
+
+
+@pytest.mark.django_db
+def test_enrich_last_name_fallback_does_not_match_different_surname(base_race):
+    Candidate.objects.create(race=base_race, name='Andrew Tarr')
+    matcher = CandidateMatcher()
+
+    matched, action = matcher.enrich(
+        base_race, 'openstates', 'os-2',
+        {'name': 'Jamie Nobody', 'family_name': 'Nobody', 'openstates_person_id': 'os-2'},
+    )
+
+    assert matched is None
+    assert action == 'no_match'
+
+
+@pytest.mark.django_db
+def test_enrich_matches_last_name_cross_race_from_payload_for_state_legislature():
+    election = Election.objects.create(
+        name='State Election',
+        election_date=date(2026, 11, 3),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state='MA',
+        source_id='ma-2026',
+        status=Election.Status.UPCOMING,
+    )
+    race = Race.objects.create(
+        election=election,
+        race_type=Race.RaceType.CANDIDATE,
+        office_title='State Representative 5th Essex',
+        jurisdiction='5th Essex',
+        geography_scope='district',
+        source=Race.Source.CIVIC_API,
+        vote_method=Race.VoteMethod.SINGLE_CHOICE,
+        canonical_key='ma-house-5th-essex',
+        normalized_office_title='state representative 5th essex',
+    )
+    candidate = Candidate.objects.create(race=race, name='Andrew Francis Robert Tarr')
+    matcher = CandidateMatcher()
+
+    matched, action = matcher.enrich(
+        None, 'openstates', 'os-1',
+        {
+            'name': 'Dru Tarr',
+            'other_names': ['A.F.R. Tarr'],
+            'family_name': 'Tarr',
+            'state': 'MA',
+            'chamber': 'lower',
+        },
+    )
+
+    assert matched == candidate
+    assert action == 'enriched'
+
+
+@pytest.mark.django_db
+def test_enrich_backfills_blank_race_ocd_division_id(base_race):
+    assert base_race.ocd_division_id == ''
+    Candidate.objects.create(race=base_race, name='Alex Smith')
+    matcher = CandidateMatcher()
+
+    matcher.enrich(
+        base_race, 'openstates', 'os-1',
+        {
+            'name': 'Alex Smith',
+            'ocd_division_id': 'ocd-division/country:us/state:ca/sldu:5',
+        },
+    )
+
+    base_race.refresh_from_db()
+    assert base_race.ocd_division_id == 'ocd-division/country:us/state:ca/sldu:5'
+
+
+@pytest.mark.django_db
+def test_enrich_does_not_overwrite_existing_race_ocd_division_id(base_race):
+    base_race.ocd_division_id = 'ocd-division/country:us/state:ca/sldu:5-original'
+    base_race.save(update_fields=['ocd_division_id'])
+    Candidate.objects.create(race=base_race, name='Alex Smith')
+    matcher = CandidateMatcher()
+
+    matcher.enrich(
+        base_race, 'openstates', 'os-1',
+        {'name': 'Alex Smith', 'ocd_division_id': 'ocd-division/country:us/state:ca/sldu:5-different'},
+    )
+
+    base_race.refresh_from_db()
+    assert base_race.ocd_division_id == 'ocd-division/country:us/state:ca/sldu:5-original'
+
+
+@pytest.mark.django_db
 def test_enrich_returns_ambiguous_when_multiple_external_id_matches(base_race):
     Candidate.objects.create(race=base_race, name='Alex Smith', fec_candidate_id='H1')
     other_election = Election.objects.create(

@@ -20,6 +20,7 @@ def test_map_person_extracts_active_legislator_fields():
             'links': [{'url': 'https://alex.example.com'}],
             'email': 'alex@example.com',
             'offices': [{'voice': '555-0100', 'address': '123 Capitol Ave'}],
+            'other_names': [{'name': 'A. Smith', 'note': ''}, {'name': 'Alexander Smith', 'note': ''}],
         }
     )
 
@@ -33,7 +34,49 @@ def test_map_person_extracts_active_legislator_fields():
     assert mapped['chamber'] == 'upper'
     assert mapped['district'] == '5'
     assert mapped['display_name'] == 'Alex Smith'
+    assert mapped['other_names'] == ['A. Smith', 'Alexander Smith']
+    assert mapped['ocd_division_id'] == ''
     assert mapped['source_metadata']['openstates']['person_id'] == 'os-1'
+
+
+def test_map_person_extracts_ocd_division_id():
+    mapped = map_person(
+        {
+            'id': 'os-1',
+            'name': 'Dru Tarr',
+            'current_role': {
+                'org_classification': 'lower',
+                'district': '5th Essex',
+                'jurisdiction': 'ocd-division/country:us/state:ma/government',
+                'division_id': 'ocd-division/country:us/state:ma/sldl:5th_essex',
+            },
+        }
+    )
+
+    assert mapped['ocd_division_id'] == 'ocd-division/country:us/state:ma/sldl:5th_essex'
+
+
+def test_map_person_other_names_defaults_to_empty_list():
+    mapped = map_person({'id': 'os-1', 'name': 'Alex Smith', 'current_role': None})
+    assert mapped['other_names'] == []
+
+
+def test_map_person_extracts_family_name():
+    mapped = map_person(
+        {
+            'id': 'os-1',
+            'name': 'Dru Tarr',
+            'given_name': 'Dru',
+            'family_name': 'Tarr',
+            'current_role': {'org_classification': 'lower', 'district': '5th Essex'},
+        }
+    )
+    assert mapped['family_name'] == 'Tarr'
+
+
+def test_map_person_family_name_defaults_to_empty_string():
+    mapped = map_person({'id': 'os-1', 'name': 'Alex Smith', 'current_role': None})
+    assert mapped['family_name'] == ''
 
 
 def test_map_person_sets_incumbent_false_without_current_role():

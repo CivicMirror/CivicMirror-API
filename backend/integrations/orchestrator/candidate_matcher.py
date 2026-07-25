@@ -38,6 +38,11 @@ class CandidateMatcher:
         if candidate is None:
             return None, 'no_match'
 
+        ocd_division_id = enrichment_payload.get('ocd_division_id')
+        if ocd_division_id and candidate.race_id and not candidate.race.ocd_division_id:
+            candidate.race.ocd_division_id = ocd_division_id
+            candidate.race.save(update_fields=['ocd_division_id'])
+
         updates = get_fields_to_update(candidate, source, enrichment_payload)
         metadata_updates = {'external_id': str(external_id)}
         source_metadata_payload = enrichment_payload.get('source_metadata') or {}
@@ -150,14 +155,37 @@ class CandidateMatcher:
         if candidate is not None or ambiguous:
             return candidate, ambiguous
 
-        name = self._payload_name(payload)
-        if race is not None:
-            candidate, ambiguous = self._match_by_name_within_race(race, name)
+        for name in self._payload_names(payload):
+            if race is not None:
+                candidate, ambiguous = self._match_by_name_within_race(race, name)
+                if candidate is not None or ambiguous:
+                    return candidate, ambiguous
+                candidate, ambiguous = self._match_cross_race(race, name)
+            else:
+                candidate, ambiguous = self._match_cross_race_from_payload(payload, name)
             if candidate is not None or ambiguous:
                 return candidate, ambiguous
-            return self._match_cross_race(race, name)
 
-        return self._match_cross_race_from_payload(payload, name)
+        # Last-resort fallback: surname only, using the source's own structured
+        # family_name field (not a guess parsed off a display name) — e.g.
+        # OpenStates' display name can be a nickname ("Dru Tarr") that never
+        # matches a ballot name ("Andrew Francis Robert Tarr") on any full-name
+        # variant, but family_name ("Tarr") does. Scoped exactly like the
+        # full-name tiers above, so a same-surname collision within that scope
+        # still correctly returns ambiguous rather than guessing.
+        last_name = self._normalize(payload.get('family_name') or '')
+        if last_name:
+            if race is not None:
+                candidate, ambiguous = self._match_by_last_name_within_race(race, last_name)
+                if candidate is not None or ambiguous:
+                    return candidate, ambiguous
+                candidate, ambiguous = self._match_last_name_cross_race(race, last_name)
+            else:
+                candidate, ambiguous = self._match_last_name_cross_race_from_payload(payload, last_name)
+            if candidate is not None or ambiguous:
+                return candidate, ambiguous
+
+        return None, False
 
     def _match_by_external_ids(self, payload: dict) -> tuple[Candidate | None, bool]:
         for field in self.external_id_fields:
@@ -212,6 +240,85 @@ class CandidateMatcher:
             return matches[0], False
         if len(matches) > 1:
             return None, True
+        return None, False
+
+    def _candidate_last_name(self, name: str) -> str:
+        parts = self._normalize(name).split()
+        return parts[-1] if parts else ''
+
+    def _match_by_last_name_within_race(self, race: Race, last_name: str) -> tuple[Candidate | None, bool]:
+        if not last_name:
+            return None, False
+        matches = [
+            candidate
+            for candidate in race.candidates.all()
+            if self._candidate_last_name(candidate.name) == last_name
+        ]
+        if len(matches) == 1:
+            return matches[0], False
+        if len(matches) > 1:
+            return None, True
+        return None, False
+
+    def _match_last_name_cross_race(self, race: Race, last_name: str) -> tuple[Candidate | None, bool]:
+        state = race.election.state
+        office_type = race.normalized_office_title or self._normalize(race.office_title)
+        if not last_name or not state or not office_type:
+            return None, False
+
+        matches = [
+            candidate
+            for candidate in Candidate.objects.filter(
+                race__election__state=state,
+                race__normalized_office_title=office_type,
+            ).select_related('race', 'race__election')
+            if self._candidate_last_name(candidate.name) == last_name
+        ]
+        if len(matches) == 1:
+            return matches[0], False
+        if len(matches) > 1:
+            return None, True
+        return None, False
+
+    def _match_last_name_cross_race_from_payload(self, payload: dict, last_name: str) -> tuple[Candidate | None, bool]:
+        state = (payload.get('state') or '').upper()
+        if not last_name or not state:
+            return None, False
+
+        office_type = (payload.get('office_type') or '').upper()
+        district = self._normalize_district(payload.get('district'))
+
+        if office_type in {'H', 'S'}:
+            matches = [
+                candidate
+                for candidate in Candidate.objects.filter(race__election__state=state).select_related('race', 'race__election')
+                if self._candidate_last_name(candidate.name) == last_name
+                and self._race_matches_congressional_office(candidate.race, office_type, district)
+            ]
+            if len(matches) == 1:
+                return matches[0], False
+            if len(matches) > 1:
+                return None, True
+            return None, False
+
+        chamber = (payload.get('chamber') or '').lower()
+        if chamber in {'upper', 'lower'}:
+            keywords = self._UPPER_CHAMBER_KEYWORDS if chamber == 'upper' else self._LOWER_CHAMBER_KEYWORDS
+            candidates = list(Candidate.objects.filter(race__election__state=state).select_related('race', 'race__election'))
+            matches = [
+                candidate
+                for candidate in candidates
+                if self._candidate_last_name(candidate.name) == last_name
+                and any(
+                    keyword in self._normalize(candidate.race.normalized_office_title or candidate.race.office_title)
+                    for keyword in keywords
+                )
+            ]
+            if len(matches) == 1:
+                return matches[0], False
+            if len(matches) > 1:
+                return None, True
+
         return None, False
 
     _UPPER_CHAMBER_KEYWORDS = frozenset({'senate'})
@@ -293,6 +400,16 @@ class CandidateMatcher:
         first_name = str(payload.get('first_name') or '').strip()
         last_name = str(payload.get('last_name') or '').strip()
         return f'{first_name} {last_name}'.strip()
+
+    def _payload_names(self, payload: dict) -> list[str]:
+        """Primary payload name, plus any alternate names (e.g. OpenStates
+        other_names), tried in order until one produces a match."""
+        names = [self._payload_name(payload)]
+        for alt in payload.get('other_names') or []:
+            alt_name = str(alt or '').strip()
+            if alt_name and alt_name not in names:
+                names.append(alt_name)
+        return [n for n in names if n]
 
     @staticmethod
     def _normalize_district(value) -> str:
