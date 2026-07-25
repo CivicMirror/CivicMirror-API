@@ -405,6 +405,8 @@ def test_adapter_missing_zip_still_warns_when_recent(caplog):
 
         adapter.fetch_results(election.election_date, election.pk)
 
+    mock_fetch_zip.assert_not_called()
+
     assert any(
         r.levelname == "WARNING" and "results_zip_not_found" in r.message
         for r in caplog.records
