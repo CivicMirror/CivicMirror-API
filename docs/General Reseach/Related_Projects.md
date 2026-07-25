@@ -11,4 +11,4 @@ https://github.com/npstorey/socrata-mcp-server
 
 https://civicdatatech.github.io/
 
-https://civictech.guide/
+https://empowered.vote/
