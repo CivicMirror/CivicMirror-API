@@ -23,6 +23,12 @@ US_STATES = [
 ]
 
 
+def _save_source_links(source_record, *, candidate=None):
+    if getattr(source_record, 'linked_candidate_id', None) != getattr(candidate, 'pk', None):
+        source_record.linked_candidate = candidate
+        source_record.save(update_fields=['linked_candidate'])
+
+
 @shared_task(bind=True, max_retries=3)
 def sync_openstates_legislators(self, state: str):
     state = (state or '').upper()
@@ -48,8 +54,13 @@ def sync_openstates_legislators(self, state: str):
                 skipped_count += 1
                 continue
 
-            _, changed = store.upsert('openstates', person_id, raw_person)
-            if not changed:
+            source_record, changed = store.upsert('openstates', person_id, raw_person)
+            # An unchanged payload only means it's safe to skip re-fetching —
+            # it doesn't mean the last attempt found a match. Without a linked
+            # candidate, the payload hasn't proven it can enrich anything yet,
+            # so keep retrying (e.g. the candidate for this cycle may not have
+            # existed on the last run).
+            if not changed and source_record.linked_candidate_id:
                 skipped_count += 1
                 continue
 
@@ -87,6 +98,7 @@ def sync_openstates_legislators(self, state: str):
                     sources.append('openstates')
                     candidate.contributing_sources = sources
                     candidate.save(update_fields=['contributing_sources'])
+                _save_source_links(source_record, candidate=candidate)
 
         sync_log.records_updated = updated_count
         sync_log.records_skipped = skipped_count
