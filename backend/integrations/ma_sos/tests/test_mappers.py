@@ -43,6 +43,47 @@ def test_infer_election_type(stage, expected):
 
 
 # ---------------------------------------------------------------------------
+# party_label_from_stage
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("stage,expected", [
+    ("Democratic", "Democratic"),
+    ("republican", "Republican"),
+    ("Green-Rainbow", "Green-Rainbow"),
+    ("General", ""),
+    ("Primaries", ""),
+    ("", ""),
+])
+def test_party_label_from_stage(stage, expected):
+    assert mappers.party_label_from_stage(stage) == expected
+
+
+# ---------------------------------------------------------------------------
+# contest_variant_key
+# ---------------------------------------------------------------------------
+
+def test_contest_variant_key_party_primary():
+    key = mappers.contest_variant_key("State Representative", "5th Essex", "Republican")
+    assert key == "ma:state representative:5th essex:republican"
+
+
+def test_contest_variant_key_different_party_different_key():
+    dem = mappers.contest_variant_key("State Representative", "5th Essex", "Democratic")
+    rep = mappers.contest_variant_key("State Representative", "5th Essex", "Republican")
+    assert dem != rep
+
+
+def test_contest_variant_key_general_is_empty():
+    assert mappers.contest_variant_key("State Representative", "5th Essex", "General") == ""
+
+
+def test_contest_variant_key_generic_primaries_is_empty():
+    # Unresolved party (nonpartisan primary caught by the generic "Primaries"
+    # fallback stage) — no variant, keeps today's merged-race behavior.
+    assert mappers.contest_variant_key("State Representative", "5th Essex", "Primaries") == ""
+
+
+# ---------------------------------------------------------------------------
 # infer_jurisdiction_level
 # ---------------------------------------------------------------------------
 
@@ -154,6 +195,38 @@ def test_map_race_candidate():
     assert result["source"] == Race.Source.MA_SOS
 
 
+def test_map_race_contest_variant_for_party_primary():
+    from elections.models import Election
+    mock_election = MagicMock(spec=Election)
+    mock_election.source_id = "ma_sos_171922"
+    mock_election.status = Election.Status.RESULTS_PENDING
+    mock_election.source_metadata = {"electionstats_id": 171922}
+
+    row = {
+        "election_id": 171922, "office": "State Representative",
+        "district": "5th Essex", "stage": "Republican",
+    }
+    result = mappers.map_race(mock_election, row)
+    assert result["contest_variant"] == "ma:state representative:5th essex:republican"
+    assert result["source_metadata"]["party"] == "Republican"
+
+
+def test_map_race_no_contest_variant_for_general():
+    from elections.models import Election
+    mock_election = MagicMock(spec=Election)
+    mock_election.source_id = "ma_sos_171924"
+    mock_election.status = Election.Status.RESULTS_PENDING
+    mock_election.source_metadata = {"electionstats_id": 171924}
+
+    row = {
+        "election_id": 171924, "office": "State Representative",
+        "district": "5th Essex", "stage": "General",
+    }
+    result = mappers.map_race(mock_election, row)
+    assert result["contest_variant"] == ""
+    assert result["source_metadata"]["party"] == ""
+
+
 def test_map_race_includes_canonical_key():
     from elections.models import Election
     mock_election = MagicMock(spec=Election)
@@ -176,6 +249,28 @@ def test_map_candidate():
     assert result["party"] == "Democratic"
     assert result["incumbent"] is False
     assert result["source_metadata"]["csv_column_index"] == 3
+
+
+def test_map_candidate_party_falls_back_to_stage():
+    # Primary CSVs don't carry a party row — party comes from the election's
+    # per-party stage instead (see issue #105).
+    row = {"name": "Christina Delisio", "party": "", "col_index": 1}
+    result = mappers.map_candidate(row, stage="Republican")
+    assert result["party"] == "Republican"
+
+
+def test_map_candidate_csv_party_wins_over_stage():
+    # General-election CSVs already carry party per-column; stage shouldn't
+    # override real data.
+    row = {"name": "Vanna Howard", "party": "Democratic", "col_index": 2}
+    result = mappers.map_candidate(row, stage="General")
+    assert result["party"] == "Democratic"
+
+
+def test_map_candidate_no_stage_no_party_stays_blank():
+    row = {"name": "Some Write-In", "party": "", "col_index": 5}
+    result = mappers.map_candidate(row, stage="Primaries")
+    assert result["party"] == ""
 
 
 # ---------------------------------------------------------------------------

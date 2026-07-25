@@ -35,8 +35,21 @@ from .mappers import map_ballot_question, map_candidate, map_election, map_race
 
 logger = logging.getLogger(__name__)
 
-# Stage values searched each sync run
-_SYNC_STAGES = ["General", "Primaries"]
+# Stage values searched each sync run. Party-specific stages are listed
+# before the generic "Primaries" catch-all: electionstats returns the same
+# election_id under both (e.g. election 171922 shows up for both
+# stage:Republican and stage:Primaries), and discovery dedupes by
+# election_id keeping the first-seen row — so querying the party-specific
+# stage first is what lets the party label and per-party Race split (see
+# mappers.contest_variant_key) survive into source_metadata. "Primaries"
+# stays as a catch-all for primaries that aren't one of these parties (e.g.
+# nonpartisan municipal primaries) — those keep today's merged-race behavior.
+_SYNC_STAGES = [
+    "General",
+    "Democratic", "Republican", "Green-Rainbow", "Libertarian",
+    "Working Families", "United Independent", "American", "Independent Voters",
+    "Primaries",
+]
 
 # Tally columns that are NOT real candidates
 _TALLY_LABELS = parsers.TALLY_LABELS
@@ -129,7 +142,10 @@ def sync_ma_elections(self):
                 updated_count += 1
 
             sync_ma_races.apply_async(
-                args=[election_obj.pk, electionstats_id],
+                args=[
+                    election_obj.pk, electionstats_id,
+                    row.get("office", ""), row.get("district", ""), row.get("stage", "General"),
+                ],
                 countdown=idx * 3,
             )
             queued_count += 1
@@ -184,12 +200,23 @@ def sync_ma_elections(self):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def sync_ma_races(self, election_pk: int, electionstats_id: int):
+def sync_ma_races(
+    self, election_pk: int, electionstats_id: int,
+    office: str = "", district: str = "", stage: str = "",
+):
     """
     Stage 2: Download election CSV, parse candidates, and upsert Race + Candidate records.
 
     Looks up the election by PK, builds the CSV URL from the provided electionstats_id,
     parses candidate column headers and party row, then bulk-upserts.
+
+    office/district/stage come from the discovery row that queued this task
+    (sync_ma_elections) and take precedence over election_obj.source_metadata:
+    a partisan primary's Democratic and Republican contests share one
+    *canonical* Election (see mappers.contest_variant_key), so its
+    source_metadata.stage reflects whichever party synced last, not the
+    party this specific electionstats_id belongs to. Falling back to
+    source_metadata keeps old call sites (tests, manual triggers) working.
     """
     try:
         election_obj = Election.objects.get(pk=election_pk)
@@ -221,17 +248,20 @@ def sync_ma_races(self, election_pk: int, electionstats_id: int):
             sync_log.save(update_fields=["notes", "status", "completed_at"])
             return
 
-        # Build the race row from stored metadata; fall back to empty strings if
-        # a higher-precedence source owns source_metadata on the canonical election.
+        # Prefer the discovery-row values passed in by sync_ma_elections (race-
+        # scoped); fall back to the canonical election's stored metadata for
+        # call sites that don't pass them (tests, manual triggers). See the
+        # docstring above for why source_metadata alone isn't reliable once a
+        # canonical election is shared across a primary's parties.
         meta = election_obj.source_metadata or {}
         election_row = {
             "election_id": electionstats_id,
-            "office": meta.get("office", ""),
-            "district": meta.get("district", ""),
-            "stage": meta.get("stage", "General"),
+            "office": office or meta.get("office", ""),
+            "district": district or meta.get("district", ""),
+            "stage": stage or meta.get("stage", "General"),
         }
 
-        # Infer office/district from election name if not in metadata
+        # Infer office/district from election name if still unknown
         if not election_row["office"] and election_obj.name:
             # e.g. "2024 MA U.S. House 1st Congressional General" → extract office
             parts = election_obj.name.split(" ")
@@ -248,6 +278,7 @@ def sync_ma_races(self, election_pk: int, electionstats_id: int):
             "office_title": race_fields.pop("office_title"),
             "ocd_division_id": race_fields.pop("ocd_division_id", "") or "",
             "race_type": race_fields.pop("race_type"),
+            "contest_variant": race_fields.pop("contest_variant", "") or "",
         }
         race_obj, race_was_new = ingest.ingest_race(
             election=election_obj, source="ma_sos",
@@ -257,7 +288,7 @@ def sync_ma_races(self, election_pk: int, electionstats_id: int):
         race_updated = 0 if race_was_new else 1
 
         for c in real_candidates:
-            cand_fields = map_candidate(c)
+            cand_fields = map_candidate(c, stage=election_row["stage"])
             cand_name = c.get("name", "")
             cand_party = cand_fields.pop("party", "")
             if not cand_name:

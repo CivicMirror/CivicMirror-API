@@ -6,8 +6,23 @@ All electionstats results are post-certification data — result_type is always 
 Election electionstats_id is stored in Election.source_metadata["electionstats_id"]
 and is populated programmatically by the sync_ma_elections task.
 
+A partisan primary is split across multiple Races that share one canonical
+Election (see integrations.ma_sos.mappers.contest_variant_key) — each party's
+results live on their own electionstats CSV under that Race's own
+electionstats_id (Race.source_metadata["electionstats_id"]). When a given
+election has more than one such Race, fetch_results fetches each party's CSV
+separately and tags every row with contest_code=str(electionstats_id) and
+party_code=<that Race's party> so results.tasks._process_race_results routes
+rows to the correct Race instead of applying every row to every race sharing
+the election. Elections with a single Race (general elections, unsplit/
+nonpartisan primaries, or elections whose Races haven't synced yet) keep the
+original single-CSV behavior, keyed off
+Election.source_metadata["electionstats_id"].
+
 Version cache key: "ma_sos:hash:{election_id}"
-Cache value:       SHA-256 hex digest of the CSV body.
+Cache value:       SHA-256 hex digest of the CSV body (or, for a split
+                    primary, of all fetched CSV bodies concatenated in
+                    electionstats_id order).
 """
 from __future__ import annotations
 
@@ -20,7 +35,7 @@ from typing import Optional
 import requests
 from django.core.cache import cache
 
-from elections.models import Election
+from elections.models import Election, Race
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
 from .registry import register
@@ -54,6 +69,22 @@ class MassachusettsAdapter(StateResultsAdapter):
                 notes=f"Election pk={election_id} not found",
             )
 
+        # A split primary has multiple Races sharing this Election, each with
+        # its own electionstats_id (its own party's CSV) and its own
+        # party_code. Collect electionstats_id -> party_code across the
+        # election's Races; more than one distinct id means a split fetch is
+        # needed. Races without an electionstats_id (not yet synced, or a
+        # non-ma_sos source) are ignored here.
+        party_code_by_stats_id: dict[int, str] = {}
+        for race in Race.objects.filter(election=election, source=Race.Source.MA_SOS):
+            metadata = race.source_metadata or {}
+            sid = metadata.get("electionstats_id")
+            if sid:
+                party_code_by_stats_id[int(sid)] = str(metadata.get("party_code") or "")
+
+        if len(party_code_by_stats_id) > 1:
+            return self._fetch_split(election_id, party_code_by_stats_id)
+
         electionstats_id = (election.source_metadata or {}).get("electionstats_id")
         if not electionstats_id:
             logger.warning(
@@ -67,17 +98,13 @@ class MassachusettsAdapter(StateResultsAdapter):
                 notes="No electionstats_id in election.source_metadata",
             )
 
-        csv_url = f"{_ELECTIONSTATS_BASE}/elections/download/{electionstats_id}/precincts_include:0/"
-
         try:
-            resp = requests.get(csv_url, timeout=_TIMEOUT, headers={"User-Agent": "CivicMirror/1.0"})
-            resp.raise_for_status()
-            csv_bytes = resp.content
+            csv_bytes, csv_url = self._download_csv(electionstats_id)
         except requests.RequestException as exc:
             logger.error("ma_sos.adapter.csv_fetch_error id=%s: %s", electionstats_id, exc)
             return AdapterResult(
                 rows=[],
-                source_url=csv_url,
+                source_url=f"{_ELECTIONSTATS_BASE}/elections/download/{electionstats_id}/precincts_include:0/",
                 mapping_confidence="none",
                 notes=f"CSV fetch failed: {exc}",
             )
@@ -97,7 +124,10 @@ class MassachusettsAdapter(StateResultsAdapter):
                 source_version=new_hash,
             )
 
-        rows = _parse_election_csv(csv_bytes, csv_url)
+        party_code = party_code_by_stats_id.get(int(electionstats_id), "")
+        rows = _parse_election_csv(
+            csv_bytes, csv_url, contest_code=str(electionstats_id), party_code=party_code,
+        )
 
         cache.set(cache_key, new_hash, _CACHE_TTL)
 
@@ -113,12 +143,89 @@ class MassachusettsAdapter(StateResultsAdapter):
             source_version=new_hash,
         )
 
+    def _download_csv(self, electionstats_id: int) -> tuple[bytes, str]:
+        csv_url = f"{_ELECTIONSTATS_BASE}/elections/download/{electionstats_id}/precincts_include:0/"
+        resp = requests.get(csv_url, timeout=_TIMEOUT, headers={"User-Agent": "CivicMirror/1.0"})
+        resp.raise_for_status()
+        return resp.content, csv_url
+
+    def _fetch_split(self, election_id: int, party_code_by_stats_id: dict[int, str]) -> AdapterResult:
+        """
+        Fetch and combine each party's CSV for a primary split across
+        multiple Races. Every row is tagged raw["contest_code"] = str(that
+        CSV's electionstats_id) and raw["party_code"] = that Race's party,
+        matching Race.source_metadata["contest_code"]/["party_code"] (set in
+        integrations.ma_sos.mappers.map_race) so
+        results.tasks._process_race_results/_row_source_identity routes each
+        party's rows to its own Race instead of applying every row to every
+        race. Both keys must be tagged: _row_source_identity only includes a
+        key in a row's identity when it's present in raw, and
+        _process_race_results requires every key present in the *race's*
+        identity to match — so a race with a non-empty party_code (any
+        party-stage primary) would never match rows carrying contest_code
+        alone.
+        """
+        all_rows: list[ResultRow] = []
+        csv_bodies: list[bytes] = []
+        urls: list[str] = []
+
+        for stats_id in sorted(party_code_by_stats_id):
+            try:
+                csv_bytes, csv_url = self._download_csv(stats_id)
+            except requests.RequestException as exc:
+                logger.error("ma_sos.adapter.csv_fetch_error id=%s: %s", stats_id, exc)
+                return AdapterResult(
+                    rows=[],
+                    source_url="; ".join(urls),
+                    mapping_confidence="none",
+                    notes=f"CSV fetch failed for electionstats_id={stats_id}: {exc}",
+                )
+            csv_bodies.append(csv_bytes)
+            urls.append(csv_url)
+            rows = _parse_election_csv(
+                csv_bytes, csv_url,
+                contest_code=str(stats_id), party_code=party_code_by_stats_id[stats_id],
+            )
+            all_rows.extend(rows)
+
+        # Combined fingerprint over every fetched CSV, in electionstats_id order.
+        new_hash = hashlib.sha256(b"".join(csv_bodies)).hexdigest()
+        cache_key = f"ma_sos:hash:{election_id}"
+        cached_hash = cache.get(cache_key)
+        source_url = "; ".join(urls)
+
+        if cached_hash == new_hash:
+            logger.debug("ma_sos.adapter.unchanged election_id=%d (split)", election_id)
+            return AdapterResult(
+                rows=[],
+                source_url=source_url,
+                mapping_confidence="full",
+                unchanged=True,
+                source_version=new_hash,
+            )
+
+        cache.set(cache_key, new_hash, _CACHE_TTL)
+
+        logger.info(
+            "ma_sos.adapter.fetched_split election_id=%d electionstats_ids=%s rows=%d",
+            election_id, sorted(party_code_by_stats_id), len(all_rows),
+        )
+
+        return AdapterResult(
+            rows=all_rows,
+            source_url=source_url,
+            mapping_confidence="full",
+            source_version=new_hash,
+        )
+
 
 # ---------------------------------------------------------------------------
 # CSV parsing helpers
 # ---------------------------------------------------------------------------
 
-def _parse_election_csv(csv_bytes: bytes, source_url: str) -> list[ResultRow]:
+def _parse_election_csv(
+    csv_bytes: bytes, source_url: str, contest_code: str = "", party_code: str = "",
+) -> list[ResultRow]:
     """
     Parse an electionstats election results CSV into ResultRow objects.
 
@@ -131,6 +238,15 @@ def _parse_election_csv(csv_bytes: bytes, source_url: str) -> list[ResultRow]:
     We emit one ResultRow per candidate per town. The TOTALS row (statewide aggregate)
     is included with jurisdiction_fragment="STATEWIDE". Tally labels (All Others, Blanks,
     Total Votes Cast) are emitted as is_write_in_aggregate=True / option_label rows.
+
+    contest_code/party_code, when passed by fetch_results/_fetch_split for a
+    Race whose source_metadata carries them, are this CSV's own
+    electionstats_id and that Race's party — carried into every row's raw
+    dict so results.tasks._process_race_results/_row_source_identity can
+    match against the owning Race's source_metadata. Both must be supplied
+    together whenever the owning race has a non-empty party_code: a race's
+    identity match requires every key present on the race to also match on
+    the row, so a row missing party_code would never match such a race.
     """
     text = csv_bytes.decode("utf-8", errors="replace")
     reader = csv.reader(io.StringIO(text))
@@ -184,6 +300,8 @@ def _parse_election_csv(csv_bytes: bytes, source_url: str) -> list[ResultRow]:
                     "town": town,
                     "party": cand["party"],
                     "col_idx": col_idx,
+                    **({"contest_code": contest_code} if contest_code else {}),
+                    **({"party_code": party_code} if party_code else {}),
                 },
             ))
 

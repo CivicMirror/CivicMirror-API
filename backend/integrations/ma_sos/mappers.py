@@ -39,6 +39,21 @@ _STAGE_TO_TYPE = {
     "independent voters": "primary",
 }
 
+# Per-party stage slugs -> the canonical party label, in the same vocabulary
+# electionstats already uses in general-election CSV party rows ("Democratic",
+# "Republican", "Unenrolled", ...). Deliberately excludes "general"/"primaries"
+# — those aren't a party, so party lookup for those stages returns "".
+_STAGE_TO_PARTY_LABEL = {
+    "democratic": "Democratic",
+    "republican": "Republican",
+    "green-rainbow": "Green-Rainbow",
+    "libertarian": "Libertarian",
+    "working families": "Working Families",
+    "united independent": "United Independent",
+    "american": "American",
+    "independent voters": "Independent Voters",
+}
+
 
 # ---------------------------------------------------------------------------
 # Generic helpers
@@ -63,6 +78,32 @@ def infer_election_type(stage: str) -> str:
     if "special" in lower:
         return "special"
     return _STAGE_TO_TYPE.get(lower, "general")
+
+
+def party_label_from_stage(stage: str) -> str:
+    """
+    Map a per-party stage slug ("Democratic", "Republican", ...) to its
+    canonical party label. Returns "" for non-party stages (General,
+    Primaries) — there's no party to derive there.
+    """
+    return _STAGE_TO_PARTY_LABEL.get((stage or "").strip().lower(), "")
+
+
+def contest_variant_key(office: str, district: str, stage: str) -> str:
+    """
+    Disambiguator threaded into aggregation.identity.race_canonical_key's
+    optional contest_variant parameter.
+
+    Without it, a partisan primary's Democratic and Republican contests for
+    the same office/date collapse into a single Race (same election_type,
+    date, office, and OCD) — see issue #105. Returns "" for non-party stages
+    (General, generic Primaries) so those races are unaffected — this mirrors
+    the vt_sos/nc_sbe/ny_boe contest_variant pattern.
+    """
+    party = party_label_from_stage(stage)
+    if not party:
+        return ""
+    return f"ma:{normalize(office)}:{normalize(district) or 'statewide'}:{party.lower()}"
 
 
 def infer_jurisdiction_level(office: str) -> str:
@@ -213,9 +254,12 @@ def map_race(election_obj: Election, election_row: dict) -> dict:
     )
 
     canonical_key = build_canonical_key(election_obj.source_id, office, district)
+    stage = election_row.get("stage", "")
+    variant = contest_variant_key(office, district, stage)
 
     return {
         "canonical_key": canonical_key,
+        "contest_variant": variant,
         "race_type": Race.RaceType.CANDIDATE,
         "office_title": office,
         "normalized_office_title": normalize(office),
@@ -229,6 +273,19 @@ def map_race(election_obj: Election, election_row: dict) -> dict:
         "ocd_division_id": "",
         "source_metadata": {
             "electionstats_id": election_id,
+            "party": party_label_from_stage(stage),
+            # Consumed by results.tasks._race_source_identity /
+            # _row_source_identity to route each party's CSV results to the
+            # right Race when a primary is split across multiple Races that
+            # share one canonical Election (see contest_variant_key).
+            # _process_race_results requires every key present on the race's
+            # identity to also match on a result row — so both keys must be
+            # set here, and results/adapters/ma.py must tag both onto every
+            # row it produces, or a race with a non-empty party_code will
+            # never match any row (see results/adapters/ma.py's fetch_results
+            # docstring for the incident this caused).
+            "contest_code": str(election_id),
+            "party_code": party_label_from_stage(stage),
         },
     }
 
@@ -237,14 +294,21 @@ def map_race(election_obj: Election, election_row: dict) -> dict:
 # Candidate mapper
 # ---------------------------------------------------------------------------
 
-def map_candidate(candidate_row: dict) -> dict:
+def map_candidate(candidate_row: dict, stage: str = "") -> dict:
     """
     Map a parsed CSV candidate row → Candidate model field values.
 
     candidate_row keys: name, party, col_index
+
+    Primary CSVs (one party per election_id, see contest_variant_key) don't
+    carry a party row, so `party` falls back to the election's stage — e.g.
+    an election discovered under stage="Republican" implies every candidate
+    on its CSV is Republican. General-election CSVs already have `party`
+    populated per-column and take precedence.
     """
+    party = candidate_row.get("party", "") or party_label_from_stage(stage)
     return {
-        "party": candidate_row.get("party", ""),
+        "party": party,
         "incumbent": False,
         "candidate_status": Candidate.CandidateStatus.RUNNING,
         "source_metadata": {
