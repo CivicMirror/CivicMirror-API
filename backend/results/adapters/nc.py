@@ -27,8 +27,11 @@ results_url:
 """
 from __future__ import annotations
 
+import io
 import logging
+import zipfile
 from collections import defaultdict
+from datetime import date, timedelta
 
 import requests
 from django.core.cache import cache
@@ -42,6 +45,18 @@ from .registry import register
 logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 86400 * 30  # 30 days
+
+# NC SBE publishes a 134-byte placeholder ZIP containing only Readme.txt with
+# this exact text for historical elections it never digitized precinct-level
+# results for (confirmed live for the 2013-11-05 and 2015-05-12 elections).
+# This is an authoritative "no data" signal from NC, not a fetch anomaly.
+_NC_NO_DATA_PLACEHOLDER = "Data Unavailable"
+
+# If NC's results_pct ZIP for a past election is still missing this long after
+# election day, treat it as permanently unavailable (e.g. deleted/retracted by
+# NC — confirmed live via an S3 delete marker for 2024-05-14) rather than
+# "not yet published", and stop logging it as a warning every night.
+_PERMANENTLY_MISSING_THRESHOLD = timedelta(days=45)
 
 
 @register
@@ -88,7 +103,12 @@ class NorthCarolinaAdapter(StateResultsAdapter):
             etag = None
 
         if date_str and etag is None:
-            logger.warning("nc_sbe.adapter.results_zip_not_found url=%s", source_url)
+            if _is_permanently_missing(election.election_date):
+                logger.info(
+                    "nc_sbe.adapter.results_zip_permanently_unavailable url=%s", source_url
+                )
+            else:
+                logger.warning("nc_sbe.adapter.results_zip_not_found url=%s", source_url)
             return AdapterResult(
                 rows=[],
                 source_url=source_url,
@@ -115,12 +135,17 @@ class NorthCarolinaAdapter(StateResultsAdapter):
 
         raw_rows = parse_results_tsv(zip_bytes)
         if not raw_rows:
-            logger.warning("nc_sbe.adapter.empty_zip url=%s", source_url)
+            if _is_no_data_placeholder(zip_bytes):
+                logger.info("nc_sbe.adapter.no_precinct_data_published url=%s", source_url)
+                notes = "NC SBE published no precinct-level data for this election (official placeholder)"
+            else:
+                logger.warning("nc_sbe.adapter.empty_zip url=%s", source_url)
+                notes = "ZIP parsed but contained no rows"
             return AdapterResult(
                 rows=[],
                 source_url=source_url,
                 mapping_confidence="none",
-                notes="ZIP parsed but contained no rows",
+                notes=notes,
             )
 
         rows = _aggregate_rows(raw_rows)
@@ -141,6 +166,25 @@ class NorthCarolinaAdapter(StateResultsAdapter):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _is_no_data_placeholder(zip_bytes: bytes) -> bool:
+    """True if this is NC's known 'Data Unavailable' placeholder ZIP."""
+    try:
+        z = zipfile.ZipFile(io.BytesIO(zip_bytes))
+        names = z.namelist()
+        if names != ["Readme.txt"]:
+            return False
+        with z.open("Readme.txt") as f:
+            content = f.read().decode("latin-1").strip()
+        return content == _NC_NO_DATA_PLACEHOLDER
+    except (zipfile.BadZipFile, KeyError):
+        return False
+
+
+def _is_permanently_missing(election_date: date) -> bool:
+    """True if a past election's results ZIP has had time to appear and hasn't."""
+    return date.today() - election_date > _PERMANENTLY_MISSING_THRESHOLD
+
 
 def _fetch_zip(url: str) -> bytes:
     resp = requests.get(
