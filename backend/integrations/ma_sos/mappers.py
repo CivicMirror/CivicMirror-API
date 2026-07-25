@@ -277,10 +277,13 @@ def map_race(election_obj: Election, election_row: dict) -> dict:
             # Consumed by results.tasks._race_source_identity /
             # _row_source_identity to route each party's CSV results to the
             # right Race when a primary is split across multiple Races that
-            # share one canonical Election (see contest_variant_key). Every
-            # Race gets its own electionstats_id, so it alone is enough to
-            # disambiguate — party_code is included for parity with the
-            # vt_sos/nc_sbe/ny_boe convention and readability.
+            # share one canonical Election (see contest_variant_key).
+            # _process_race_results requires every key present on the race's
+            # identity to also match on a result row — so both keys must be
+            # set here, and results/adapters/ma.py must tag both onto every
+            # row it produces, or a race with a non-empty party_code will
+            # never match any row (see results/adapters/ma.py's fetch_results
+            # docstring for the incident this caused).
             "contest_code": str(election_id),
             "party_code": party_label_from_stage(stage),
         },
