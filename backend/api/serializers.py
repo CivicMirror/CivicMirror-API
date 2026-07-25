@@ -18,7 +18,7 @@ class ElectionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Election
         fields = [
-            'id', 'source_id', 'name', 'election_date', 'jurisdiction_level',
+            'id', 'source_id', 'name', 'election_date', 'election_type', 'jurisdiction_level',
             'state', 'status', 'last_synced_at', 'election_cycle', 'race_count',
             'sources', 'field_provenance',
         ]
