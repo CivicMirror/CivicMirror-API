@@ -193,9 +193,9 @@ def test_fetch_results_split_primary_fetches_each_party_csv(mock_get, mock_cache
     mock_cache.get.return_value = None
 
     dem_race = MagicMock()
-    dem_race.source_metadata = {"electionstats_id": 171921}
+    dem_race.source_metadata = {"electionstats_id": 171921, "party_code": "Democratic"}
     rep_race = MagicMock()
-    rep_race.source_metadata = {"electionstats_id": 171922}
+    rep_race.source_metadata = {"electionstats_id": 171922, "party_code": "Republican"}
     mock_race_cls.objects.filter.return_value = [dem_race, rep_race]
 
     dem_resp = MagicMock(content=DEM_CSV_BYTES)
@@ -223,6 +223,12 @@ def test_fetch_results_split_primary_fetches_each_party_csv(mock_get, mock_cache
     assert any(r.candidate_name == "Christina Delisio" for r in rep_rows)
     assert not any(r.candidate_name == "Christina Delisio" for r in dem_rows)
     assert not any(r.candidate_name == "Andrew Tarr" for r in rep_rows)
+    # Every row must carry party_code too — a race's identity match requires
+    # every key present in the race's source_metadata (contest_code AND
+    # party_code) to match on the row, so a row missing party_code would
+    # never match a split-primary race (see _fetch_split docstring).
+    assert all(r.raw.get("party_code") == "Democratic" for r in dem_rows)
+    assert all(r.raw.get("party_code") == "Republican" for r in rep_rows)
 
 
 @patch("results.adapters.ma.Race")
@@ -235,9 +241,9 @@ def test_fetch_results_split_primary_unchanged_on_cache_hit(mock_get, mock_cache
     mock_cache.get.return_value = combined_hash
 
     dem_race = MagicMock()
-    dem_race.source_metadata = {"electionstats_id": 171921}
+    dem_race.source_metadata = {"electionstats_id": 171921, "party_code": "Democratic"}
     rep_race = MagicMock()
-    rep_race.source_metadata = {"electionstats_id": 171922}
+    rep_race.source_metadata = {"electionstats_id": 171922, "party_code": "Republican"}
     mock_race_cls.objects.filter.return_value = [dem_race, rep_race]
 
     dem_resp = MagicMock(content=DEM_CSV_BYTES)
@@ -301,3 +307,84 @@ def test_parse_election_csv_empty():
 
     rows = _parse_election_csv(b"", "http://test.url/")
     assert rows == []
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: fetch_results output routed through results.tasks._process_race_results
+#
+# Regression coverage for a bug caught in review: Race.source_metadata carries
+# both contest_code AND party_code for a split-primary race (see
+# integrations.ma_sos.mappers.map_race), and _race_source_identity requires
+# every one of those keys to also appear — and match — on a row's raw dict
+# (results.tasks._row_source_identity). Tagging rows with contest_code alone
+# (without party_code) would make every row fail to match any split-primary
+# race, silently dropping all results rather than misrouting them. This test
+# exercises the real DB models and the real results.tasks matching logic, not
+# just the adapter's own output, so it would have caught that.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_split_primary_results_route_to_correct_race_end_to_end():
+    from datetime import date
+
+    from elections.models import Candidate, Election, Race
+    from results.adapters.ma import MassachusettsAdapter
+    from results.models import OfficialResult
+    from results.tasks import _process_race_results
+
+    election = Election.objects.create(
+        name="2026 MA State Representative 5th Essex Special Primary",
+        election_date=date(2026, 9, 1),
+        election_type=Election.ElectionType.PRIMARY,
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state="MA",
+        canonical_key="MA:primary:2026-09-01:state",
+        contributing_sources=["ma_sos"],
+    )
+    dem_race = Race.objects.create(
+        election=election,
+        office_title="State Representative",
+        jurisdiction="5th Essex",
+        race_type=Race.RaceType.CANDIDATE,
+        source=Race.Source.MA_SOS,
+        canonical_key="MA:primary:2026-09-01:state|state representative|NO_OCD|candidate|democratic",
+        contributing_sources=["ma_sos"],
+        source_metadata={"electionstats_id": 171921, "contest_code": "171921", "party_code": "Democratic"},
+    )
+    rep_race = Race.objects.create(
+        election=election,
+        office_title="State Representative",
+        jurisdiction="5th Essex",
+        race_type=Race.RaceType.CANDIDATE,
+        source=Race.Source.MA_SOS,
+        canonical_key="MA:primary:2026-09-01:state|state representative|NO_OCD|candidate|republican",
+        contributing_sources=["ma_sos"],
+        source_metadata={"electionstats_id": 171922, "contest_code": "171922", "party_code": "Republican"},
+    )
+    dem_candidate = Candidate.objects.create(race=dem_race, name="Andrew Tarr", party="Democratic")
+    rep_candidate = Candidate.objects.create(race=rep_race, name="Christina Delisio", party="Republican")
+
+    dem_resp = MagicMock(content=DEM_CSV_BYTES)
+    dem_resp.raise_for_status = MagicMock()
+    rep_resp = MagicMock(content=REP_CSV_BYTES)
+    rep_resp.raise_for_status = MagicMock()
+
+    adapter = MassachusettsAdapter()
+    with patch("results.adapters.ma.requests.get", side_effect=[dem_resp, rep_resp]), \
+         patch("results.adapters.ma.cache") as mock_cache:
+        mock_cache.get.return_value = None
+        result = adapter.fetch_results(election.election_date, election.pk)
+
+    _process_race_results(dem_race, result, "MA")
+    _process_race_results(rep_race, result, "MA")
+
+    dem_result = OfficialResult.objects.get(
+        race=dem_race, candidate=dem_candidate, jurisdiction_fragment="STATEWIDE",
+    )
+    rep_result = OfficialResult.objects.get(
+        race=rep_race, candidate=rep_candidate, jurisdiction_fragment="STATEWIDE",
+    )
+    assert dem_result.vote_count == 2194
+    assert rep_result.vote_count == 568
+    assert not OfficialResult.objects.filter(race=dem_race, candidate=rep_candidate).exists()
+    assert not OfficialResult.objects.filter(race=rep_race, candidate=dem_candidate).exists()

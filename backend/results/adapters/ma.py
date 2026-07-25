@@ -11,12 +11,13 @@ Election (see integrations.ma_sos.mappers.contest_variant_key) — each party's
 results live on their own electionstats CSV under that Race's own
 electionstats_id (Race.source_metadata["electionstats_id"]). When a given
 election has more than one such Race, fetch_results fetches each party's CSV
-separately and tags every row with contest_code=str(electionstats_id) so
-results.tasks._process_race_results routes rows to the correct Race instead
-of applying every row to every race sharing the election. Elections with a
-single Race (general elections, unsplit/nonpartisan primaries, or elections
-whose Races haven't synced yet) keep the original single-CSV behavior, keyed
-off Election.source_metadata["electionstats_id"].
+separately and tags every row with contest_code=str(electionstats_id) and
+party_code=<that Race's party> so results.tasks._process_race_results routes
+rows to the correct Race instead of applying every row to every race sharing
+the election. Elections with a single Race (general elections, unsplit/
+nonpartisan primaries, or elections whose Races haven't synced yet) keep the
+original single-CSV behavior, keyed off
+Election.source_metadata["electionstats_id"].
 
 Version cache key: "ma_sos:hash:{election_id}"
 Cache value:       SHA-256 hex digest of the CSV body (or, for a split
@@ -69,18 +70,20 @@ class MassachusettsAdapter(StateResultsAdapter):
             )
 
         # A split primary has multiple Races sharing this Election, each with
-        # its own electionstats_id (its own party's CSV). Collect the distinct
-        # ids across the election's Races; more than one means a split fetch
-        # is needed. Races without an electionstats_id (not yet synced, or a
+        # its own electionstats_id (its own party's CSV) and its own
+        # party_code. Collect electionstats_id -> party_code across the
+        # election's Races; more than one distinct id means a split fetch is
+        # needed. Races without an electionstats_id (not yet synced, or a
         # non-ma_sos source) are ignored here.
-        race_stats_ids: dict[int, list[int]] = {}
+        party_code_by_stats_id: dict[int, str] = {}
         for race in Race.objects.filter(election=election, source=Race.Source.MA_SOS):
-            sid = (race.source_metadata or {}).get("electionstats_id")
+            metadata = race.source_metadata or {}
+            sid = metadata.get("electionstats_id")
             if sid:
-                race_stats_ids.setdefault(int(sid), []).append(race.pk)
+                party_code_by_stats_id[int(sid)] = str(metadata.get("party_code") or "")
 
-        if len(race_stats_ids) > 1:
-            return self._fetch_split(election_id, sorted(race_stats_ids))
+        if len(party_code_by_stats_id) > 1:
+            return self._fetch_split(election_id, party_code_by_stats_id)
 
         electionstats_id = (election.source_metadata or {}).get("electionstats_id")
         if not electionstats_id:
@@ -121,7 +124,10 @@ class MassachusettsAdapter(StateResultsAdapter):
                 source_version=new_hash,
             )
 
-        rows = _parse_election_csv(csv_bytes, csv_url, contest_code=str(electionstats_id))
+        party_code = party_code_by_stats_id.get(int(electionstats_id), "")
+        rows = _parse_election_csv(
+            csv_bytes, csv_url, contest_code=str(electionstats_id), party_code=party_code,
+        )
 
         cache.set(cache_key, new_hash, _CACHE_TTL)
 
@@ -143,20 +149,27 @@ class MassachusettsAdapter(StateResultsAdapter):
         resp.raise_for_status()
         return resp.content, csv_url
 
-    def _fetch_split(self, election_id: int, electionstats_ids: list[int]) -> AdapterResult:
+    def _fetch_split(self, election_id: int, party_code_by_stats_id: dict[int, str]) -> AdapterResult:
         """
         Fetch and combine each party's CSV for a primary split across
         multiple Races. Every row is tagged raw["contest_code"] = str(that
-        CSV's electionstats_id), matching Race.source_metadata["contest_code"]
-        (set in integrations.ma_sos.mappers.map_race) so
-        results.tasks._process_race_results routes each party's rows to its
-        own Race instead of applying every row to every race.
+        CSV's electionstats_id) and raw["party_code"] = that Race's party,
+        matching Race.source_metadata["contest_code"]/["party_code"] (set in
+        integrations.ma_sos.mappers.map_race) so
+        results.tasks._process_race_results/_row_source_identity routes each
+        party's rows to its own Race instead of applying every row to every
+        race. Both keys must be tagged: _row_source_identity only includes a
+        key in a row's identity when it's present in raw, and
+        _process_race_results requires every key present in the *race's*
+        identity to match — so a race with a non-empty party_code (any
+        party-stage primary) would never match rows carrying contest_code
+        alone.
         """
         all_rows: list[ResultRow] = []
         csv_bodies: list[bytes] = []
         urls: list[str] = []
 
-        for stats_id in electionstats_ids:
+        for stats_id in sorted(party_code_by_stats_id):
             try:
                 csv_bytes, csv_url = self._download_csv(stats_id)
             except requests.RequestException as exc:
@@ -169,7 +182,10 @@ class MassachusettsAdapter(StateResultsAdapter):
                 )
             csv_bodies.append(csv_bytes)
             urls.append(csv_url)
-            rows = _parse_election_csv(csv_bytes, csv_url, contest_code=str(stats_id))
+            rows = _parse_election_csv(
+                csv_bytes, csv_url,
+                contest_code=str(stats_id), party_code=party_code_by_stats_id[stats_id],
+            )
             all_rows.extend(rows)
 
         # Combined fingerprint over every fetched CSV, in electionstats_id order.
@@ -192,7 +208,7 @@ class MassachusettsAdapter(StateResultsAdapter):
 
         logger.info(
             "ma_sos.adapter.fetched_split election_id=%d electionstats_ids=%s rows=%d",
-            election_id, electionstats_ids, len(all_rows),
+            election_id, sorted(party_code_by_stats_id), len(all_rows),
         )
 
         return AdapterResult(
@@ -207,7 +223,9 @@ class MassachusettsAdapter(StateResultsAdapter):
 # CSV parsing helpers
 # ---------------------------------------------------------------------------
 
-def _parse_election_csv(csv_bytes: bytes, source_url: str, contest_code: str = "") -> list[ResultRow]:
+def _parse_election_csv(
+    csv_bytes: bytes, source_url: str, contest_code: str = "", party_code: str = "",
+) -> list[ResultRow]:
     """
     Parse an electionstats election results CSV into ResultRow objects.
 
@@ -221,10 +239,14 @@ def _parse_election_csv(csv_bytes: bytes, source_url: str, contest_code: str = "
     is included with jurisdiction_fragment="STATEWIDE". Tally labels (All Others, Blanks,
     Total Votes Cast) are emitted as is_write_in_aggregate=True / option_label rows.
 
-    contest_code, when passed by _fetch_split for a party-split primary, is
-    this CSV's own electionstats_id — carried into each row's raw dict so
-    results.tasks._process_race_results can match it against the owning
-    Race's source_metadata["contest_code"].
+    contest_code/party_code, when passed by fetch_results/_fetch_split for a
+    Race whose source_metadata carries them, are this CSV's own
+    electionstats_id and that Race's party — carried into every row's raw
+    dict so results.tasks._process_race_results/_row_source_identity can
+    match against the owning Race's source_metadata. Both must be supplied
+    together whenever the owning race has a non-empty party_code: a race's
+    identity match requires every key present on the race to also match on
+    the row, so a row missing party_code would never match such a race.
     """
     text = csv_bytes.decode("utf-8", errors="replace")
     reader = csv.reader(io.StringIO(text))
@@ -279,6 +301,7 @@ def _parse_election_csv(csv_bytes: bytes, source_url: str, contest_code: str = "
                     "party": cand["party"],
                     "col_idx": col_idx,
                     **({"contest_code": contest_code} if contest_code else {}),
+                    **({"party_code": party_code} if party_code else {}),
                 },
             ))
 
