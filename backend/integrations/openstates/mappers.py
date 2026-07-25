@@ -56,6 +56,7 @@ def map_person(raw: dict) -> dict:
         'district': str(current_role.get('district') or ''),
         'display_name': (raw.get('name') or '').strip(),
         'other_names': _extract_other_names(raw.get('other_names')),
+        'family_name': (raw.get('family_name') or '').strip(),
         'ocd_division_id': current_role.get('division_id') or '',
         'source_metadata': {
             'openstates': {

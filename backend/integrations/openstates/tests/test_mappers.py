@@ -61,6 +61,24 @@ def test_map_person_other_names_defaults_to_empty_list():
     assert mapped['other_names'] == []
 
 
+def test_map_person_extracts_family_name():
+    mapped = map_person(
+        {
+            'id': 'os-1',
+            'name': 'Dru Tarr',
+            'given_name': 'Dru',
+            'family_name': 'Tarr',
+            'current_role': {'org_classification': 'lower', 'district': '5th Essex'},
+        }
+    )
+    assert mapped['family_name'] == 'Tarr'
+
+
+def test_map_person_family_name_defaults_to_empty_string():
+    mapped = map_person({'id': 'os-1', 'name': 'Alex Smith', 'current_role': None})
+    assert mapped['family_name'] == ''
+
+
 def test_map_person_sets_incumbent_false_without_current_role():
     mapped = map_person({'id': 'os-1', 'name': 'Alex Smith', 'current_role': None})
     assert isinstance(mapped, dict)
