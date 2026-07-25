@@ -274,6 +274,15 @@ def map_race(election_obj: Election, election_row: dict) -> dict:
         "source_metadata": {
             "electionstats_id": election_id,
             "party": party_label_from_stage(stage),
+            # Consumed by results.tasks._race_source_identity /
+            # _row_source_identity to route each party's CSV results to the
+            # right Race when a primary is split across multiple Races that
+            # share one canonical Election (see contest_variant_key). Every
+            # Race gets its own electionstats_id, so it alone is enough to
+            # disambiguate — party_code is included for parity with the
+            # vt_sos/nc_sbe/ny_boe convention and readability.
+            "contest_code": str(election_id),
+            "party_code": party_label_from_stage(stage),
         },
     }
 

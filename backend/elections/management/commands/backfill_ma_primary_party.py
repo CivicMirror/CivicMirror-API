@@ -34,6 +34,12 @@ DEPLOYMENT ORDER
 2. Run this command (``--dry-run`` first).
 3. Re-run sync_ma_elections (or wait for the next scheduled run) so the
    deleted races are recreated, correctly split by party.
+
+DESTRUCTIVE: Race.delete() cascades to Candidate and, via
+OfficialResult.race (``on_delete=CASCADE``), to any certified results
+already attached to the merged Race — they are permanently deleted along
+with it, not just re-derived on the next sync. They only come back once
+results ingestion re-runs for the recreated per-party Races.
 """
 
 import logging
@@ -93,7 +99,7 @@ class Command(BaseCommand):
                     race.delete()
 
         if dry_run:
-            self.stdout.write(self.style.WARNING(f"[DRY RUN] would delete {count} race(s). Re-run with --apply-equivalent (omit --dry-run) to delete."))
+            self.stdout.write(self.style.WARNING(f"[DRY RUN] would delete {count} race(s). Omit --dry-run to delete."))
         else:
             self.stdout.write(self.style.SUCCESS(f"[APPLY] deleted {count} race(s)."))
             self.stdout.write(

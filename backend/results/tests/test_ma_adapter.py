@@ -42,9 +42,12 @@ def test_fetch_results_missing_election(mock_get):
 # fetch_results — no electionstats_id in metadata
 # ---------------------------------------------------------------------------
 
+@patch("results.adapters.ma.Race")
 @patch("results.adapters.ma.requests.get")
-def test_fetch_results_no_electionstats_id(mock_get):
+def test_fetch_results_no_electionstats_id(mock_get, mock_race_cls):
     from results.adapters.ma import MassachusettsAdapter
+
+    mock_race_cls.objects.filter.return_value = []
 
     adapter = MassachusettsAdapter()
     mock_election = MagicMock()
@@ -71,9 +74,10 @@ CSV_BYTES = (
 )
 
 
+@patch("results.adapters.ma.Race")
 @patch("results.adapters.ma.cache")
 @patch("results.adapters.ma.requests.get")
-def test_fetch_results_unchanged_on_cache_hit(mock_get, mock_cache):
+def test_fetch_results_unchanged_on_cache_hit(mock_get, mock_cache, mock_race_cls):
     from results.adapters.ma import MassachusettsAdapter
 
     csv_hash = hashlib.sha256(CSV_BYTES).hexdigest()
@@ -84,6 +88,7 @@ def test_fetch_results_unchanged_on_cache_hit(mock_get, mock_cache):
     mock_get.return_value = mock_resp
 
     mock_cache.get.return_value = csv_hash  # Cache hit
+    mock_race_cls.objects.filter.return_value = []
 
     adapter = MassachusettsAdapter()
     mock_election = MagicMock()
@@ -103,9 +108,10 @@ def test_fetch_results_unchanged_on_cache_hit(mock_get, mock_cache):
 # fetch_results — cache miss (returns rows)
 # ---------------------------------------------------------------------------
 
+@patch("results.adapters.ma.Race")
 @patch("results.adapters.ma.cache")
 @patch("results.adapters.ma.requests.get")
-def test_fetch_results_parses_csv_on_cache_miss(mock_get, mock_cache):
+def test_fetch_results_parses_csv_on_cache_miss(mock_get, mock_cache, mock_race_cls):
     from results.adapters.ma import MassachusettsAdapter
 
     mock_resp = MagicMock()
@@ -114,6 +120,7 @@ def test_fetch_results_parses_csv_on_cache_miss(mock_get, mock_cache):
     mock_get.return_value = mock_resp
 
     mock_cache.get.return_value = None  # Cache miss
+    mock_race_cls.objects.filter.return_value = []
 
     adapter = MassachusettsAdapter()
     mock_election = MagicMock()
@@ -127,6 +134,7 @@ def test_fetch_results_parses_csv_on_cache_miss(mock_get, mock_cache):
     assert result.unchanged is False
     assert len(result.rows) > 0
     assert result.mapping_confidence == "full"
+    assert all(r.raw.get("contest_code") == "165300" for r in result.rows)
     # Cache should be set with new hash
     mock_cache.set.assert_called_once()
 
@@ -135,13 +143,15 @@ def test_fetch_results_parses_csv_on_cache_miss(mock_get, mock_cache):
 # fetch_results — HTTP error
 # ---------------------------------------------------------------------------
 
+@patch("results.adapters.ma.Race")
 @patch("results.adapters.ma.requests.get")
-def test_fetch_results_http_error(mock_get):
+def test_fetch_results_http_error(mock_get, mock_race_cls):
     import requests as req_lib
 
     from results.adapters.ma import MassachusettsAdapter
 
     mock_get.side_effect = req_lib.RequestException("network error")
+    mock_race_cls.objects.filter.return_value = []
 
     adapter = MassachusettsAdapter()
     mock_election = MagicMock()
@@ -154,6 +164,99 @@ def test_fetch_results_http_error(mock_get):
 
     assert result.mapping_confidence == "none"
     assert "network error" in result.notes
+
+
+# ---------------------------------------------------------------------------
+# fetch_results — split primary (multiple Races, distinct electionstats_ids)
+# ---------------------------------------------------------------------------
+
+DEM_CSV_BYTES = (
+    b'City/Town,,,"Andrew Tarr","All Others","Blanks","Total Votes Cast"\r\n'
+    b',,,Democratic,,,\r\n'
+    b'Boston,,,"2,194",30,23,"2,247"\r\n'
+    b'TOTALS,,,"2,194",30,23,"2,247"\r\n'
+)
+REP_CSV_BYTES = (
+    b'City/Town,,,"Christina Delisio","All Others","Blanks","Total Votes Cast"\r\n'
+    b',,,Republican,,,\r\n'
+    b'Boston,,,"568",37,6,"611"\r\n'
+    b'TOTALS,,,"568",37,6,"611"\r\n'
+)
+
+
+@patch("results.adapters.ma.Race")
+@patch("results.adapters.ma.cache")
+@patch("results.adapters.ma.requests.get")
+def test_fetch_results_split_primary_fetches_each_party_csv(mock_get, mock_cache, mock_race_cls):
+    from results.adapters.ma import MassachusettsAdapter
+
+    mock_cache.get.return_value = None
+
+    dem_race = MagicMock()
+    dem_race.source_metadata = {"electionstats_id": 171921}
+    rep_race = MagicMock()
+    rep_race.source_metadata = {"electionstats_id": 171922}
+    mock_race_cls.objects.filter.return_value = [dem_race, rep_race]
+
+    dem_resp = MagicMock(content=DEM_CSV_BYTES)
+    dem_resp.raise_for_status = MagicMock()
+    rep_resp = MagicMock(content=REP_CSV_BYTES)
+    rep_resp.raise_for_status = MagicMock()
+    mock_get.side_effect = [dem_resp, rep_resp]
+
+    adapter = MassachusettsAdapter()
+    mock_election = MagicMock()
+    mock_election.source_id = "ma_sos_171920"
+    mock_election.source_metadata = {"electionstats_id": 171921}
+
+    with patch("results.adapters.ma.Election") as mock_election_cls:
+        mock_election_cls.objects.get.return_value = mock_election
+        result = adapter.fetch_results(None, 1)
+
+    assert mock_get.call_count == 2
+    assert result.mapping_confidence == "full"
+
+    dem_rows = [r for r in result.rows if r.raw.get("contest_code") == "171921"]
+    rep_rows = [r for r in result.rows if r.raw.get("contest_code") == "171922"]
+    assert dem_rows and rep_rows
+    assert any(r.candidate_name == "Andrew Tarr" for r in dem_rows)
+    assert any(r.candidate_name == "Christina Delisio" for r in rep_rows)
+    assert not any(r.candidate_name == "Christina Delisio" for r in dem_rows)
+    assert not any(r.candidate_name == "Andrew Tarr" for r in rep_rows)
+
+
+@patch("results.adapters.ma.Race")
+@patch("results.adapters.ma.cache")
+@patch("results.adapters.ma.requests.get")
+def test_fetch_results_split_primary_unchanged_on_cache_hit(mock_get, mock_cache, mock_race_cls):
+    from results.adapters.ma import MassachusettsAdapter
+
+    combined_hash = hashlib.sha256(DEM_CSV_BYTES + REP_CSV_BYTES).hexdigest()
+    mock_cache.get.return_value = combined_hash
+
+    dem_race = MagicMock()
+    dem_race.source_metadata = {"electionstats_id": 171921}
+    rep_race = MagicMock()
+    rep_race.source_metadata = {"electionstats_id": 171922}
+    mock_race_cls.objects.filter.return_value = [dem_race, rep_race]
+
+    dem_resp = MagicMock(content=DEM_CSV_BYTES)
+    dem_resp.raise_for_status = MagicMock()
+    rep_resp = MagicMock(content=REP_CSV_BYTES)
+    rep_resp.raise_for_status = MagicMock()
+    mock_get.side_effect = [dem_resp, rep_resp]
+
+    adapter = MassachusettsAdapter()
+    mock_election = MagicMock()
+    mock_election.source_id = "ma_sos_171920"
+    mock_election.source_metadata = {"electionstats_id": 171921}
+
+    with patch("results.adapters.ma.Election") as mock_election_cls:
+        mock_election_cls.objects.get.return_value = mock_election
+        result = adapter.fetch_results(None, 1)
+
+    assert result.unchanged is True
+    assert result.rows == []
 
 
 # ---------------------------------------------------------------------------
