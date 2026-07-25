@@ -366,3 +366,76 @@ def test_enrich_returns_ambiguous_when_multiple_external_id_matches(base_race):
 
     assert matched is None
     assert action == 'ambiguous'
+
+
+# ---------------------------------------------------------------------------
+# contact_office: incumbent-conditional priority (OCPF committee address vs
+# openstates/congress Capitol office)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_ocpf_office_wins_for_challenger(base_race):
+    """A challenger has no Capitol office — OCPF's committee address is the
+    only real contact address available, so it should win even against a
+    normally-higher-priority source."""
+    candidate = Candidate.objects.create(race=base_race, name='Alex Smith', incumbent=False)
+    matcher = CandidateMatcher()
+
+    matcher.enrich(base_race, 'openstates', 'os-1', {'name': 'Alex Smith', 'contact_office': 'Capitol Office'})
+    matcher.enrich(base_race, 'ocpf', 'cpf-1', {'name': 'Alex Smith', 'contact_office': 'Committee Address'})
+
+    candidate.refresh_from_db()
+    assert candidate.contact_office == 'Committee Address'
+
+
+@pytest.mark.django_db
+def test_openstates_office_wins_for_incumbent(base_race):
+    """An incumbent has a real Capitol office — that should win over OCPF's
+    committee/mailing address."""
+    candidate = Candidate.objects.create(race=base_race, name='Alex Smith', incumbent=True)
+    matcher = CandidateMatcher()
+
+    matcher.enrich(base_race, 'ocpf', 'cpf-1', {'name': 'Alex Smith', 'contact_office': 'Committee Address'})
+    matcher.enrich(base_race, 'openstates', 'os-1', {'name': 'Alex Smith', 'contact_office': 'Capitol Office'})
+
+    candidate.refresh_from_db()
+    assert candidate.contact_office == 'Capitol Office'
+
+
+@pytest.mark.django_db
+def test_ocpf_office_does_not_overwrite_capitol_office_for_incumbent(base_race):
+    """Once an incumbent's Capitol office is set, a later OCPF sync (lower
+    priority for incumbents) must not clobber it."""
+    candidate = Candidate.objects.create(race=base_race, name='Alex Smith', incumbent=True)
+    matcher = CandidateMatcher()
+
+    matcher.enrich(base_race, 'openstates', 'os-1', {'name': 'Alex Smith', 'contact_office': 'Capitol Office'})
+    matcher.enrich(base_race, 'ocpf', 'cpf-1', {'name': 'Alex Smith', 'contact_office': 'Committee Address'})
+
+    candidate.refresh_from_db()
+    assert candidate.contact_office == 'Capitol Office'
+
+
+@pytest.mark.django_db
+def test_ocpf_party_wins_over_openstates(base_race):
+    """OCPF is self-declared/authoritative for MA party affiliation and
+    should win over openstates regardless of write order."""
+    candidate = Candidate.objects.create(race=base_race, name='Alex Smith')
+    matcher = CandidateMatcher()
+
+    matcher.enrich(base_race, 'openstates', 'os-1', {'name': 'Alex Smith', 'party': 'Independent'})
+    matcher.enrich(base_race, 'ocpf', 'cpf-1', {'name': 'Alex Smith', 'party': 'Democratic'})
+
+    candidate.refresh_from_db()
+    assert candidate.party == 'Democratic'
+
+
+@pytest.mark.django_db
+def test_ocpf_matches_by_external_id_on_repeat_sync(base_race):
+    candidate = Candidate.objects.create(race=base_race, name='Alex Smith', ocpf_filer_id='cpf-1')
+    matcher = CandidateMatcher()
+
+    matched, action = matcher.enrich(base_race, 'ocpf', 'cpf-1', {'ocpf_filer_id': 'cpf-1', 'name': 'Someone Different'})
+
+    assert matched == candidate
+    assert action == 'enriched'

@@ -10,10 +10,21 @@ def _is_blank(value):
     return value in (None, '')
 
 
-def _has_higher_priority(field: str, incoming_source: str, current_source: str | None) -> bool:
+def _priorities_for(field: str, candidate: Candidate) -> list[str]:
+    """
+    FIELD_PRIORITY entries are normally a static source-priority list, but
+    some fields (e.g. contact_office) need the winning source to depend on
+    the candidate being enriched — see candidate_matcher._contact_office_priority.
+    """
     from .candidate_matcher import FIELD_PRIORITY
 
     priorities = FIELD_PRIORITY.get(field, [])
+    if callable(priorities):
+        return priorities(candidate)
+    return priorities
+
+
+def _has_higher_priority(priorities: list[str], incoming_source: str, current_source: str | None) -> bool:
     if incoming_source not in priorities:
         return False
     if not current_source or current_source not in priorities:
@@ -38,11 +49,12 @@ def get_fields_to_update(candidate: Candidate, source: str, payload: dict) -> di
 
         current_value = getattr(candidate, field)
         current_source = field_sources.get(field)
+        priorities = _priorities_for(field, candidate)
 
         if field == 'incumbent':
             if current_value == incoming_value:
                 continue
-            if current_source is None or _has_higher_priority(field, source, current_source):
+            if current_source is None or _has_higher_priority(priorities, source, current_source):
                 updates[field] = incoming_value
                 field_sources[field] = source
             continue
@@ -50,7 +62,7 @@ def get_fields_to_update(candidate: Candidate, source: str, payload: dict) -> di
         if current_value == incoming_value:
             continue
 
-        if _is_blank(current_value) or _has_higher_priority(field, source, current_source):
+        if _is_blank(current_value) or _has_higher_priority(priorities, source, current_source):
             updates[field] = incoming_value
             field_sources[field] = source
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Callable, Union
 
 from django.db import models as django_models
 
@@ -8,14 +9,31 @@ from elections.models import Candidate, Race
 
 from .enrichment import get_fields_to_update, merge_source_metadata
 
-FIELD_PRIORITY = {
-    'party': ['civic_api', 'fec', 'congress', 'openstates', 'openelections'],
+
+def _contact_office_priority(candidate: Candidate) -> list[str]:
+    """
+    OCPF's address is the candidate's committee/mailing address (accurate for
+    challengers, who have no official office) while openstates/congress carry
+    the actual Capitol office (accurate for sitting officeholders, absent for
+    challengers). Which one is "correct" depends on whether this specific
+    candidate currently holds office, not on which source is generally more
+    authoritative.
+    """
+    if candidate.incumbent:
+        return ['congress', 'openstates', 'ocpf', 'openelections']
+    return ['ocpf', 'congress', 'openstates', 'openelections']
+
+
+FieldPriority = Union[list[str], Callable[[Candidate], list[str]]]
+
+FIELD_PRIORITY: dict[str, FieldPriority] = {
+    'party': ['ocpf', 'civic_api', 'fec', 'congress', 'openstates', 'openelections'],
     'incumbent': ['civic_api', 'congress', 'openstates', 'openelections'],
-    'image_url': ['civic_api', 'openstates', 'openelections'],
+    'image_url': ['civic_api', 'openstates', 'ocpf', 'openelections'],
     'website_url': ['civic_api', 'congress', 'openstates', 'openelections'],
     'description': ['civic_api', 'congress', 'openelections'],
     'contact_phone': ['congress', 'openstates', 'openelections'],
-    'contact_office': ['congress', 'openstates', 'openelections'],
+    'contact_office': _contact_office_priority,
 }
 
 IMMUTABLE_FROM_ENRICHMENT = {'name'}
@@ -23,7 +41,7 @@ CONGRESSIONAL_DISTRICT_RE = re.compile(r'(?:/cd:|district\s+)(\d+)', re.IGNORECA
 
 
 class CandidateMatcher:
-    external_id_fields = ('fec_candidate_id', 'bioguide_id', 'openstates_person_id')
+    external_id_fields = ('fec_candidate_id', 'bioguide_id', 'openstates_person_id', 'ocpf_filer_id')
 
     def enrich(
         self,

@@ -184,9 +184,38 @@ Regex: `election_data\[(\d+)\]\s*=\s*\{Election:\s*(\{[^}]+\})`
 | Endpoint | Purpose |
 |---|---|
 | `GET /filers/listings/C` | All candidate committees (no server-side filter — fetch all, filter client-side) |
-| `GET /filer/{cpfId}` | Full filer detail with structured `officeSought`/`officeHeld` and election tags |
+| `GET /filer/{cpfId}` | Full filer detail with structured `officeSought`/`officeHeld`, address, ballot-status tags, and photo |
+| `GET /reports/legislative/race/depository/{year}` | One row per state-legislative candidate committee for `year`: `cpfId`, `filerName` ("Last, First"), `officeSought` (district string only, no office type), `partyAffiliation`, `isWinner`, and YTD `receiptsYtdNumeric`/`expendituresYtdNumeric`/`currentCashOnHandNumeric` — the discovery/financial-totals call used by `sync_ocpf_ma_candidates` |
 | `GET /municipalities` | All 351 MA towns → incumbent elected officials (`electedFilers[]`) |
 | `GET /filingSchedules/{year}` | Election schedule — primary and general dates |
+
+Full endpoint list (from the spec above, `paths` key): `/chartData/electionChart`, `/chartData/monthly`, `/filer/{cpfId}`, `/filer/payload/{cpfId}`, `/filer/correspondence/all/{cpfId}`, `/filers/listings/{category}`, `/filers/recentlyOrganized/{category}`, `/filers/changesOfPurpose`, `/legal/*`, `/miscreports/*`, `/municipalities`, `/photos`, `/news/recent`, `/events/*`, `/filingDeadlines`, `/newsletters`, `/filingSchedules/{year}`, `/forms/all`, `/reports/log`, `/report/{reportId}`, `/report/pdf/{reportId}`, `/report/diffs/{reportId}`, `/reports/baseReportTypes/{cpfId}`, `/reports/reportList/{cpfId}`, `/reports/filer/list`, `/reports/legislative/race/depository/{year}`, `/reports/mayoral/depository/{year}`, `/reports/cc/ytd/{year}`, `/reports/pacs/{year}`, `/reports/lpc/{year}`, `/search/*`, `/data/ytdTotals`, `/public/search/*`. Only the endpoints in the table above are currently used; the rest weren't needed for candidate enrichment but are there if a future need comes up (e.g. `/report/{reportId}` for individual filing PDFs, `/reports/pacs/{year}` for PAC spending).
+
+#### `/reports/legislative/race/depository/{year}` Response Shape (financial totals)
+
+```json
+{
+  "cpfId": 19580,
+  "filerName": "Tarr, Andrew",
+  "officeSought": "5th Essex",
+  "districtCodeSought": 227,
+  "districtCodeHeld": 227,
+  "receiptsYtdNumeric": 28366.76,
+  "expendituresYtdNumeric": 32967.91,
+  "currentCashOnHandNumeric": 9824.71,
+  "receiptsYtd": "$28,366.76",
+  "expendituresYtd": "$32,967.91",
+  "currentCashOnHand": "$9,824.71",
+  "startBalanceNumeric": 11625.11,
+  "bankReportId": 1030842,
+  "bankReportEndDate": "6/30/2026",
+  "reportYearFirstDayDate": "1/1/2026",
+  "partyAffiliation": "Democratic",
+  "isWinner": false
+}
+```
+
+Note `officeSought` here is just the district string ("5th Essex") — no office-type ("House"/"Senate") indicator, unlike `/filer/{cpfId}`'s structured `officeSought.officeDescription`. `sync_ocpf_ma_candidates` uses this endpoint for discovery + $ totals, then calls `/filer/{cpfId}` per candidate for the office type (needed for chamber-based matching), address, tags, and photo.
 
 #### `/filers/listings/C` Response Shape
 
@@ -1025,9 +1054,20 @@ from results.adapters import ma  # noqa: F401
 4. `test_tasks.py` — test both Celery tasks (fully mocked, no DB)
 5. `test_ma_adapter.py` — test adapter with mocked CSV response
 
-### Phase 4 — OCPF Candidate Enrichment (Optional)
-1. Add `sync_ma_ocpf_candidates` task: fetch `/filers/listings/C` → enrich matching Candidate records
-2. Add `enrich_ma_incumbents` task: fetch `/municipalities` → mark incumbent=True on matching Candidates
+### Phase 4 — OCPF Candidate Enrichment — Built (2026-07-25)
+
+Shipped as `sync_ocpf_ma_candidates` (`integrations/ma_sos/tasks.py`), triggered via `POST /internal/tasks/sync-ocpf-ma/`. Grew out of issue #26 (MA candidate metadata gaps — blank party, no OCD division id, no photo/address) once OpenStates turned out to be a weaker source than OCPF for MA specifically: OpenStates only reliably has data for sitting officeholders and its display name can be a nickname (`"Dru Tarr"` for ballot name `"Andrew Francis Robert Tarr"`), while OCPF's filer registry has every on-ballot candidate — incumbent or challenger — under their exact legal filing name.
+
+**What it does:** fetches `/reports/legislative/race/depository/{year}` (discovery + $ totals, one call), then `/filer/{cpfId}` per candidate (office type, address, ballot tags, photo). Enrichment-only — never creates candidates; `sync_ma_races` (electionstats CSV) remains the source of truth for who's running. Matching reuses `CandidateMatcher`'s existing chamber/district cross-race logic unchanged (OCPF's `officeSought.officeDescription` "House"/"Senate" maps directly onto the same branch already used for other state-legislature sources), plus the surname-only fallback tier (`family_name`) added for this same investigation, since even OCPF's own filer name didn't help with the underlying "Dru" vs "Andrew" mismatch — OCPF's `candidateLastName` did.
+
+**Per-field source priority** (`integrations/orchestrator/candidate_matcher.py FIELD_PRIORITY`):
+- `party`: OCPF ranked first — self-declared at state filing, authoritative, and populated for challengers OpenStates has no record of at all.
+- `image_url`: OCPF appended after openstates — openstates draws from the legislature's own official directory when it has a match (more consistently populated); OCPF's `filerThumbnailPhotoUrl` was empty for 2 of 3 sampled candidates.
+- `contact_office`: **incumbency-conditional**, not a fixed order — `_contact_office_priority(candidate)` returns different priority lists depending on `candidate.incumbent`. OCPF's address is the candidate's committee/mailing address (correct for challengers, who have no official office); openstates/congress carry the real Capitol office (correct for sitting officeholders). This required extending `FIELD_PRIORITY` to accept a callable, not just a static list — see `integrations/orchestrator/enrichment.py::_priorities_for`.
+
+**On-ballot tags:** no dedicated model field exists for this; stored as raw data under `Candidate.source_metadata["ocpf"]["tags"]` / `["on_ballot"]` / `["is_winner"]` (audit trail, queryable) rather than driving `candidate_status` automatically. `receipts_ytd`/`expenditures_ytd`/`cash_on_hand` are stored there too.
+
+**Not implemented:** `incumbent` field itself isn't set from OCPF (`officeHeld.districtCode` non-zero is a plausible incumbency signal, but out of the scope that was actually asked for, and interacts with `FIELD_PRIORITY["incumbent"]` not currently listing `'ocpf'` at all — left for a future pass if wanted). `/municipalities` (this doc's original `enrich_ma_incumbents` idea) was not built — the depository + filer-detail combination turned out to cover everything needed without it.
 
 ---
 
@@ -1055,7 +1095,7 @@ from results.adapters import ma  # noqa: F401
 | Source | Use Case | Method |
 |---|---|---|
 | `electionstats.state.ma.us` | Election discovery, race/candidate data, results | HTML scrape (ID discovery) + CSV download (data) |
-| `api.ocpf.us` | Candidate enrichment, incumbency, election dates | REST API (JSON) |
+| `api.ocpf.us` | Candidate enrichment (legal name, party, address, photo, ballot status, $ totals), election filing dates | REST API (JSON) — see §2.2, Phase 4 |
 | OpenElections MA | Historical backfill 2000–2020 | GitHub raw CSVs |
 | MEDSL Harvard Dataverse | Academic cross-validation 2020–2024 | Dataverse API |
 | Google Civic API | Federal/state races with address lookup | REST API (existing integration) |

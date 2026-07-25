@@ -165,6 +165,66 @@ def test_get_ocpf_schedule_failure_returns_empty(mock_session_cls):
 
 
 # ---------------------------------------------------------------------------
+# get_legislative_depository
+# ---------------------------------------------------------------------------
+
+@patch("integrations.ma_sos.client.requests.Session")
+def test_get_legislative_depository_returns_rows(mock_session_cls):
+    session = MagicMock()
+    mock_session_cls.return_value = session
+    resp = _mock_response()
+    resp.json.return_value = [{"cpfId": 19580, "filerName": "Tarr, Andrew"}]
+    session.get.return_value = resp
+
+    client = MaSosClient()
+    rows = client.get_legislative_depository(2026)
+    assert rows == [{"cpfId": 19580, "filerName": "Tarr, Andrew"}]
+    called_url = session.get.call_args[0][0]
+    assert "reports/legislative/race/depository/2026" in called_url
+
+
+@patch("integrations.ma_sos.client.requests.Session")
+def test_get_legislative_depository_failure_returns_empty(mock_session_cls):
+    session = MagicMock()
+    mock_session_cls.return_value = session
+    session.get.return_value = _mock_response(status_code=503)
+
+    client = MaSosClient(max_retries=0)
+    rows = client.get_legislative_depository(2026)
+    assert rows == []
+
+
+# ---------------------------------------------------------------------------
+# get_filer_detail
+# ---------------------------------------------------------------------------
+
+@patch("integrations.ma_sos.client.requests.Session")
+def test_get_filer_detail_returns_dict(mock_session_cls):
+    session = MagicMock()
+    mock_session_cls.return_value = session
+    resp = _mock_response()
+    resp.json.return_value = {"cpfId": 19580, "fullName": "Andrew F. Tarr"}
+    session.get.return_value = resp
+
+    client = MaSosClient()
+    detail = client.get_filer_detail(19580)
+    assert detail["fullName"] == "Andrew F. Tarr"
+    called_url = session.get.call_args[0][0]
+    assert called_url.endswith("/filer/19580")
+
+
+@patch("integrations.ma_sos.client.requests.Session")
+def test_get_filer_detail_failure_returns_empty_dict(mock_session_cls):
+    session = MagicMock()
+    mock_session_cls.return_value = session
+    session.get.return_value = _mock_response(status_code=503)
+
+    client = MaSosClient(max_retries=0)
+    detail = client.get_filer_detail(19580)
+    assert detail == {}
+
+
+# ---------------------------------------------------------------------------
 # 403 / 400 error handling
 # ---------------------------------------------------------------------------
 
