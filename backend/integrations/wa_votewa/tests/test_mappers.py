@@ -191,6 +191,16 @@ def test_map_candidate_no_party():
     assert result["party"] == ""
 
 
+def test_map_candidate_write_in_null_party_fields():
+    opt = {
+        "nativeId": "wi-002",
+        "isWriteIn": True,
+        "party": {"abbreviation": None, "name": None},
+    }
+    result = map_candidate(opt)
+    assert result["party"] == ""
+
+
 # ---------------------------------------------------------------------------
 # map_measure_option
 # ---------------------------------------------------------------------------

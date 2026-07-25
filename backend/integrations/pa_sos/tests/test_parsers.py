@@ -63,6 +63,34 @@ def test_parse_candidate_list():
     assert "2026C0020" in entry.cf_online_url
 
 
+def test_parse_candidate_list_handles_null_fields():
+    json_str = """[
+      {
+        "CandidateID": 161839,
+        "CandidateIDNum": null,
+        "CandidateName": "DOE, JANE",
+        "PartyName": null,
+        "CandidateStatusValue": "Approved",
+        "CandidateTypeValue": "Petition",
+        "OfficeName": "REPRESENTATIVE IN THE GENERAL ASSEMBLY",
+        "DistrictName": "55th Legislative District",
+        "ElectionName": "2026 Primary Election",
+        "Municipality": null,
+        "CountyName": "YORK",
+        "PrimaryResult": "false",
+        "GeneralResult": "false",
+        "CFOnlineURL": null
+      }
+    ]"""
+    entries = parse_candidate_list(json_str)
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.municipality == ""
+    assert entry.party == ""
+    assert entry.candidate_id_num == ""
+    assert entry.cf_online_url == ""
+
+
 def test_parse_candidate_detail():
     detail = parse_candidate_detail(_MOCK_DETAIL_HTML)
     assert detail.approved_date == "02/10/2026 13:16:00"
