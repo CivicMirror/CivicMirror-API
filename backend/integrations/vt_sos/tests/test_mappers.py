@@ -133,6 +133,7 @@ class TestMapRaceIdentity:
         assert fields["vote_method"] == Race.VoteMethod.SINGLE_CHOICE
         assert fields["max_selections"] == 1
         assert fields["ballot_type"] == "D"
+        assert fields["party"] == "D"
         assert fields["source"] == Race.Source.VT_SOS
 
     def test_maps_multi_seat_contest(self):

@@ -271,6 +271,7 @@ def map_race(election_obj: Election, election_row: dict) -> dict:
         "vote_method": Race.VoteMethod.SINGLE_CHOICE,
         "max_selections": 1,
         "ocd_division_id": "",
+        "party": party_label_from_stage(stage),
         "source_metadata": {
             "electionstats_id": election_id,
             "party": party_label_from_stage(stage),

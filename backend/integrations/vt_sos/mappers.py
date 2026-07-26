@@ -134,6 +134,7 @@ def map_race_identity(
         "vote_method": Race.VoteMethod.MULTI_SEAT if vote_for > 1 else Race.VoteMethod.SINGLE_CHOICE,
         "max_selections": max(1, vote_for),
         "ballot_type": party_code or "",
+        "party": party_code or "",
         "source": Race.Source.VT_SOS,
         "location_name": district_name or "",
         "source_metadata": {

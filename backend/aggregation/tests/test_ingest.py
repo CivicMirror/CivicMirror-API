@@ -136,6 +136,67 @@ def test_ingest_race_contest_variant_keeps_primary_parties_distinct(ca_precedenc
 
 
 @pytest.mark.django_db
+def test_ingest_race_derives_normalized_party_from_party_field(ca_precedence):
+    e, _ = ingest.ingest_election(source="ca_sos", source_id="x", identity=_election_identity(), fields={})
+    r, _ = ingest.ingest_race(
+        election=e, source="vt_sos",
+        identity={"office_title": "Governor", "ocd_division_id": "", "race_type": "candidate"},
+        fields={"office_title": "Governor", "party": "D"},
+    )
+    assert r.party == "D"
+    assert r.normalized_party == "DEM"
+
+
+@pytest.mark.django_db
+def test_ingest_race_without_party_leaves_normalized_party_blank(ca_precedence):
+    e, _ = ingest.ingest_election(source="ca_sos", source_id="x", identity=_election_identity(), fields={})
+    r, _ = ingest.ingest_race(
+        election=e, source="ca_sos",
+        identity={"office_title": "Governor", "ocd_division_id": "", "race_type": "candidate"},
+        fields={"office_title": "Governor"},
+    )
+    assert r.normalized_party == ""
+
+
+@pytest.mark.django_db
+def test_ingest_race_warns_when_primary_sibling_race_has_no_party(ca_precedence, caplog):
+    """A primary race sharing an office with a sibling race but resolving no
+    party means an adapter hasn't been taught to emit the party signal yet —
+    the surfacing mechanism recommended in issue #121."""
+    e, _ = ingest.ingest_election(source="ca_sos", source_id="x", identity=_election_identity(), fields={})
+    ingest.ingest_race(
+        election=e, source="vt_sos",
+        identity={
+            "office_title": "Governor", "ocd_division_id": "",
+            "race_type": "candidate", "contest_variant": "vt:d",
+        },
+        fields={"office_title": "Governor", "party": "D"},
+    )
+    with caplog.at_level("WARNING"):
+        ingest.ingest_race(
+            election=e, source="vt_sos",
+            identity={
+                "office_title": "Governor", "ocd_division_id": "",
+                "race_type": "candidate", "contest_variant": "vt:r",
+            },
+            fields={"office_title": "Governor"},
+        )
+    assert any("primary_missing_party" in record.message for record in caplog.records)
+
+
+@pytest.mark.django_db
+def test_ingest_race_no_warning_for_lone_primary_race(ca_precedence, caplog):
+    e, _ = ingest.ingest_election(source="ca_sos", source_id="x", identity=_election_identity(), fields={})
+    with caplog.at_level("WARNING"):
+        ingest.ingest_race(
+            election=e, source="ca_sos",
+            identity={"office_title": "Governor", "ocd_division_id": "", "race_type": "candidate"},
+            fields={"office_title": "Governor"},
+        )
+    assert not any("primary_missing_party" in record.message for record in caplog.records)
+
+
+@pytest.mark.django_db
 def test_candidate_matching_by_normalized_name_and_party(ca_precedence):
     e, _ = ingest.ingest_election(source="ca_sos", source_id="x", identity=_election_identity(), fields={})
     r, _ = ingest.ingest_race(

@@ -123,6 +123,10 @@ def map_contest_to_race_defaults(election: Election, contest: dict) -> dict:
     vote_method = Race.VoteMethod.YES_NO if race_type == Race.RaceType.MEASURE else Race.VoteMethod.SINGLE_CHOICE
     return {
         "race_type": race_type,
+        # NOTE: civic's `ballot_type` holds contest *type* (e.g. "General"),
+        # never a party — unlike VT/NY/NC, which use ballot_type for party.
+        # civic never emits `party`, so it's excluded from the party-pill
+        # resolution path by construction (see issue #121).
         "ballot_type": contest.get("type", ""),
         "office_title": office_title,
         "jurisdiction": extract_jurisdiction(contest),

@@ -209,6 +209,7 @@ def test_map_race_contest_variant_for_party_primary():
     result = mappers.map_race(mock_election, row)
     assert result["contest_variant"] == "ma:state representative:5th essex:republican"
     assert result["source_metadata"]["party"] == "Republican"
+    assert result["party"] == "Republican"
 
 
 def test_map_race_no_contest_variant_for_general():
@@ -225,6 +226,7 @@ def test_map_race_no_contest_variant_for_general():
     result = mappers.map_race(mock_election, row)
     assert result["contest_variant"] == ""
     assert result["source_metadata"]["party"] == ""
+    assert result["party"] == ""
 
 
 def test_map_race_includes_canonical_key():

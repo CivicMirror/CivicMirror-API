@@ -39,7 +39,9 @@ _US_STATE_CODES = frozenset([
 # Canonical party codes. Keys are normalized (lowercased) source variants.
 _PARTY_CODES = {
     "dem": "DEM", "democratic": "DEM", "democratic party": "DEM", "democrat": "DEM",
+    "d": "DEM",
     "rep": "REP", "republican": "REP", "republican party": "REP", "gop": "REP",
+    "r": "REP",
     "grn": "GRN", "green": "GRN", "green party": "GRN",
     "lib": "LIB", "libertarian": "LIB", "libertarian party": "LIB",
     "pf": "PF", "p&f": "PF", "peace and freedom": "PF", "peace & freedom": "PF",

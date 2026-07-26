@@ -88,6 +88,17 @@ def test_normalize_party_strips_ca_party_preference_prefix():
     assert normalize_party("Party Preference: Whig") == "WHIG"
 
 
+def test_normalize_party_maps_bare_letter_codes():
+    # VT races carry bare "D"/"R" party codes with no letter-code alias
+    # otherwise defined; without this a VT primary renders a gray "D" pill
+    # instead of blue "DEM" (see issue #121).
+    assert normalize_party("D") == "DEM"
+    assert normalize_party("R") == "REP"
+    assert normalize_party("d") == "DEM"
+    # Bare letters not in the alias table pass through unchanged.
+    assert normalize_party("PR") == "PR"
+
+
 def test_normalize_party_aligns_civic_and_ca_sos_vocab():
     # No-party-preference: civic "NPP" vs CA "Party Preference: None".
     assert normalize_party("NPP") == normalize_party("Party Preference: None") == "NP"

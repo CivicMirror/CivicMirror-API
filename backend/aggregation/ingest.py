@@ -23,6 +23,12 @@ from .precedence import field_group_for, resolve_rank
 
 logger = logging.getLogger(__name__)
 
+# Election types where sibling races sharing an office are expected to be
+# split by party (see issue #121); a race in one of these with no resolvable
+# party, while a sibling race for the same office exists, means an adapter
+# still hasn't been taught to emit a party signal.
+_PARTY_SPLIT_ELECTION_TYPES = {"primary", "primary_runoff", "party"}
+
 
 def _apply_fields(instance, state, source, fields):
     """Write each field if `source` out-ranks the current owner. Returns changed field names."""
@@ -143,8 +149,23 @@ def ingest_race(*, election, source, identity, fields):
         race.contributing_sources,
         key=lambda s: resolve_rank(state, "identity", s),
     )
+    # Derived from the precedence-winning `party`, same as Candidate.normalized_party.
+    race.normalized_party = normalize_party(race.party)
     race.last_synced_at = timezone.now()
     race.save()
+
+    if (
+        not race.normalized_party
+        and election.election_type in _PARTY_SPLIT_ELECTION_TYPES
+        and Race.objects.filter(
+            election=race.election_id, normalized_office_title=race.normalized_office_title,
+        ).exclude(pk=race.pk).exists()
+    ):
+        logger.warning(
+            "aggregation.ingest_race.primary_missing_party election=%s race=%s office=%r source=%s",
+            race.election_id, race.pk, race.office_title, source,
+        )
+
     return race, created
 
 
