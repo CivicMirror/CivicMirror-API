@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 import datetime
+from contextlib import contextmanager
 from dataclasses import dataclass
 from urllib.parse import urljoin
 
-import requests
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
+from playwright_stealth import Stealth
 
 _NY_BOE_BASE = "https://elections.ny.gov"
+_TIMEOUT_MS = 30000
+# elections.ny.gov 403s plain `requests` (basic bot/UA fingerprinting, not a
+# Cloudflare Managed Challenge) but serves a real stealth-Chromium session
+# immediately — same pattern already proven for flateau.elections.ny.gov in
+# results/adapters/ny.py, no need for the heavier core/cf_solver.py service.
+_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
 
 
 @dataclass
@@ -20,13 +31,32 @@ class CertificationDocument:
     pdf_url: str
 
 
+@contextmanager
+def _browser_page(*, accept_downloads: bool = False):
+    with Stealth().use_sync(sync_playwright()) as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+        )
+        try:
+            context = browser.new_context(user_agent=_USER_AGENT, accept_downloads=accept_downloads)
+            yield context.new_page()
+        finally:
+            browser.close()
+
+
 class NyBoeClient:
     landing_url = _NY_BOE_BASE
 
     def get_current_certification_documents(self) -> list[dict]:
-        response = requests.get(self.landing_url, timeout=30)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
+        with _browser_page() as page:
+            response = page.goto(self.landing_url, timeout=_TIMEOUT_MS)
+            if response is None or not response.ok:
+                status = response.status if response else "no response"
+                raise RuntimeError(f"NY BOE landing page fetch failed: {status}")
+            html = page.content()
+
+        soup = BeautifulSoup(html, "html.parser")
         docs = []
         for link in soup.find_all("a"):
             title = " ".join(link.get_text(" ").split())
@@ -51,9 +81,23 @@ class NyBoeClient:
         return [doc for doc in docs if doc["election_date"] is not None]
 
     def fetch_certification_pdf(self, url: str) -> bytes:
-        response = requests.get(url, timeout=60)
-        response.raise_for_status()
-        content = response.content
+        # elections.ny.gov's WAF treats an in-page fetch (page.request.get, no
+        # Sec-Fetch-Mode: navigate / Referer) as a bot signal and 403s it, even
+        # though a real top-level navigation to the same URL is let through as
+        # a normal PDF download. Navigating to a PDF URL makes Chromium start a
+        # download rather than render a page, so Playwright's goto() always
+        # raises "Download is starting" here — that's expected, not a failure;
+        # the actual bytes come from the intercepted Download object.
+        with _browser_page(accept_downloads=True) as page:
+            with page.expect_download(timeout=_TIMEOUT_MS) as download_info:
+                try:
+                    page.goto(url, timeout=_TIMEOUT_MS)
+                except Exception:
+                    pass
+            download_path = download_info.value.path()
+            if download_path is None:
+                raise RuntimeError(f"NY BOE PDF download failed for {url}")
+            content = download_path.read_bytes()
         if not content.startswith(b"%PDF"):
             raise ValueError("NY BOE certification response was not a PDF")
         return content
