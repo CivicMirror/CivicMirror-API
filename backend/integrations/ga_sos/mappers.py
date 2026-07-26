@@ -5,6 +5,7 @@ from datetime import date
 
 from django.utils import timezone
 
+from aggregation.identity import normalize_party
 from elections.models import Candidate, Election, Race
 
 STATE = "GA"
@@ -19,6 +20,29 @@ _PARTY_SUFFIX = {
     "REP": "rep",
     "R": "rep",
 }
+
+# Strict trailing-token match only — GA primary office titles carry a lot of
+# non-party trailing tokens (judge surnames, circuit names: "SMITH", "GREEN",
+# "ALCOVY", ...), so this must never generalize to a bare "- <token>" pattern
+# (see issue #121 investigation comment for the false-positive census).
+_TITLE_PARTY_SUFFIX_RE = re.compile(r"-\s*(DEM|REP|D|R)\s*$", re.IGNORECASE)
+_TITLE_SUFFIX_CODE = {"DEM": "DEM", "D": "DEM", "REP": "REP", "R": "REP"}
+
+
+def _party_from_title_suffix(title: str) -> str:
+    match = _TITLE_PARTY_SUFFIX_RE.search((title or "").strip())
+    if not match:
+        return ""
+    return _TITLE_SUFFIX_CODE[match.group(1).upper()]
+
+
+def resolve_race_party(party_name: str, office_title: str) -> str:
+    """partyName is corroboration-only for GA (populated on <20% of primary
+    splits in production); the office-title suffix is the load-bearing party
+    signal. Prefer partyName when present, fall back to the strict suffix."""
+    if party_name:
+        return normalize_party(party_name)
+    return _party_from_title_suffix(office_title)
 
 
 def _get_text(names, lang: str = "en") -> str:
@@ -174,6 +198,7 @@ def map_race(election_obj, ballot_item: dict) -> dict:
         "vote_method": Race.VoteMethod.YES_NO if race_type == Race.RaceType.MEASURE else Race.VoteMethod.SINGLE_CHOICE,
         "max_selections": _vote_for_count(ballot_item),
         "ocd_division_id": "",
+        "party": resolve_race_party(party_name, office_title),
         "source_metadata": source_meta,
     }
 

@@ -60,6 +60,7 @@ class RaceListSerializer(serializers.ModelSerializer):
             'id', 'election', 'race_type', 'office_title', 'jurisdiction',
             'geography_scope', 'certification_status', 'race_status',
             'vote_method', 'ocd_division_id', 'source', 'last_synced_at',
+            'party', 'normalized_party',
         ]
 
 
@@ -74,6 +75,7 @@ class RaceDetailSerializer(serializers.ModelSerializer):
             'id', 'election', 'race_type', 'office_title', 'jurisdiction',
             'geography_scope', 'certification_status', 'race_status',
             'vote_method', 'max_selections', 'ballot_type',
+            'party', 'normalized_party',
             'ocd_division_id', 'normalized_office_title',
             'yes_vote_details', 'no_vote_details', 'match_confidence',
             'source', 'last_synced_at', 'candidates', 'measure_options',

@@ -159,6 +159,8 @@ class Race(models.Model):
     normalized_office_title = models.CharField(max_length=255, blank=True)
     canonical_key = models.CharField(max_length=512, unique=True, null=True, blank=True)
     ballot_type = models.CharField(max_length=100, blank=True)
+    party = models.CharField(max_length=100, blank=True)
+    normalized_party = models.CharField(max_length=40, blank=True)
     yes_vote_details = models.TextField(blank=True)
     no_vote_details = models.TextField(blank=True)
     supporting_links = models.JSONField(default=list, blank=True)

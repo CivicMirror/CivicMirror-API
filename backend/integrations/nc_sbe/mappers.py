@@ -150,6 +150,7 @@ def map_race_identity(
         "vote_method": Race.VoteMethod.MULTI_SEAT if vote_for > 1 else Race.VoteMethod.SINGLE_CHOICE,
         "max_selections": vote_for,
         "ballot_type": (party_contest or "").strip(),
+        "party": (party_contest or "").strip(),
         "source": Race.Source.NC_SBE,
         "source_metadata": {
             "provider": "nc_sbe",

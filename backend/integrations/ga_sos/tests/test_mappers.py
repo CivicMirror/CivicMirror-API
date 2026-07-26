@@ -10,6 +10,7 @@ from integrations.ga_sos.mappers import (
     map_measure_option,
     map_race,
     normalize_office_title,
+    resolve_race_party,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -79,6 +80,7 @@ def test_map_race_uses_ga_source_and_ballot_item_id():
     assert mapped["source_metadata"]["party_name"] == "REP"
     assert mapped["source_metadata"]["reporting_units"] == 159
     assert mapped["source_metadata"]["total_units"] == 159
+    assert mapped["party"] == "REP"
 
 
 def test_map_race_identifies_district_scope():
@@ -119,6 +121,24 @@ def test_map_candidate_reads_party_from_media_export_shape():
     assert mapped["party"] == "REP"
     assert mapped["source_metadata"]["party_abbreviation"] == "REP"
     assert mapped["source_metadata"]["ga_native_id"] == option.get("id")
+
+
+def test_resolve_race_party_prefers_party_name_over_title_suffix():
+    assert resolve_race_party("REP", "US Senate - Dem") == "REP"
+    assert resolve_race_party("Democratic Party", "US Senate") == "DEM"
+
+
+def test_resolve_race_party_falls_back_to_strict_title_suffix():
+    assert resolve_race_party("", "US Senate - Rep") == "REP"
+    assert resolve_race_party("", "Secretary of State - Dem") == "DEM"
+
+
+def test_resolve_race_party_does_not_misread_trailing_surnames():
+    # Judge/circuit surnames on primary ballots must never be misread as a
+    # party — see issue #121's false-positive census (SMITH, GREEN, etc.).
+    assert resolve_race_party("", "Court of Appeals - Smith") == ""
+    assert resolve_race_party("", "Superior Court - Green") == ""
+    assert resolve_race_party("", "Special State Senate - District 7") == ""
 
 
 def test_map_measure_option_preserves_label():

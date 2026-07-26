@@ -1,6 +1,6 @@
 import pytest
 
-from api.serializers import ElectionSerializer, RaceDetailSerializer
+from api.serializers import ElectionSerializer, RaceDetailSerializer, RaceListSerializer
 from elections.models import Candidate, Election, MeasureOption, Race
 
 
@@ -56,6 +56,41 @@ def test_race_detail_serializer_includes_candidates():
     assert len(data['candidates']) == 2
     names = {c['name'] for c in data['candidates']}
     assert names == {'Alice', 'Bob'}
+
+
+@pytest.mark.django_db
+def test_race_list_and_detail_serializers_expose_party_fields():
+    """Split partisan primaries (e.g. MA 5th Essex, issue #121) need `party`
+    and `normalized_party` on both the list and detail shapes, or the
+    frontend's PartyPill works on detail pages but vanishes from list cards."""
+    election = Election.objects.create(
+        source_id='99003',
+        name='Test Primary',
+        election_date='2026-09-01',
+        election_type=Election.ElectionType.PRIMARY,
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state='MA',
+    )
+    race = Race.objects.create(
+        election=election,
+        race_type=Race.RaceType.CANDIDATE,
+        office_title='State Representative',
+        jurisdiction='Massachusetts',
+        geography_scope='district',
+        source=Race.Source.MA_SOS,
+        race_status=Race.RaceStatus.ACTIVE,
+        canonical_key='ma:99003:state representative:ocd:candidate:5th essex',
+        party='Republican',
+        normalized_party='REP',
+    )
+
+    list_data = RaceListSerializer(race).data
+    detail_data = RaceDetailSerializer(race).data
+
+    assert list_data['party'] == 'Republican'
+    assert list_data['normalized_party'] == 'REP'
+    assert detail_data['party'] == 'Republican'
+    assert detail_data['normalized_party'] == 'REP'
 
 
 @pytest.mark.django_db

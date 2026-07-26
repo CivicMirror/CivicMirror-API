@@ -116,6 +116,8 @@ def test_map_race_identity_returns_identity_and_fields():
     assert fields["geography_scope"] == "district"
     assert fields["max_selections"] == 1
     assert fields["source_metadata"]["party_contest"] == "REP"
+    assert fields["party"] == "REP"
+    assert fields["ballot_type"] == "REP"
 
 
 def test_map_race_identity_multi_seat_vote_for():

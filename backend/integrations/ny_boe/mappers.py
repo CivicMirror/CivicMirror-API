@@ -94,6 +94,7 @@ def map_contest_to_race(contest: dict, election: Election, existing_metadata: di
         "vote_method": Race.VoteMethod.MULTI_SEAT if vote_for > 1 else Race.VoteMethod.SINGLE_CHOICE,
         "max_selections": vote_for,
         "ballot_type": (contest.get("party") or "").strip(),
+        "party": (contest.get("party") or "").strip(),
         "source": Race.Source.NY_BOE,
         "source_metadata": metadata,
     }

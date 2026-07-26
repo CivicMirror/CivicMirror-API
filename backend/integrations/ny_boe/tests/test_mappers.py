@@ -61,6 +61,8 @@ def test_map_contest_to_race_preserves_existing_metadata_keys():
     assert fields["source_metadata"]["curated"] == "keep-me"
     assert fields["source_metadata"]["contest_code"] == "representative in congress|19|"
     assert fields["source_metadata"]["party_code"] == "DEM"
+    assert fields["party"] == "Democratic"
+    assert fields["ballot_type"] == "Democratic"
 
 
 def test_map_candidate_preserves_existing_metadata_keys():
