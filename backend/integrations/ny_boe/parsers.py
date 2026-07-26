@@ -142,7 +142,19 @@ def parse_certification_pdf(pdf_bytes: bytes) -> dict:
                     current[key] = value
                     last_label_key = key
                     continue
-                if "Candidate Name" in text and "Ballot Order" in text:
+                # Single-name-column offices render "Ballot Order" and "Candidate
+                # Name" as one clustered row; two-column joint-ticket offices
+                # (e.g. Governor and Lt. Governor) render them as two separate
+                # rows a few points apart — within BAND but outside ROW_TOL, so
+                # they never cluster together. Checking each phrase
+                # independently (instead of requiring both in one row) handles
+                # both layouts without falling through to the continuation
+                # branch below, which would otherwise swallow the header text
+                # and every following candidate row into e.g. `vote_for`.
+                if "Ballot Order" in text:
+                    last_label_key = None
+                    continue
+                if "Candidate Name" in text:
                     name_cols = [word["x0"] for word in row["words"] if word["text"] == "Candidate"]
                     last_label_key = None
                     continue
