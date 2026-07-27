@@ -61,6 +61,7 @@ def test_sync_openstates_legislators_retries_unchanged_but_unlinked_records():
     ):
         mock_client_cls.return_value.list_people_all_pages.return_value = [raw_person]
         mock_store_cls.return_value.upsert.return_value = (Mock(linked_candidate_id=None), False)
+        mock_matcher_cls.return_value.find_races_for_legislator.return_value = []
         mock_matcher_cls.return_value.enrich_or_create.return_value = (None, 'no_match')
 
         sync_openstates_legislators('CA')
@@ -127,6 +128,80 @@ def test_sync_openstates_legislators_updates_matching_candidate(mock_client_cls)
     assert source_record.linked_candidate_id == candidate.pk
     assert sync_log.records_updated == 1
     assert sync_log.records_skipped == 0
+
+
+@pytest.mark.django_db
+@patch('integrations.openstates.tasks.OpenStatesClient')
+def test_sync_openstates_legislators_enriches_both_primary_and_general_rows(mock_client_cls):
+    """
+    Regression for issue #26: MA (and any state that splits a partisan
+    primary into its own Race — see ma_sos mappers.contest_variant_key)
+    gives the same real candidate two Candidate rows for the same
+    office+district — a primary Race and a general Race. Cross-race
+    matching by state+chamber+name alone can't tell those rows apart and
+    used to always report "ambiguous", so a genuinely resolvable OpenStates
+    match never enriched anyone and Race.ocd_division_id never backfilled.
+    Resolving races explicitly by state+chamber+district first (this task's
+    fix) lets both rows get enriched independently.
+    """
+    primary_election = Election.objects.create(
+        name='MA Primary', election_date=date(2026, 9, 1),
+        jurisdiction_level=Election.JurisdictionLevel.STATE, state='MA',
+        source_id='ma-2026-primary', status=Election.Status.UPCOMING,
+    )
+    general_election = Election.objects.create(
+        name='MA General', election_date=date(2026, 11, 3),
+        jurisdiction_level=Election.JurisdictionLevel.STATE, state='MA',
+        source_id='ma-2026-general', status=Election.Status.UPCOMING,
+    )
+    primary_race = Race.objects.create(
+        election=primary_election, race_type=Race.RaceType.CANDIDATE,
+        office_title='State Representative', jurisdiction='5th Essex',
+        geography_scope='district', source=Race.Source.MA_SOS,
+        vote_method=Race.VoteMethod.SINGLE_CHOICE,
+        canonical_key='ma-house-5th-essex-primary',
+        normalized_office_title='state representative',
+    )
+    general_race = Race.objects.create(
+        election=general_election, race_type=Race.RaceType.CANDIDATE,
+        office_title='State Representative', jurisdiction='5th Essex',
+        geography_scope='district', source=Race.Source.MA_SOS,
+        vote_method=Race.VoteMethod.SINGLE_CHOICE,
+        canonical_key='ma-house-5th-essex-general',
+        normalized_office_title='state representative',
+    )
+    primary_candidate = Candidate.objects.create(race=primary_race, name='Andrew Francis Robert Tarr')
+    general_candidate = Candidate.objects.create(race=general_race, name='Andrew Francis Robert Tarr')
+
+    mock_client_cls.return_value.list_people_all_pages.return_value = [
+        {
+            'id': 'ocd-person/tarr',
+            'name': 'Dru Tarr',
+            'family_name': 'Tarr',
+            'party': [{'name': 'Democratic', 'end_date': ''}],
+            'jurisdiction': {'id': 'ocd-jurisdiction/country:us/state:ma/government', 'name': 'Massachusetts'},
+            'current_role': {
+                'title': 'Representative',
+                'org_classification': 'lower',
+                'district': '5th Essex',
+                'division_id': 'ocd-division/country:us/state:ma/sldl:5th_essex',
+            },
+            'other_names': [{'name': 'A.F.R. Tarr'}],
+        }
+    ]
+
+    result = sync_openstates_legislators('MA')
+
+    primary_candidate.refresh_from_db()
+    general_candidate.refresh_from_db()
+    primary_race.refresh_from_db()
+    general_race.refresh_from_db()
+
+    assert result['updated'] == 2
+    assert primary_candidate.party == 'Democratic'
+    assert general_candidate.party == 'Democratic'
+    assert primary_race.ocd_division_id == 'ocd-division/country:us/state:ma/sldl:5th_essex'
+    assert general_race.ocd_division_id == 'ocd-division/country:us/state:ma/sldl:5th_essex'
 
 
 @pytest.mark.django_db

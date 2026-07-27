@@ -64,41 +64,101 @@ def sync_openstates_legislators(self, state: str):
                 skipped_count += 1
                 continue
 
-            mapped = map_person(raw_person)
+            mapped = map_person(raw_person, state=state)
             enrichment_payload = dict(mapped)
             enrichment_payload['name'] = mapped.get('display_name', '')
 
-            try:
-                candidate, action = matcher.enrich_or_create(
-                    race=None,
-                    source='openstates',
-                    external_id=person_id,
-                    enrichment_payload=enrichment_payload,
-                )
-            except AmbiguousMatchError as exc:
-                warning_count += 1
-                last_warning = str(exc)
-                skipped_count += 1
-                continue
+            # Resolve races explicitly (state+chamber+district) and enrich
+            # each individually, rather than matching cross-race by
+            # state+chamber alone: a candidate on both a primary Race and a
+            # general Race for the same seat (see ma_sos
+            # mappers.contest_variant_key) would otherwise always collide as
+            # "ambiguous" under name/last-name cross-race matching, since
+            # both rows share the same name, state, chamber, and district.
+            # Enriching within each resolved race individually — same
+            # pattern as ma_sos.tasks.sync_ocpf_ma_candidates — lets every
+            # row get updated. Falls back to enrich_or_create's cross-race
+            # matching (and its single-race create path) when no races
+            # resolve this way, e.g. executive offices or states/offices
+            # find_races_for_legislator doesn't cover.
+            races = matcher.find_races_for_legislator(
+                enrichment_payload.get('state', ''),
+                enrichment_payload.get('chamber', ''),
+                enrichment_payload.get('district', ''),
+            )
 
-            if action == 'enriched':
-                updated_count += 1
-            elif action == 'created':
-                created_count += 1
+            linked_candidate = None
+            if races:
+                matched_any = False
+                for race in races:
+                    try:
+                        candidate, action = matcher.enrich(
+                            race=race, source='openstates',
+                            external_id=person_id, enrichment_payload=enrichment_payload,
+                        )
+                    except AmbiguousMatchError as exc:
+                        warning_count += 1
+                        last_warning = str(exc)
+                        continue
+
+                    if action == 'enriched':
+                        matched_any = True
+                        updated_count += 1
+                        linked_candidate = candidate
+                    elif action == 'skipped':
+                        matched_any = True
+                        linked_candidate = candidate
+                    elif action == 'ambiguous':
+                        warning_count += 1
+                        last_warning = f'Ambiguous candidate match for openstates:{person_id} in race={race.pk}'
+
+                    if action in ('enriched', 'skipped') and candidate is not None:
+                        sources = list(candidate.contributing_sources or [])
+                        if 'openstates' not in sources:
+                            sources.append('openstates')
+                            candidate.contributing_sources = sources
+                            candidate.save(update_fields=['contributing_sources'])
+
+                if not matched_any:
+                    skipped_count += 1
             else:
-                skipped_count += 1
-                if action == 'ambiguous':
+                try:
+                    candidate, action = matcher.enrich_or_create(
+                        race=None,
+                        source='openstates',
+                        external_id=person_id,
+                        enrichment_payload=enrichment_payload,
+                    )
+                except AmbiguousMatchError as exc:
                     warning_count += 1
-                    last_warning = f'Ambiguous candidate match for openstates:{person_id}'
-                candidate = None
+                    last_warning = str(exc)
+                    skipped_count += 1
+                    continue
 
-            if action in ('enriched', 'created') and candidate is not None:
-                sources = list(candidate.contributing_sources or [])
-                if 'openstates' not in sources:
-                    sources.append('openstates')
-                    candidate.contributing_sources = sources
-                    candidate.save(update_fields=['contributing_sources'])
-                _save_source_links(source_record, candidate=candidate)
+                if action == 'enriched':
+                    updated_count += 1
+                    linked_candidate = candidate
+                elif action == 'created':
+                    created_count += 1
+                    linked_candidate = candidate
+                elif action == 'skipped':
+                    skipped_count += 1
+                    linked_candidate = candidate
+                else:
+                    skipped_count += 1
+                    if action == 'ambiguous':
+                        warning_count += 1
+                        last_warning = f'Ambiguous candidate match for openstates:{person_id}'
+
+                if action in ('enriched', 'created', 'skipped') and candidate is not None:
+                    sources = list(candidate.contributing_sources or [])
+                    if 'openstates' not in sources:
+                        sources.append('openstates')
+                        candidate.contributing_sources = sources
+                        candidate.save(update_fields=['contributing_sources'])
+
+            if linked_candidate is not None:
+                _save_source_links(source_record, candidate=linked_candidate)
 
         sync_log.records_updated = updated_count
         sync_log.records_skipped = skipped_count
