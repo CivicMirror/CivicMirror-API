@@ -20,6 +20,7 @@ import hashlib
 import logging
 
 from celery import shared_task
+from celery.exceptions import Retry
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -195,7 +196,27 @@ def sync_pa_elections(self):
         }
 
     except PaSosRetryableError as exc:
-        raise self.retry(exc=exc)
+        try:
+            raise self.retry(exc=exc)
+        except Retry:
+            # A further retry was scheduled — leave sync_log as STARTED,
+            # the eventual attempt (success, failure, or final exhaustion
+            # below) will give it a terminal state.
+            raise
+        except PaSosRetryableError:
+            # self.retry() re-raises the original exc as-is once max_retries
+            # is exhausted, instead of raising Retry — that's the signal this
+            # was the last attempt. Without this branch, the exception would
+            # propagate past the `except Exception` below (only one except
+            # clause runs per try), leaving sync_log stuck in STARTED forever
+            # (see #59).
+            logger.exception("pa_sos.sync_elections.failed (retries exhausted)")
+            sync_log.error_count = 1
+            sync_log.last_error = str(exc)
+            sync_log.status = SyncLog.Status.FAILED
+            sync_log.completed_at = timezone.now()
+            sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+            raise
     except Exception as exc:
         logger.exception("pa_sos.sync_elections.failed")
         sync_log.error_count = 1
