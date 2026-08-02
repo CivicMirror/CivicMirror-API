@@ -80,7 +80,14 @@ def sync_pa_elections(self):
         total_created = 0
         total_races = 0
 
-        # We'll fetch candidate lists for both Primary and General elections
+        # Fetch candidate lists for both Primary and General elections first,
+        # entirely within the Playwright session, and defer all Django ORM
+        # writes until after that session has fully closed. Playwright's sync
+        # API keeps its background dispatch thread's event loop "running" for
+        # the life of the `with PaSosClient()` block; any sync DB call made
+        # while that block is still open trips Django's async_unsafe guard
+        # (SynchronousOnlyOperation). See #129.
+        to_ingest: list[tuple[str, Election, str, str, list]] = []
         with PaSosClient() as client:
             for spec in PA_ELECTIONS:
                 etype = spec["election_type"]
@@ -101,76 +108,80 @@ def sync_pa_elections(self):
                 entries = parse_candidate_list(json_str)
                 logger.info("pa_sos.sync_elections.parsed etype=%s entries=%d", etype, len(entries))
 
-                seen_candidate_pks: set[int] = set()
+                to_ingest.append((etype, election, fingerprint, cache_key, entries))
 
-                for entry in entries:
-                    canonical_office = normalize_contest_name(entry.office, entry.district)
+        # Playwright's context is fully closed now — safe to make sync ORM calls.
+        for etype, election, fingerprint, cache_key, entries in to_ingest:
+            seen_candidate_pks: set[int] = set()
 
-                    race, race_created = ingest.ingest_race(
-                        election=election,
-                        source="pa_sos",
-                        identity={
-                            "office_title": canonical_office,
-                            "ocd_division_id": "",
-                            "race_type": "candidate",
-                        },
-                        fields={
-                            "office_title": canonical_office,
-                            "jurisdiction": "Pennsylvania",
-                            "geography_scope": geography_scope(canonical_office),
-                            "source_metadata": {"pa_office_raw": entry.office, "pa_district_raw": entry.district},
-                        },
-                    )
-                    if race_created:
-                        total_races += 1
+            for entry in entries:
+                canonical_office = normalize_contest_name(entry.office, entry.district)
 
-                    # Look up existing candidate by stable pa_candidate_id
-                    existing = Candidate.objects.filter(
-                        race=race,
-                        source_metadata__pa_candidate_id=entry.candidate_id,
-                    ).first()
-
-                    if existing:
-                        seen_candidate_pks.add(existing.pk)
-                    else:
-                        cand, _ = ingest.ingest_candidate(
-                            race=race,
-                            source="pa_sos",
-                            name=entry.name,
-                            party=party_abbrev(entry.party),
-                            fields={
-                                "source_metadata": {
-                                    "pa_candidate_id": entry.candidate_id,
-                                    "pa_candidate_id_num": entry.candidate_id_num,
-                                    "pa_party_raw": entry.party,
-                                    "pa_candidate_type_raw": entry.type_val,
-                                    "pa_cf_online_url": entry.cf_online_url,
-                                },
-                            },
-                        )
-                        seen_candidate_pks.add(cand.pk)
-                        total_created += 1
-
-                # Mark absent candidates as withdrawn
-                withdrawn = (
-                    Candidate.objects
-                    .filter(
-                        race__election=election,
-                        source_metadata__has_key="pa_candidate_id",
-                        candidate_status=Candidate.CandidateStatus.RUNNING,
-                    )
-                    .exclude(pk__in=seen_candidate_pks)
-                    .update(candidate_status=Candidate.CandidateStatus.WITHDRAWN)
+                race, race_created = ingest.ingest_race(
+                    election=election,
+                    source="pa_sos",
+                    identity={
+                        "office_title": canonical_office,
+                        "ocd_division_id": "",
+                        "race_type": "candidate",
+                    },
+                    fields={
+                        "office_title": canonical_office,
+                        "jurisdiction": "Pennsylvania",
+                        "geography_scope": geography_scope(canonical_office),
+                        "source_metadata": {"pa_office_raw": entry.office, "pa_district_raw": entry.district},
+                    },
                 )
-                if withdrawn:
-                    logger.info("pa_sos.sync_elections.withdrawn count=%d etype=%s", withdrawn, etype)
+                if race_created:
+                    total_races += 1
 
-                cache.set(cache_key, fingerprint, _FINGERPRINT_CACHE_TTL)
-                election.last_synced_at = timezone.now()
-                election.save(update_fields=["last_synced_at"])
+                # Look up existing candidate by stable pa_candidate_id
+                existing = Candidate.objects.filter(
+                    race=race,
+                    source_metadata__pa_candidate_id=entry.candidate_id,
+                ).first()
 
-                # Enqueue details sweep for this election
-                sync_pa_candidate_details.delay(election.pk)
+                if existing:
+                    seen_candidate_pks.add(existing.pk)
+                else:
+                    cand, _ = ingest.ingest_candidate(
+                        race=race,
+                        source="pa_sos",
+                        name=entry.name,
+                        party=party_abbrev(entry.party),
+                        fields={
+                            "source_metadata": {
+                                "pa_candidate_id": entry.candidate_id,
+                                "pa_candidate_id_num": entry.candidate_id_num,
+                                "pa_party_raw": entry.party,
+                                "pa_candidate_type_raw": entry.type_val,
+                                "pa_cf_online_url": entry.cf_online_url,
+                            },
+                        },
+                    )
+                    seen_candidate_pks.add(cand.pk)
+                    total_created += 1
+
+            # Mark absent candidates as withdrawn
+            withdrawn = (
+                Candidate.objects
+                .filter(
+                    race__election=election,
+                    source_metadata__has_key="pa_candidate_id",
+                    candidate_status=Candidate.CandidateStatus.RUNNING,
+                )
+                .exclude(pk__in=seen_candidate_pks)
+                .update(candidate_status=Candidate.CandidateStatus.WITHDRAWN)
+            )
+            if withdrawn:
+                logger.info("pa_sos.sync_elections.withdrawn count=%d etype=%s", withdrawn, etype)
+
+            cache.set(cache_key, fingerprint, _FINGERPRINT_CACHE_TTL)
+            election.last_synced_at = timezone.now()
+            election.save(update_fields=["last_synced_at"])
+
+            # Enqueue details sweep for this election
+            sync_pa_candidate_details.delay(election.pk)
 
         sync_log.records_created = total_created
         sync_log.notes = f"races_created={total_races}"
