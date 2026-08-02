@@ -304,6 +304,77 @@ def test_enrich_matches_last_name_cross_race_from_payload_for_state_legislature(
 
 
 @pytest.mark.django_db
+def test_enrich_disambiguates_last_name_cross_race_by_district_when_split_across_primary_and_general():
+    """
+    Regression for issue #26: a real MA legislator running unopposed in the
+    primary and general has two separate Candidate rows for the same
+    office+chamber (see ma_sos mappers.contest_variant_key) — chamber-only
+    matching can't tell those Races apart and used to always return
+    ambiguous, which meant a genuinely resolvable OpenStates match (payload
+    carries a named district, "5th Essex") never enriched anyone and
+    Race.ocd_division_id was never backfilled.
+    """
+    primary_election = Election.objects.create(
+        name='MA Primary', election_date=date(2026, 9, 1),
+        jurisdiction_level=Election.JurisdictionLevel.STATE, state='MA',
+        source_id='ma-2026-primary', status=Election.Status.UPCOMING,
+    )
+    general_election = Election.objects.create(
+        name='MA General', election_date=date(2026, 11, 3),
+        jurisdiction_level=Election.JurisdictionLevel.STATE, state='MA',
+        source_id='ma-2026-general', status=Election.Status.UPCOMING,
+    )
+    primary_race = Race.objects.create(
+        election=primary_election, race_type=Race.RaceType.CANDIDATE,
+        office_title='State Representative', jurisdiction='5th Essex',
+        geography_scope='district', source=Race.Source.MA_SOS,
+        vote_method=Race.VoteMethod.SINGLE_CHOICE,
+        canonical_key='ma-house-5th-essex-primary',
+        normalized_office_title='state representative',
+    )
+    general_race = Race.objects.create(
+        election=general_election, race_type=Race.RaceType.CANDIDATE,
+        office_title='State Representative', jurisdiction='5th Essex',
+        geography_scope='district', source=Race.Source.MA_SOS,
+        vote_method=Race.VoteMethod.SINGLE_CHOICE,
+        canonical_key='ma-house-5th-essex-general',
+        normalized_office_title='state representative',
+    )
+    primary_candidate = Candidate.objects.create(race=primary_race, name='Andrew Francis Robert Tarr')
+    general_candidate = Candidate.objects.create(race=general_race, name='Andrew Francis Robert Tarr')
+    matcher = CandidateMatcher()
+
+    payload = {
+        'openstates_person_id': 'os-1',
+        'name': 'Dru Tarr',
+        'other_names': ['A.F.R. Tarr'],
+        'family_name': 'Tarr',
+        'state': 'MA',
+        'chamber': 'lower',
+        'district': '5th Essex',
+    }
+    _primary_matched, primary_action = matcher.enrich(None, 'openstates', 'os-1', {**payload})
+    _general_matched, general_action = matcher.enrich(None, 'openstates', 'os-1', {**payload})
+
+    # Both rows are eligible matches (same district, same name) — since
+    # neither is externally linked yet, this stays ambiguous, but it must be
+    # a *real* ambiguity (two candidates), not the old bug where every
+    # cross-district race in the state matched.
+    assert primary_action == 'ambiguous'
+    assert general_action == 'ambiguous'
+
+    # Once one row already carries the external id (as happens after a
+    # first successful disambiguated match elsewhere), re-enriching resolves
+    # to that specific row instead of colliding with its sibling.
+    primary_candidate.openstates_person_id = 'os-1'
+    primary_candidate.save(update_fields=['openstates_person_id'])
+    matched, action = matcher.enrich(None, 'openstates', 'os-1', {**payload})
+    assert matched == primary_candidate
+    assert action in {'enriched', 'skipped'}
+    assert general_candidate.race.ocd_division_id == ''
+
+
+@pytest.mark.django_db
 def test_enrich_backfills_blank_race_ocd_division_id(base_race):
     assert base_race.ocd_division_id == ''
     Candidate.objects.create(race=base_race, name='Alex Smith')

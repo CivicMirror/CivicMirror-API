@@ -6,7 +6,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from celery.exceptions import Retry
 
+from integrations.pa_sos.exceptions import PaSosRetryableError
 from integrations.pa_sos.parsers import PaCandidateDetailData, PaCandidateListEntry
 
 
@@ -155,3 +157,51 @@ def test_sync_pa_candidate_details_enrichment(mock_entries):
     assert doe.source_metadata.get("pa_ballot_position") == "2"
     assert doe.source_metadata.get("pa_cross_filed") == "No"
     assert doe.source_metadata.get("pa_details_enriched") is True
+
+
+@pytest.mark.django_db
+def test_sync_pa_elections_marks_synclog_failed_on_retry_exhaustion():
+    """
+    Regression test for #59: once self.retry() exhausts max_retries, Celery
+    re-raises the original PaSosRetryableError instead of raising Retry — that
+    must still land in the `except Exception` terminal-state handling, not
+    leave the SyncLog row stuck in STARTED forever.
+    """
+    from integrations.pa_sos.tasks import sync_pa_elections
+    from ops.models import SyncLog
+
+    exhausted = PaSosRetryableError("WAF challenge/block page did not clear for ... after 3 attempts")
+
+    with patch("integrations.pa_sos.tasks.PaSosClient") as MC, \
+         patch.object(sync_pa_elections, "retry", side_effect=exhausted):
+        mock_client = MC.return_value.__enter__.return_value
+        mock_client.fetch_candidate_list.side_effect = exhausted
+
+        with pytest.raises(PaSosRetryableError):
+            sync_pa_elections.apply()
+
+    log = SyncLog.objects.filter(source="pa_sos", task_name="sync_pa_elections").latest("started_at")
+    assert log.status == SyncLog.Status.FAILED
+    assert log.completed_at is not None
+    assert log.last_error
+
+
+@pytest.mark.django_db
+def test_sync_pa_elections_leaves_synclog_started_when_retry_scheduled():
+    """A retry that's still within max_retries must NOT be treated as terminal."""
+    from integrations.pa_sos.tasks import sync_pa_elections
+    from ops.models import SyncLog
+
+    transient = PaSosRetryableError("temporary WAF hiccup")
+
+    with patch("integrations.pa_sos.tasks.PaSosClient") as MC, \
+         patch.object(sync_pa_elections, "retry", side_effect=Retry("retry scheduled")):
+        mock_client = MC.return_value.__enter__.return_value
+        mock_client.fetch_candidate_list.side_effect = transient
+
+        with pytest.raises(Retry):
+            sync_pa_elections.apply()
+
+    log = SyncLog.objects.filter(source="pa_sos", task_name="sync_pa_elections").latest("started_at")
+    assert log.status == SyncLog.Status.STARTED
+    assert log.completed_at is None

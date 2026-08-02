@@ -135,9 +135,24 @@ class CandidateMatcher:
         )
         return candidate, 'created'
 
-    def _find_race_for_legislator(self, state: str, chamber: str, district: str) -> 'Race | None':
+    def find_races_for_legislator(self, state: str, chamber: str, district: str) -> list['Race']:
+        """
+        Resolve every active Race matching state+chamber(+district).
+
+        Deliberately returns *every* match, not just a unique one: the same
+        real person can have two separate Candidate rows for the same
+        office/district in one cycle — a primary Race and a general Race —
+        when a source splits a partisan primary into per-party Races (see
+        ma_sos mappers.contest_variant_key). Callers that want to *enrich*
+        should loop over every returned race and call enrich() on each
+        (scoped, so within-race name matching can't collide the way a
+        cross-race match does); callers that want to *create* a new
+        candidate should keep requiring uniqueness (see
+        _find_race_for_legislator) since there's no existing row to anchor
+        a guess to.
+        """
         if not state or not chamber:
-            return None
+            return []
 
         qs = Race.objects.filter(
             election__state=state.upper(),
@@ -153,7 +168,7 @@ class CandidateMatcher:
                 office_title__iregex=r'governor|attorney general|secretary|treasurer|auditor|comptroller'
             )
         else:
-            return None
+            return []
 
         if district:
             qs = qs.filter(
@@ -161,7 +176,10 @@ class CandidateMatcher:
                 django_models.Q(jurisdiction__icontains=district)
             )
 
-        matches = list(qs[:2])
+        return list(qs)
+
+    def _find_race_for_legislator(self, state: str, chamber: str, district: str) -> 'Race | None':
+        matches = self.find_races_for_legislator(state, chamber, district)[:2]
         return matches[0] if len(matches) == 1 else None
 
     def _find_candidate(self, race: Race | None, payload: dict) -> tuple[Candidate | None, bool]:
@@ -335,6 +353,7 @@ class CandidateMatcher:
         chamber = (payload.get('chamber') or '').lower()
         if chamber in {'upper', 'lower'}:
             keywords = self._UPPER_CHAMBER_KEYWORDS if chamber == 'upper' else self._LOWER_CHAMBER_KEYWORDS
+            state_leg_district = self._normalize(str(payload.get('district') or ''))
             candidates = list(Candidate.objects.filter(race__election__state=state).select_related('race', 'race__election'))
             matches = [
                 candidate
@@ -344,6 +363,7 @@ class CandidateMatcher:
                     keyword in self._normalize(candidate.race.normalized_office_title or candidate.race.office_title)
                     for keyword in keywords
                 )
+                and self._state_leg_district_matches(candidate.race, state_leg_district)
             ]
             if len(matches) == 1:
                 return matches[0], False
@@ -380,6 +400,7 @@ class CandidateMatcher:
         chamber = (payload.get('chamber') or '').lower()
         if chamber in {'upper', 'lower'}:
             keywords = self._UPPER_CHAMBER_KEYWORDS if chamber == 'upper' else self._LOWER_CHAMBER_KEYWORDS
+            state_leg_district = self._normalize(str(payload.get('district') or ''))
             candidates = list(Candidate.objects.filter(race__election__state=state).select_related('race', 'race__election'))
             matches = [
                 candidate
@@ -389,6 +410,7 @@ class CandidateMatcher:
                     keyword in self._normalize(candidate.race.normalized_office_title or candidate.race.office_title)
                     for keyword in keywords
                 )
+                and self._state_leg_district_matches(candidate.race, state_leg_district)
             ]
             if len(matches) == 1:
                 return matches[0], False
@@ -396,6 +418,27 @@ class CandidateMatcher:
                 return None, True
 
         return None, False
+
+    def _state_leg_district_matches(self, race: Race, district: str) -> bool:
+        """
+        Disambiguate state-legislature chamber matches by district when the
+        payload supplies one (e.g. OpenStates' "5th Essex").
+
+        Without this, a contested primary's Democratic/Republican Races and
+        the general-election Race for the same seat (see mappers.contest_variant_key
+        in ma_sos, or an equivalent split elsewhere) all share the same
+        office/chamber and each carry their own Candidate row for the same
+        real person — chamber-only matching can't tell them apart and always
+        goes ambiguous. State-legislature districts are named ("5th Essex"),
+        not numeric like congressional districts, so this checks substring
+        containment against jurisdiction/office_title rather than
+        _normalize_district's digit-only extraction. No district in the
+        payload means "don't filter" — preserves old behavior for sources
+        that don't supply one.
+        """
+        if not district:
+            return True
+        return district in self._normalize(race.jurisdiction) or district in self._normalize(race.office_title)
 
     def _race_matches_congressional_office(self, race: Race, office_type: str, district: str) -> bool:
         race_office_type = self._infer_congressional_office_type(race)
