@@ -94,6 +94,15 @@ def test_normalize_party_maps_bare_letter_codes():
     # instead of blue "DEM" (see issue #121).
     assert normalize_party("D") == "DEM"
     assert normalize_party("R") == "REP"
+
+
+def test_normalize_party_maps_working_families_and_ny_conservative():
+    # Both raw labels (17/12 chars) overrun the frontend PartyPill's
+    # short-code sizing without an alias — see issue #124.
+    assert normalize_party("Working Families") == "WFP"
+    assert normalize_party("Working Families Party") == "WFP"
+    assert normalize_party("Conservative") == "CON"
+    assert normalize_party("Conservative Party") == "CON"
     assert normalize_party("d") == "DEM"
     # Bare letters not in the alias table pass through unchanged.
     assert normalize_party("PR") == "PR"
