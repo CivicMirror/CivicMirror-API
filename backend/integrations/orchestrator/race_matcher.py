@@ -9,8 +9,8 @@ from elections.models import DistrictRecord, Election, Race
 
 from .exceptions import AmbiguousMatchError, NoRaceFoundError
 
-SOURCE_PRIORITY = ['civic_api', 'medsl', 'openelections', 'fec', 'openstates', 'congress']
-ENRICHMENT_SOURCES = {'fec', 'openstates', 'congress', 'openelections'}
+SOURCE_PRIORITY = ['civic_api', 'medsl', 'openelections', 'fec', 'congress']
+ENRICHMENT_SOURCES = {'fec', 'congress', 'openelections'}
 
 
 class RaceMatcher:
