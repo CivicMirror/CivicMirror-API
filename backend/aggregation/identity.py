@@ -51,6 +51,16 @@ _PARTY_CODES = {
     # after the prefix is stripped only "none" remains.
     "none": "NP", "no party": "NP",
     "ind": "IND", "independent": "IND",
+    "working families": "WFP", "working families party": "WFP",
+    # NY's Conservative Party (cpnys.org) — a real, distinct ballot party,
+    # not a generic "conservative-leaning" ideological label. Confirmed via
+    # backend/integrations audit (2026-08-02): only ny_boe uses the bare
+    # "Conservative" string today; MA's own "Working Families" stage is the
+    # same national party WFP represents, no collision. If a future
+    # adapter's raw party string uses "Conservative" to mean something else,
+    # key on a more specific phrase in that state's own mapper instead of
+    # widening this alias. See issue #124.
+    "conservative": "CON", "conservative party": "CON",
 }
 
 
