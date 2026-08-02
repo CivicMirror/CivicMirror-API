@@ -118,15 +118,35 @@ def sync_ma_elections(self):
 
         from aggregation import ingest
 
+        from .mappers import infer_election_status, parse_electionstats_date
+
         election_objects: list[Election] = []
         for idx, row in enumerate(unique_rows):
             schedule = row.pop("_schedule", {})
             mapped = map_election(row, schedule)
             source_id = mapped.pop("source_id")
             if mapped.get("election_date") is None:
-                logger.warning("ma_sos.sync_elections.skipped_no_date source_id=%s", source_id)
-                skipped_count += 1
-                continue
+                # OCPF's /filingSchedules/{year} only carries the statewide
+                # primary/general date -- off-year legislative special
+                # elections (no regular statewide election that year) have
+                # nothing to borrow from it. Fall back to the election's own
+                # view page, which embeds its true date + an is_special flag
+                # in an inline JS object. See issue #33.
+                detail = client.get_election_detail(row["election_id"])
+                fallback_date = parse_electionstats_date(detail.get("date", ""))
+                if fallback_date is not None:
+                    mapped["election_date"] = fallback_date
+                    mapped["status"] = infer_election_status(fallback_date)
+                    if detail.get("is_special"):
+                        mapped["election_type"] = "special"
+                    logger.info(
+                        "ma_sos.sync_elections.date_recovered_from_view_page source_id=%s date=%s",
+                        source_id, fallback_date,
+                    )
+                else:
+                    logger.warning("ma_sos.sync_elections.skipped_no_date source_id=%s", source_id)
+                    skipped_count += 1
+                    continue
             identity = {
                 "state": mapped["state"],
                 "election_type": mapped["election_type"],

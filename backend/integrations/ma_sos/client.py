@@ -84,6 +84,23 @@ class MaSosClient:
             row["stage"] = stage
         return rows
 
+    def get_election_detail(self, election_id: int) -> dict:
+        """
+        Fetch an individual election's view page and parse its inline
+        election_data JS metadata (see parsers.parse_election_metadata_js).
+
+        Used as a per-election date fallback when OCPF's schedule has no
+        statewide date for the year -- see sync_ma_elections and issue #33.
+        Returns {} on fetch failure or if the page has no election_data.
+        """
+        url = f"{_ELECTIONSTATS_BASE}/elections/view/{election_id}/"
+        try:
+            resp = self._get(url, timeout=30)
+        except MaSosRetryableError as exc:
+            logger.warning("ma_sos.client.get_election_detail_failed election_id=%d: %s", election_id, exc)
+            return {}
+        return parsers.parse_election_metadata_js(resp.text)
+
     def get_ballot_question_ids(self, year: int) -> list[int]:
         """Fetch BQ search page → list of ballot question ID ints."""
         url = f"{_ELECTIONSTATS_BASE}/ballot_questions/search/year_from:{year}/year_to:{year}/"

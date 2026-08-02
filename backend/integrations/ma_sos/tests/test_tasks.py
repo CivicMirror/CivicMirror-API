@@ -115,6 +115,112 @@ def test_sync_ma_elections_empty_returns_warning(mock_tz, mock_client_cls, mock_
     mock_log.save.assert_called()
 
 
+@patch("integrations.ma_sos.tasks.SyncLog")
+@patch("integrations.ma_sos.tasks.sync_ma_races")
+@patch("integrations.ma_sos.tasks.sync_ma_ballot_question")
+@patch("integrations.ma_sos.tasks.MaSosClient")
+@patch("integrations.ma_sos.tasks.timezone")
+def test_sync_ma_elections_recovers_date_from_view_page_for_special_election(
+    mock_tz, mock_client_cls, mock_bq_task, mock_races_task, mock_synclog_cls,
+):
+    """
+    Regression test for #33: OCPF's /filingSchedules/{year} has no statewide
+    date for off-year legislative special elections. sync_ma_elections must
+    fall back to the election's own view page (client.get_election_detail)
+    instead of skipping it outright.
+    """
+    from integrations.ma_sos.tasks import sync_ma_elections
+
+    mock_log = MagicMock()
+    mock_synclog_cls.objects.create.return_value = mock_log
+    mock_synclog_cls.Status.STARTED = "started"
+    mock_synclog_cls.Status.COMPLETED = "completed"
+    mock_synclog_cls.Status.COMPLETED_WITH_WARNINGS = "warnings"
+    mock_synclog_cls.Status.FAILED = "failed"
+
+    mock_client = MagicMock()
+    mock_client_cls.return_value = mock_client
+    # 2025 OCPF schedule has no statewide dates -- the off-year case from #33.
+    mock_client.get_ocpf_schedule.return_value = {"generalElectionDate": "", "primaryElectionDate": ""}
+
+    def fake_get_election_ids(year, stage):
+        if year == 2025 and stage == "General":
+            return [{
+                "election_id": 171339, "office": "State Representative",
+                "district": "6th Essex", "stage": "General", "year": 2025,
+            }]
+        return []
+
+    mock_client.get_election_ids.side_effect = fake_get_election_ids
+    mock_client.get_ballot_question_ids.return_value = []
+    mock_client.get_election_detail.return_value = {
+        "election_id": 171339, "date": "2025-05-13", "is_special": True, "year": 2025,
+    }
+
+    mock_saved_election = MagicMock()
+    mock_saved_election.pk = 1
+    mock_saved_election.source_metadata = {"electionstats_id": 171339}
+
+    mock_tz.now.return_value = MagicMock()
+    mock_tz.localdate.return_value = date(2025, 12, 1)
+
+    with patch("integrations.ma_sos.tasks.date") as mock_date, \
+         patch("aggregation.ingest.ingest_election", return_value=(mock_saved_election, True)) as mock_ingest:
+        mock_date.today.return_value = date(2025, 12, 1)
+        result = sync_ma_elections.run()
+
+    mock_client.get_election_detail.assert_called_once_with(171339)
+    assert result["created"] == 1
+    ingest_kwargs = mock_ingest.call_args.kwargs
+    assert ingest_kwargs["identity"]["election_date"] == date(2025, 5, 13)
+    assert ingest_kwargs["identity"]["election_type"] == "special"
+
+
+@patch("integrations.ma_sos.tasks.SyncLog")
+@patch("integrations.ma_sos.tasks.sync_ma_races")
+@patch("integrations.ma_sos.tasks.sync_ma_ballot_question")
+@patch("integrations.ma_sos.tasks.MaSosClient")
+@patch("integrations.ma_sos.tasks.timezone")
+def test_sync_ma_elections_still_skips_when_view_page_fallback_also_fails(
+    mock_tz, mock_client_cls, mock_bq_task, mock_races_task, mock_synclog_cls,
+):
+    """If the view-page fallback can't find a date either, still skip (not crash)."""
+    from integrations.ma_sos.tasks import sync_ma_elections
+
+    mock_log = MagicMock()
+    mock_synclog_cls.objects.create.return_value = mock_log
+    mock_synclog_cls.Status.STARTED = "started"
+    mock_synclog_cls.Status.COMPLETED = "completed"
+    mock_synclog_cls.Status.COMPLETED_WITH_WARNINGS = "warnings"
+    mock_synclog_cls.Status.FAILED = "failed"
+
+    mock_client = MagicMock()
+    mock_client_cls.return_value = mock_client
+    mock_client.get_ocpf_schedule.return_value = {"generalElectionDate": "", "primaryElectionDate": ""}
+
+    def fake_get_election_ids(year, stage):
+        if year == 2025 and stage == "General":
+            return [{
+                "election_id": 999999, "office": "State Representative",
+                "district": "Nowhere", "stage": "General", "year": 2025,
+            }]
+        return []
+
+    mock_client.get_election_ids.side_effect = fake_get_election_ids
+    mock_client.get_ballot_question_ids.return_value = []
+    mock_client.get_election_detail.return_value = {}
+
+    mock_tz.now.return_value = MagicMock()
+    mock_tz.localdate.return_value = date(2025, 12, 1)
+
+    with patch("integrations.ma_sos.tasks.date") as mock_date:
+        mock_date.today.return_value = date(2025, 12, 1)
+        result = sync_ma_elections.run()
+
+    mock_client.get_election_detail.assert_called_once_with(999999)
+    assert result["created"] == 0
+
+
 # ---------------------------------------------------------------------------
 # sync_ma_races
 # ---------------------------------------------------------------------------

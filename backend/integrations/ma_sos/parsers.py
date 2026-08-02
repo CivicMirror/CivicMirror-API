@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 # Synthetic tally rows in election CSVs — not real candidates
 TALLY_LABELS = frozenset({"All Others", "Blanks", "Total Votes Cast", "Write-In"})
 
-# Regex for inline JS election_data object on BQ view pages.
+# Regex for the inline JS election_data object. Present on BOTH ballot
+# question view pages AND individual election view pages (same JS variable,
+# same structure, different field sets populated per page type).
 # Matches: election_data[11620] = {Election: {"id": "11620", ...}}
 _BQ_DATA_RE = re.compile(
     r'election_data\[(\d+)\]\s*=\s*\{Election:\s*(\{.*?\})\s*\}',
@@ -138,6 +140,52 @@ def parse_bq_metadata_js(html: str) -> dict:
         "n_yes_votes": _safe_int(data.get("n_yes_votes")),
         "n_no_votes": _safe_int(data.get("n_no_votes")),
         "n_blank_votes": _safe_int(data.get("n_blank_votes")),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Election metadata from JS (individual election view page)
+# ---------------------------------------------------------------------------
+
+def parse_election_metadata_js(html: str) -> dict:
+    """
+    Extract the inline election_data JS object from an individual election
+    view page (electionstats.state.ma.us/elections/view/{id}/).
+
+    Same election_data[N] = {Election: {...}} structure as BQ view pages
+    (see parse_bq_metadata_js) but with election-specific fields -- notably
+    "date" (the true per-election date, e.g. "2025-05-13") and "is_special".
+
+    Used as a per-election fallback when OCPF's /filingSchedules/{year}
+    endpoint has no statewide primary/general date for the year, which is
+    always the case for off-year legislative special elections -- OCPF only
+    tracks the regular statewide election calendar, not per-district special
+    election dates. See issue #33.
+
+    Returns {} if not found or unparseable.
+    """
+    m = _BQ_DATA_RE.search(html)
+    if not m:
+        logger.warning("ma_sos.parsers.parse_election_metadata_js: no election_data found")
+        return {}
+
+    election_id = int(m.group(1))
+    raw_json = m.group(2).strip()
+
+    try:
+        data = json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        logger.error(
+            "ma_sos.parsers.parse_election_metadata_js: JSON parse error election_id=%d: %s",
+            election_id, exc,
+        )
+        return {}
+
+    return {
+        "election_id": election_id,
+        "date": data.get("date", ""),
+        "is_special": data.get("is_special") == "1",
+        "year": int(data.get("year", 0) or 0),
     }
 
 
