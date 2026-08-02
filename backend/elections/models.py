@@ -210,8 +210,11 @@ class Candidate(models.Model):
     incumbent = models.BooleanField(default=False)
     candidate_status = models.CharField(max_length=20, default=CandidateStatus.RUNNING, choices=CandidateStatus.choices)
     description = models.TextField(blank=True)
-    image_url = models.URLField(blank=True)
-    website_url = models.URLField(blank=True)
+    # max_length=1000: Django's URLField defaults to 200, but OpenStates CDN
+    # photo URLs routinely exceed that with long query strings/tokens,
+    # crashing enrichment with StringDataRightTruncation. See issue #127.
+    image_url = models.URLField(blank=True, max_length=1000)
+    website_url = models.URLField(blank=True, max_length=1000)
     fec_candidate_id = models.CharField(max_length=20, blank=True, db_index=True)
     bioguide_id = models.CharField(max_length=20, blank=True, db_index=True)
     openstates_person_id = models.CharField(max_length=50, blank=True)
