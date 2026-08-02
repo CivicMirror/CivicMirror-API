@@ -186,8 +186,8 @@ def test_find_or_create_raises_for_enrichment_source_without_match():
 
     with pytest.raises(NoRaceFoundError):
         matcher.find_or_create(
-            'openstates',
-            'os-1',
+            'fec',
+            'fec-1',
             {
                 'office_title': 'State Senate District 4',
                 'normalized_office_title': 'state senate district 4',
