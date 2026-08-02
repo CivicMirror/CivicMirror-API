@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from celery import shared_task
+from celery.exceptions import Retry
 from django.utils import timezone
 
 from elections.models import Candidate, Election, Race
@@ -129,7 +130,17 @@ def sync_mi_elections(self=None):
     except MiSosRetryableError as exc:
         if self is None:
             raise
-        raise self.retry(exc=exc)
+        try:
+            raise self.retry(exc=exc)
+        except Retry:
+            raise
+        except MiSosRetryableError:
+            sync_log.error_count = 1
+            sync_log.last_error = str(exc)
+            sync_log.status = SyncLog.Status.FAILED
+            sync_log.completed_at = timezone.now()
+            sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+            raise
     except Exception as exc:
         sync_log.error_count = 1
         sync_log.last_error = str(exc)

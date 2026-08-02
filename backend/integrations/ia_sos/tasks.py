@@ -17,6 +17,7 @@ import re
 from urllib.parse import unquote
 
 from celery import shared_task
+from celery.exceptions import Retry
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -199,7 +200,22 @@ def sync_ia_elections(self):
         ])
         return {"created": created_count, "updated": updated_count, "queued": queued_count}
 
-    except IowaSosRetryableError:
+    except IowaSosRetryableError as exc:
+        # self.retry() re-raises the original IowaSosRetryableError as-is once
+        # max_retries is exhausted (instead of raising Retry) — that's the
+        # terminal case, so it must be recorded, not silently re-raised.
+        # A genuine in-progress retry raises Retry instead, caught below
+        # before it can reach `except Exception` (Retry is itself an
+        # Exception subclass, so without this it would land there and mark
+        # SyncLog FAILED on every retry attempt, not just the final one).
+        logger.exception("ia_sos.sync_elections.failed (retries exhausted)")
+        sync_log.error_count = 1
+        sync_log.last_error = str(exc)
+        sync_log.status = SyncLog.Status.FAILED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+        raise
+    except Retry:
         raise
     except Exception as exc:
         logger.exception("ia_sos.sync_elections.failed")
