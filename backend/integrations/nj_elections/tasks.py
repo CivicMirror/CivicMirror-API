@@ -15,6 +15,7 @@ Stage 1 enrichment — sync_nj_county_urls:
 import logging
 
 from celery import shared_task
+from celery.exceptions import Retry
 from django.utils import timezone
 
 from elections.models import Election
@@ -71,7 +72,18 @@ def sync_nj_county_urls(self):
         return {"updated": updated_count}
 
     except NjElectionsRetryableError as exc:
-        raise self.retry(exc=exc)
+        try:
+            raise self.retry(exc=exc)
+        except Retry:
+            raise
+        except NjElectionsRetryableError:
+            logger.exception("nj_elections.sync_county_urls.failed (retries exhausted)")
+            sync_log.error_count = 1
+            sync_log.last_error = str(exc)
+            sync_log.status = SyncLog.Status.FAILED
+            sync_log.completed_at = timezone.now()
+            sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+            raise
     except Exception as exc:
         logger.exception("nj_elections.sync_county_urls.failed")
         sync_log.error_count = 1

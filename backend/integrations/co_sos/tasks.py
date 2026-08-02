@@ -15,6 +15,7 @@ Stage 2 — sync_co_candidates:
 import logging
 
 from celery import shared_task
+from celery.exceptions import Retry
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -145,7 +146,18 @@ def sync_co_elections(self):
         return {"created": created_count, "updated": updated_count, "queued": queued_count}
 
     except CoSosRetryableError as exc:
-        raise self.retry(exc=exc)
+        try:
+            raise self.retry(exc=exc)
+        except Retry:
+            raise
+        except CoSosRetryableError:
+            logger.exception("co_sos.sync_elections.failed (retries exhausted)")
+            sync_log.error_count = 1
+            sync_log.last_error = str(exc)
+            sync_log.status = SyncLog.Status.FAILED
+            sync_log.completed_at = timezone.now()
+            sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+            raise
     except Exception as exc:
         logger.exception("co_sos.sync_elections.failed")
         sync_log.error_count = 1

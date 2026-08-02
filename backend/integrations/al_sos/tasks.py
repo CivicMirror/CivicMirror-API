@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 
 from celery import shared_task
+from celery.exceptions import Retry
 from django.utils import timezone
 
 from elections.models import Candidate, Election, ElectionSourceLink
@@ -88,7 +89,18 @@ def sync_al_elections(self, year: int | None = None):
         return {"parsed": len(parsed), "created": created_count}
 
     except AlSosRetryableError as exc:
-        raise self.retry(exc=exc)
+        try:
+            raise self.retry(exc=exc)
+        except Retry:
+            raise
+        except AlSosRetryableError:
+            logger.exception("al_sos.sync_al_elections.failed (retries exhausted)")
+            sync_log.error_count = 1
+            sync_log.last_error = str(exc)
+            sync_log.status = SyncLog.Status.FAILED
+            sync_log.completed_at = timezone.now()
+            sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+            raise
     except Exception as exc:
         logger.exception("al_sos.sync_al_elections.failed")
         sync_log.error_count = 1
@@ -222,7 +234,18 @@ def sync_al_fcpa_candidates(self):
         return {"races_created": total_created_races, "candidates_created": total_created_candidates}
 
     except AlSosRetryableError as exc:
-        raise self.retry(exc=exc)
+        try:
+            raise self.retry(exc=exc)
+        except Retry:
+            raise
+        except AlSosRetryableError:
+            logger.exception("al_sos.sync_al_fcpa_candidates.failed (retries exhausted)")
+            sync_log.error_count = 1
+            sync_log.last_error = str(exc)
+            sync_log.status = SyncLog.Status.FAILED
+            sync_log.completed_at = timezone.now()
+            sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+            raise
     except Exception as exc:
         logger.exception("al_sos.sync_al_fcpa_candidates.failed")
         sync_log.error_count = 1

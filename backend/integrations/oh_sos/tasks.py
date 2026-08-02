@@ -23,7 +23,7 @@ Federal races (Ohio's 15 US House districts) are handled by Civic API.
 import logging
 
 from celery import shared_task
-from celery.exceptions import SoftTimeLimitExceeded
+from celery.exceptions import Retry, SoftTimeLimitExceeded
 from django.utils import timezone
 
 from elections.models import Candidate, Election
@@ -180,7 +180,22 @@ def sync_oh_elections(self):
             "withdrawn": withdrawn_count,
         }
 
-    except OhSosRetryableError:
+    except OhSosRetryableError as exc:
+        # self.retry() re-raises the original OhSosRetryableError as-is once
+        # max_retries is exhausted (instead of raising Retry) — that's the
+        # terminal case, so it must be recorded, not silently re-raised.
+        # A genuine in-progress retry raises Retry instead, caught below
+        # before it can reach `except Exception` (Retry is itself an
+        # Exception subclass, so without this it would land there and mark
+        # SyncLog FAILED on every retry attempt, not just the final one).
+        logger.exception("oh_sos.sync_elections.failed (retries exhausted)")
+        sync_log.error_count = 1
+        sync_log.last_error = str(exc)
+        sync_log.status = SyncLog.Status.FAILED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=["error_count", "last_error", "status", "completed_at"])
+        raise
+    except Retry:
         raise
     except SoftTimeLimitExceeded:
         logger.warning("oh_sos.sync_elections.timeout soft_limit=300s")
