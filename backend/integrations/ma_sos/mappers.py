@@ -163,6 +163,19 @@ def parse_ocpf_date(date_str: str) -> date | None:
         return None
 
 
+def parse_electionstats_date(date_str: str) -> date | None:
+    """
+    Parse an electionstats election_data date string like "2025-05-13" →
+    date(2025, 5, 13). Returns None on failure.
+    """
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
 def build_canonical_key(election_source_id: str, office: str, district: str) -> str:
     """
     Build canonical key for a MA SOS race.
