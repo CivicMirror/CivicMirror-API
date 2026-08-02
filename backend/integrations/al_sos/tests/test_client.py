@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from integrations.al_sos.client import AlSosClient, extract_webforms_fields
+from integrations.al_sos.client import AlSosClient, _AlabamaChainFixAdapter, extract_webforms_fields
 from integrations.al_sos.exceptions import AlSosError
 
 
@@ -92,3 +92,23 @@ def test_fetch_fcpa_committee_detail_base64_encodes_id():
     # the real captured URL in the FCPA HAR.
     assert "type=cGNj" in url
     assert "id=NDgzNA%3D%3D" in url or "id=NDgzNA==" in url
+
+
+def test_chain_fix_adapter_mounted_for_hosts_missing_their_intermediate_cert():
+    """
+    Regression test for #132: sos.alabama.gov and fcpa.alabamavotes.gov omit
+    their GlobalSign Atlas intermediate CA during the TLS handshake, so
+    AlSosClient must route requests to those two hosts through the adapter
+    that supplies the missing intermediate. www2.alabamavotes.gov (ENR
+    export) sends a complete chain already and must NOT be routed through it,
+    to avoid masking a real cert problem there in the future.
+    """
+    client = AlSosClient()
+
+    sos_adapter = client.session.get_adapter("https://www.sos.alabama.gov/anything")
+    fcpa_adapter = client.session.get_adapter("https://fcpa.alabamavotes.gov/anything")
+    enr_adapter = client.session.get_adapter("https://www2.alabamavotes.gov/anything")
+
+    assert isinstance(sos_adapter, _AlabamaChainFixAdapter)
+    assert isinstance(fcpa_adapter, _AlabamaChainFixAdapter)
+    assert not isinstance(enr_adapter, _AlabamaChainFixAdapter)
