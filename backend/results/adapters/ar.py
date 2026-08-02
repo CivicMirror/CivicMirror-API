@@ -287,7 +287,23 @@ class ArkansasAdapter(StateResultsAdapter):
         is_guid = '-' in tr_id
 
         if is_guid:
-            source_url, rows = self._fetch_download(cid, tr_id)
+            try:
+                source_url, rows = self._fetch_download(cid, tr_id)
+            except requests.HTTPError as exc:
+                if exc.response is None or exc.response.status_code != 404:
+                    raise
+                # Some GUID elections were never given a bulk /download blob
+                # even though their results are fully published per-contest
+                # (CheckCurrentVersion returns isOfficial=True for them) --
+                # confirmed live for AR elections 1861/1777 (see issue #131).
+                # The granular endpoints work for any electionID regardless
+                # of ID format, so fall back to them instead of retrying the
+                # same permanently-404ing download forever.
+                logger.info(
+                    "ar_elect.adapter.download_404_falling_back_to_granular cid=%s eid=%s",
+                    cid, tr_id,
+                )
+                source_url, rows = self._fetch_granular(cid, tr_id, is_official)
         else:
             source_url, rows = self._fetch_granular(cid, tr_id, is_official)
 

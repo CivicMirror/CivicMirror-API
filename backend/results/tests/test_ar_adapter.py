@@ -541,6 +541,71 @@ def test_fetch_results_guid_official_rows():
 
 
 @pytest.mark.django_db
+def test_fetch_results_guid_download_404_falls_back_to_granular():
+    """
+    Regression test for #131: AR elections 1861/1777 have GUID-format
+    totalvote_election_ids (so the adapter picks the bulk /download path),
+    but their results were only ever published per-contest -- /download
+    404s forever even though CheckCurrentVersion confirms official results
+    exist. Confirmed live 2026-08-02 against the real TotalResults API.
+    On a 404 specifically, fetch_results must fall back to the granular
+    endpoints instead of raising and retrying the same 404 hourly forever.
+    """
+    adapter = ArkansasAdapter()
+    meta = {"totalvote_election_id": "7f77a178-af02-40ec-92db-c5cc50882c68"}
+
+    download_404 = MagicMock()
+    not_found = req_lib.HTTPError(response=MagicMock(status_code=404))
+    download_404.raise_for_status.side_effect = not_found
+
+    search_resp = MagicMock()
+    search_resp.json.return_value = _SEARCH_RESPONSE_JSON
+    results_resp = MagicMock()
+    results_resp.json.return_value = _RESULTS_RESPONSE_JSON
+
+    with patch("elections.models.Election.objects") as mock_mgr, \
+         patch("results.adapters.ar.requests.get") as mock_get, \
+         patch("results.adapters.ar.cache") as mock_cache:
+
+        mock_mgr.get.return_value = _make_election(source_metadata=meta)
+        mock_cache.get.return_value = None
+        # call order: CheckCurrentVersion, /download (404), GetContestSearchList, GetContestResults
+        mock_get.side_effect = [_ver_response(), download_404, search_resp, results_resp]
+
+        result = adapter.fetch_results(None, election_id=1861)
+
+    assert result.mapping_confidence == "full"
+    assert len(result.rows) == 1
+    assert result.rows[0].candidate_name == "Alice Brown"
+    urls_called = [c[0][0] for c in mock_get.call_args_list]
+    assert any("/download" in u for u in urls_called)
+    assert any("GetContestSearchList" in u for u in urls_called)
+
+
+@pytest.mark.django_db
+def test_fetch_results_guid_download_non_404_error_still_raises():
+    """A genuine transient/server error on /download must still propagate
+    (and thus retry via Celery) rather than silently falling back."""
+    adapter = ArkansasAdapter()
+    meta = {"totalvote_election_id": "b412bdef-f97a-45bc-b3ec-6761d28caf9e"}
+
+    download_500 = MagicMock()
+    server_error = req_lib.HTTPError(response=MagicMock(status_code=500))
+    download_500.raise_for_status.side_effect = server_error
+
+    with patch("elections.models.Election.objects") as mock_mgr, \
+         patch("results.adapters.ar.requests.get") as mock_get, \
+         patch("results.adapters.ar.cache") as mock_cache:
+
+        mock_mgr.get.return_value = _make_election(source_metadata=meta)
+        mock_cache.get.return_value = None
+        mock_get.side_effect = [_ver_response(), download_500]
+
+        with pytest.raises(req_lib.HTTPError):
+            adapter.fetch_results(None, election_id=42)
+
+
+@pytest.mark.django_db
 def test_fetch_results_numeric_calls_granular():
     adapter = ArkansasAdapter()
     meta = {"totalvote_election_id": "1846"}  # legacy numeric ID
