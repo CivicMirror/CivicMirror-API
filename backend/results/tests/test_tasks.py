@@ -291,6 +291,25 @@ def test_ingest_empty_rows_sets_results_pending():
     assert race.certification_status == Race.CertificationStatus.RESULTS_PENDING
 
 
+@pytest.mark.django_db
+def test_ingest_no_results_url_does_not_mark_partial():
+    """'none' confidence (e.g. no results_url configured) means nothing was
+    ever attempted — races must not be mislabeled partial_results with zero
+    rows in results_officialresult (regression for issue #146)."""
+    election = make_election(results_url="")
+    race = make_race(election, status=Race.CertificationStatus.RESULTS_PENDING)
+
+    mock_adapter = MagicMock()
+    mock_adapter.fetch_results.return_value = make_adapter_result(rows=[], confidence="none")
+
+    from results.tasks import ingest_official_results
+    with patch("results.tasks.get_adapter", return_value=lambda: mock_adapter):
+        ingest_official_results("WV", election.pk)
+
+    race.refresh_from_db()
+    assert race.certification_status == Race.CertificationStatus.RESULTS_PENDING
+
+
 # ---------------------------------------------------------------------------
 # _process_race_results: candidate matching
 # ---------------------------------------------------------------------------
@@ -395,6 +414,27 @@ def test_process_race_office_title_filter_skips_no_match():
     assert not OfficialResult.objects.filter(race=race).exists()
     race.refresh_from_db()
     assert race.certification_status == Race.CertificationStatus.PARTIAL_RESULTS
+
+
+@pytest.mark.django_db
+def test_process_race_matches_party_suffixed_contests_to_consolidated_race():
+    """Clarity splits a partisan primary into "<Office> - DEM"/"- REP" contests;
+    a state (e.g. SC) that pre-creates one consolidated, non-partisan Race per
+    office spanning both parties' candidates must still match both contests."""
+    election = make_election(state="SC")
+    race = make_race(election, office_title="Governor")
+    dem_candidate = Candidate.objects.create(race=race, name="Jermaine Johnson")
+    rep_candidate = Candidate.objects.create(race=race, name="Alan Wilson")
+
+    dem_row = make_result_row(candidate_name="Jermaine Johnson", office_title="Governor - DEM")
+    rep_row = make_result_row(candidate_name="Alan Wilson", office_title="Governor - REP")
+    result = make_adapter_result(rows=[dem_row, rep_row])
+
+    from results.tasks import _process_race_results
+    _process_race_results(race, result, "SC")
+
+    assert OfficialResult.objects.filter(race=race, candidate=dem_candidate).exists()
+    assert OfficialResult.objects.filter(race=race, candidate=rep_candidate).exists()
 
 
 @pytest.mark.django_db

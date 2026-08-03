@@ -8,9 +8,13 @@ class ENRElection(models.Model):
     The feed returns one entry per jurisdiction per election — one state-level entry
     (county=null) and one per participating county. Each has a unique EID.
 
-    The enr_resolved_url field stores the fully resolved /web.XXXXXX/ path required
-    by the ClarityAdapter (which constructs current_ver.txt and summary.json paths
-    by string concatenation). Never store the unresolved base URL in Election.results_url.
+    The enr_resolved_url field stores the fully resolved /web.XXXXXX/ path — this
+    is the Angular app's static asset build segment, confirmed reachable by
+    following the EID's redirect. It is NOT what ClarityAdapter needs: that
+    adapter constructs current_ver.txt and summary.json paths by string
+    concatenation against the stable base EID path (enr_base_url), which is
+    what gets copied to Election.results_url once linked. enr_resolved_url is
+    only used as a "this EID actually resolves" signal before linking.
     """
 
     class Scope(models.TextChoices):
