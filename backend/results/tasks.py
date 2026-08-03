@@ -167,6 +167,19 @@ def _office_title_key_base(office_title: str) -> str:
     return _PARTY_SUFFIX_RE.sub('', _office_title_key(office_title))
 
 
+# A source's candidate/race metadata feed and its results feed can format the
+# same office differently even after stripping party — e.g. SC's sc_vrems
+# reports "City Council at Large, Florence" while the Clarity contest name for
+# the same race is "City Council at Large Florence" (no comma). Stripping
+# punctuation is only tried as a last-resort fallback, after exact and
+# party-suffix matches, since it loosens the comparison the most.
+_PUNCT_RE = re.compile(r'[.,]')
+
+
+def _office_title_key_loose(office_title: str) -> str:
+    return _PUNCT_RE.sub('', _office_title_key_base(office_title))
+
+
 def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
     """
     Auto-create Race, Candidate, and MeasureOption rows from result data when
@@ -307,6 +320,15 @@ def _process_race_results(race, adapter_result, state: str):
             filtered_rows = [
                 r for r in adapter_result.rows
                 if r.office_title and _office_title_key_base(r.office_title) == race_key
+            ]
+        if not filtered_rows:
+            # Last resort: ignore punctuation differences between the race's
+            # source (e.g. "City Council at Large, Florence") and the results
+            # feed's contest name (e.g. "City Council at Large Florence - DEM").
+            race_key_loose = _office_title_key_loose(race.office_title)
+            filtered_rows = [
+                r for r in adapter_result.rows
+                if r.office_title and _office_title_key_loose(r.office_title) == race_key_loose
             ]
         if not filtered_rows:
             # Feed has office titles but none matched this race — skip rather than
