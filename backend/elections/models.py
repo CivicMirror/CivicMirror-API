@@ -138,7 +138,11 @@ class Race(models.Model):
 
     election = models.ForeignKey(Election, on_delete=models.CASCADE, related_name='races')
     race_type = models.CharField(max_length=20, choices=RaceType.choices)
-    office_title = models.CharField(max_length=255)
+    # TextField, not CharField: ballot-measure titles (e.g. GA constitutional
+    # amendments) can carry partial ballot text well past any fixed length —
+    # confirmed 311 chars in production (issue #128), and other states'
+    # measure text isn't bounded either.
+    office_title = models.TextField()
     jurisdiction = models.CharField(max_length=255)
     geography_scope = models.CharField(max_length=50)
     voting_opens = models.DateTimeField(null=True, blank=True)
@@ -156,8 +160,9 @@ class Race(models.Model):
     max_selections = models.PositiveIntegerField(default=1)
     last_synced_at = models.DateTimeField(null=True, blank=True)
     ocd_division_id = models.CharField(max_length=255, blank=True)
-    normalized_office_title = models.CharField(max_length=255, blank=True)
-    canonical_key = models.CharField(max_length=512, unique=True, null=True, blank=True)
+    normalized_office_title = models.TextField(blank=True)
+    # Embeds normalized_office_title, so it needs the same unbounded headroom.
+    canonical_key = models.TextField(unique=True, null=True, blank=True)
     ballot_type = models.CharField(max_length=100, blank=True)
     party = models.CharField(max_length=100, blank=True)
     normalized_party = models.CharField(max_length=40, blank=True)

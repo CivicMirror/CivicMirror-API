@@ -72,6 +72,32 @@ def test_higher_precedence_source_wins_per_field(ca_precedence):
 
 
 @pytest.mark.django_db
+def test_ingest_race_accepts_long_ballot_measure_title(ca_precedence):
+    """GA constitutional-amendment titles can carry partial ballot text well
+    past 255 chars (confirmed 311 chars in production, issue #128) — this
+    used to crash with StringDataRightTruncation since Race.office_title and
+    canonical_key were both fixed-length CharFields."""
+    long_title = (
+        "Constitutional Amendment #2 Shall the Constitution of Georgia be "
+        "amended to allow additional reckless driving penalties or fees to "
+        "be added to the Brain and Spinal Injury Trust Fund to pay for care "
+        "and rehabilitative services for Georgia citizens who have survived "
+        "neurotrauma with head or spinal cord injuries?"
+    )
+    assert len(long_title) > 255
+
+    e, _ = ingest.ingest_election(source="ca_sos", source_id="x", identity=_election_identity(), fields={})
+    r, created = ingest.ingest_race(
+        election=e, source="ca_sos",
+        identity={"office_title": long_title, "ocd_division_id": "", "race_type": "measure"},
+        fields={"office_title": long_title},
+    )
+    assert created is True
+    r.refresh_from_db()
+    assert r.office_title == long_title
+
+
+@pytest.mark.django_db
 def test_ingest_race_without_contest_variant_merges_same_office(ca_precedence):
     """Baseline: confirms the pre-existing collision this fix addresses —
     without contest_variant, two ingests for the same office/ocd/race_type
