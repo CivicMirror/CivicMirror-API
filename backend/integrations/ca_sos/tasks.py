@@ -200,6 +200,10 @@ def sync_ca_races(self, election_pk: int, catalog_json: str, fingerprint: str):
     client = CaSosClient()
     created_count = updated_count = withdrawn_count = error_count = 0
     seen_candidate_pks: set[int] = set()
+    # Endpoints that errored this run: their races' candidates must be
+    # excluded from the withdrawal pool below — "the endpoint errored" is not
+    # the same signal as "the candidate is confirmed gone" (issue #126).
+    errored_endpoints: set[str] = set()
 
     try:
         from aggregation import ingest
@@ -217,6 +221,7 @@ def sync_ca_races(self, election_pk: int, catalog_json: str, fingerprint: str):
                     "ca_sos.sync_races.contest_error endpoint=%s err=%s",
                     endpoint_path, exc,
                 )
+                errored_endpoints.add(endpoint_path)
                 error_count += 1
                 continue
 
@@ -273,11 +278,15 @@ def sync_ca_races(self, election_pk: int, catalog_json: str, fingerprint: str):
                     )
                     seen_candidate_pks.add(cand.pk)
 
-        # Mark candidates absent from this run as WITHDRAWN
+        # Mark candidates absent from this run as WITHDRAWN — but never for a
+        # race whose endpoint errored this run (CA SOS's API is frequently
+        # flaky; "no data because of a 500" must not be treated the same as
+        # "confirmed gone", see issue #126).
         withdrawn_qs = (
             Candidate.objects
             .filter(race__election=election_obj, race__source_metadata__has_key='ca_endpoint')
             .exclude(pk__in=seen_candidate_pks)
+            .exclude(race__source_metadata__ca_endpoint__in=errored_endpoints)
             .filter(candidate_status=Candidate.CandidateStatus.RUNNING)
         )
         withdrawn_count = withdrawn_qs.update(
