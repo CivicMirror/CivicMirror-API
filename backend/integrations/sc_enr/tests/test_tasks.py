@@ -138,6 +138,7 @@ def test_poll_sc_enr_propagates_results_url_when_linked(mock_synclog, mock_clien
         new_obj = MagicMock()
         new_obj.eid = 130000
         new_obj.enr_resolved_url = ""
+        new_obj.enr_base_url = "https://www.enr-scvotes.org/SC/130000/"
         new_obj.scope = "state"
         new_obj.election = None
         new_obj.election_id = None
@@ -159,7 +160,7 @@ def test_poll_sc_enr_propagates_results_url_when_linked(mock_synclog, mock_clien
     mock_ingest_election.assert_called_once()
     call_kwargs = mock_ingest_election.call_args.kwargs
     assert call_kwargs["source"] == "sc_enr"
-    assert call_kwargs["fields"]["results_url"] == "https://www.enr-scvotes.org/SC/130000/web.777/"
+    assert call_kwargs["fields"]["results_url"] == "https://www.enr-scvotes.org/SC/130000/"
 
 
 # ------------------------------------------------------------------

@@ -5,9 +5,13 @@ Task flow:
   poll_sc_enr_elections  (scheduled during election season)
     → discovers active elections from elections.json
     → upserts ENRElection records (never deletes — marks is_active=False for missing entries)
-    → resolves /web.XXXXXX/ URLs for new/unresolved entries
+    → resolves /web.XXXXXX/ URLs for new/unresolved entries (used only to confirm
+      the EID is reachable before linking — see enr_base_url note below)
     → links state-level entries to Election records by date
-    → copies enr_resolved_url → Election.results_url for auto-linked entries
+    → copies enr_base_url → Election.results_url for auto-linked entries
+      (NOT enr_resolved_url — the web.XXXXXX build segment only serves the
+      Angular app's static assets; current_ver.txt and the versioned JSON
+      results paths that ClarityAdapter fetches live under the base EID path)
 
   sync_sc_enr_results  (triggered by poll or scheduled during election window)
     → finds active ENRElections with a linked Election record
@@ -133,6 +137,14 @@ def poll_sc_enr_elections(self):
                     # Route results_url write through the aggregation ingest service
                     # so precedence, contributing_sources, and ElectionSourceLink are
                     # maintained consistently with other Phase-2 adapters.
+                    #
+                    # Use enr_base_url (the stable /SC/{EID}/ path), not
+                    # enr_resolved_url (the /web.XXXXXX/ deployment build segment):
+                    # ClarityAdapter fetches current_ver.txt and {ver}/json/en/summary.json
+                    # relative to the base EID path — the web.XXXXXX segment only serves
+                    # the Angular app's static assets and 404s on those data endpoints.
+                    # enr_resolved_url is still used above only to confirm the EID
+                    # actually resolves before we link it.
                     if enr_obj.enr_resolved_url:
                         try:
                             from aggregation import ingest
@@ -145,12 +157,12 @@ def poll_sc_enr_elections(self):
                                     "election_date":      election_obj.election_date,
                                     "jurisdiction_level": election_obj.jurisdiction_level,
                                 },
-                                fields={"results_url": enr_obj.enr_resolved_url},
+                                fields={"results_url": enr_obj.enr_base_url},
                             )
                             logger.info(
                                 "sc_enr.results_url_set election_pk=%d url=%s",
                                 election_obj.pk,
-                                enr_obj.enr_resolved_url,
+                                enr_obj.enr_base_url,
                             )
                         except Exception as exc:
                             logger.warning(

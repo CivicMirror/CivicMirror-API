@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import logging
+import re
 
 from celery import shared_task
 from django.core.cache import cache
@@ -67,9 +68,14 @@ def ingest_official_results(self, state: str, election_id: int):
         return
 
     if not result.rows:
+        # 'none' confidence means the adapter never attempted a fetch (e.g. no
+        # results_url configured yet) — nothing was found to be "partial", so
+        # leave races pending rather than mislabeling them as partial_results
+        # with zero rows in results_officialresult. Only a genuine partial
+        # mapping ('partial') earns that status.
         certification_status = (
             Race.CertificationStatus.PARTIAL_RESULTS
-            if result.mapping_confidence in {'none', 'partial'}
+            if result.mapping_confidence == 'partial'
             else Race.CertificationStatus.RESULTS_PENDING
         )
         Race.objects.filter(election=election).update(certification_status=certification_status)
@@ -146,6 +152,19 @@ def _race_source_identity(race) -> dict[str, str]:
 
 def _office_title_key(office_title: str) -> str:
     return " ".join((office_title or "").strip().lower().split())
+
+
+# Clarity represents a partisan primary as one contest per party, with the
+# party appended to the office title ("Governor - DEM", "U.S. Senate - REP").
+# Some states (e.g. SC) pre-create a single consolidated, non-partisan Race
+# per office spanning candidates from every party — so the exact office_title
+# match fails for every row even though the candidates match fine downstream.
+# Stripping this suffix is only tried as a fallback, after an exact match.
+_PARTY_SUFFIX_RE = re.compile(r'\s*-\s*(dem|rep|gop|ind|una|con|lib|grn)$')
+
+
+def _office_title_key_base(office_title: str) -> str:
+    return _PARTY_SUFFIX_RE.sub('', _office_title_key(office_title))
 
 
 def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
@@ -277,11 +296,18 @@ def _process_race_results(race, adapter_result, state: str):
 
     has_office_titles = any(r.office_title for r in adapter_result.rows)
     if filtered_rows is None and has_office_titles:
+        race_key = _office_title_key(race.office_title)
         filtered_rows = [
             r for r in adapter_result.rows
-            if r.office_title
-            and _office_title_key(r.office_title) == _office_title_key(race.office_title)
+            if r.office_title and _office_title_key(r.office_title) == race_key
         ]
+        if not filtered_rows:
+            # Fall back to matching per-party primary contests ("Governor - DEM"
+            # and "Governor - REP") against a single consolidated Race.
+            filtered_rows = [
+                r for r in adapter_result.rows
+                if r.office_title and _office_title_key_base(r.office_title) == race_key
+            ]
         if not filtered_rows:
             # Feed has office titles but none matched this race — skip rather than
             # risk corrupting it with results from a different contest.
