@@ -189,6 +189,71 @@ class TestSyncCaRaces:
         assert result["errors"] == len(SAMPLE_CATALOG_ENTRIES)
         assert result["created"] == 0
 
+    def test_contest_fetch_error_does_not_withdraw_that_endpoints_candidates(self, db):
+        """Regression for #126: a transient error fetching one endpoint must
+        not mark that endpoint's existing candidates WITHDRAWN, while a
+        candidate genuinely absent from a *successfully* fetched endpoint's
+        response should still be withdrawn as before."""
+        from datetime import date
+
+        from elections.models import Candidate, Election, Race
+        from integrations.ca_sos.exceptions import CaSosError
+        from integrations.ca_sos.tasks import sync_ca_races
+
+        election = Election.objects.create(
+            source_id="ca_sos_test_126",
+            name="CA Test 126",
+            election_date=date(2026, 3, 3),
+            jurisdiction_level="state",
+            state="CA",
+            status="upcoming",
+        )
+
+        # Pre-existing candidate on the endpoint that will error this run —
+        # must survive as RUNNING.
+        errored_race = Race.objects.create(
+            election=election, race_type="candidate", office_title="Ballot Measures",
+            jurisdiction="California", geography_scope="statewide", source="ca_sos",
+            source_metadata={"ca_endpoint": "/returns/ballot-measures"},
+        )
+        surviving_candidate = Candidate.objects.create(
+            race=errored_race, name="Dana Existing", candidate_status=Candidate.CandidateStatus.RUNNING,
+        )
+
+        # Pre-existing candidate on the endpoint that succeeds this run but no
+        # longer appears in the response — must still be withdrawn.
+        ok_race = Race.objects.create(
+            election=election, race_type="candidate", office_title="Governor",
+            jurisdiction="California", geography_scope="statewide", source="ca_sos",
+            source_metadata={"ca_endpoint": "/returns/governor"},
+        )
+        stale_candidate = Candidate.objects.create(
+            race=ok_race, name="Carol Old", candidate_status=Candidate.CandidateStatus.RUNNING,
+        )
+
+        def fetch_contest_side_effect(endpoint_path):
+            if endpoint_path == "/returns/ballot-measures":
+                raise CaSosError("upstream 500")
+            return SAMPLE_CONTEST_RESPONSE
+
+        with (
+            patch("integrations.ca_sos.tasks.CaSosClient") as mock_client_cls,
+            patch("integrations.ca_sos.tasks.cache"),
+        ):
+            mock_client = MagicMock()
+            mock_client_cls.return_value = mock_client
+            mock_client.fetch_contest.side_effect = fetch_contest_side_effect
+
+            result = sync_ca_races.apply(
+                args=[election.pk, json.dumps(SAMPLE_CATALOG_ENTRIES), "fp1"]
+            ).get()
+
+        assert result["errors"] == 1
+        surviving_candidate.refresh_from_db()
+        assert surviving_candidate.candidate_status == Candidate.CandidateStatus.RUNNING
+        stale_candidate.refresh_from_db()
+        assert stale_candidate.candidate_status == Candidate.CandidateStatus.WITHDRAWN
+
 
 # ---------------------------------------------------------------------------
 # New integration test: catalog-date extraction + ingest service routing
