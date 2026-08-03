@@ -187,6 +187,7 @@ def _tally_candidates(race, votes, total):
             'id': cand.id,
             'label': cand.name,
             'type': 'candidate',
+            'party': cand.party,
             'count': count,
             'percent': _pct(count, voter_count),
         })
