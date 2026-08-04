@@ -51,3 +51,48 @@ def test_fetch_county_results_raises_on_connection_error(mock_get):
 
     with pytest.raises(MdSbeRetryableError):
         MdSbeClient().fetch_county_results(year=2024, cycle_prefix="PG", county_code="01")
+
+
+@patch("integrations.md_sbe.client.requests.Session.get")
+def test_fetch_statewide_candidate_csv_primary_phase(mock_get):
+    """Fetch primary candidate list and build correct URL with full year and cycle prefix."""
+    response = MagicMock(status_code=200)
+    response.content = "Office Name,Candidate Name\r\nGovernor,Jane Doe\r\n".encode("utf-8-sig")
+    mock_get.return_value = response
+
+    text = MdSbeClient().fetch_statewide_candidate_csv(year=2026, cycle_prefix="GP", phase="primary")
+
+    assert text == "Office Name,Candidate Name\r\nGovernor,Jane Doe\r\n"
+    called_url = mock_get.call_args[0][0]
+    assert called_url == (
+        "https://elections.maryland.gov/elections/2026/primary_candidates/"
+        "2026_GP_statewide_candidatelist.csv"
+    )
+
+
+@patch("integrations.md_sbe.client.requests.Session.get")
+def test_fetch_statewide_candidate_csv_general_phase(mock_get):
+    """Fetch general candidate list and build correct URL with full year and cycle prefix."""
+    response = MagicMock(status_code=200)
+    response.content = "Office Name,Candidate Name\r\nSenator,John Smith\r\n".encode("utf-8-sig")
+    mock_get.return_value = response
+
+    text = MdSbeClient().fetch_statewide_candidate_csv(year=2026, cycle_prefix="GG", phase="general")
+
+    assert text == "Office Name,Candidate Name\r\nSenator,John Smith\r\n"
+    called_url = mock_get.call_args[0][0]
+    assert called_url == (
+        "https://elections.maryland.gov/elections/2026/general_candidates/"
+        "2026_GG_statewide_candidatelist.csv"
+    )
+
+
+@patch("integrations.md_sbe.client.requests.Session.get")
+def test_fetch_statewide_candidate_csv_soft_404(mock_get):
+    """Detect soft-404 in candidate list response."""
+    response = MagicMock(status_code=200)
+    response.content = ("<html><body>Page Not Found</body></html>" + "x" * 14400).encode("utf-8")
+    mock_get.return_value = response
+
+    with pytest.raises(MdSbeRetryableError):
+        MdSbeClient().fetch_statewide_candidate_csv(year=2026, cycle_prefix="GP", phase="primary")
