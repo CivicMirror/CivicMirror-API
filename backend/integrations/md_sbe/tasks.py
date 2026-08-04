@@ -68,7 +68,10 @@ def sync_md_elections(self):
                     fields={
                         "name": f"{cycle.year} Maryland {phase.title()} Election",
                         "status": status,
-                        "source_metadata": {"cycle_prefix": cycle.cycle_prefix, "phase": phase},
+                        "source_metadata": {
+                            "cycle_prefix": cycle.prefix_for_phase(phase),
+                            "phase": phase,
+                        },
                     },
                 )
                 created += int(was_created)
@@ -109,7 +112,7 @@ def sync_md_races(self):
             sync_log.save(update_fields=["status", "notes", "completed_at"])
             return {"created": 0, "updated": 0, "skipped_out_of_scope": 0}
 
-        phase = "primary" if today <= cycle.primary_date else "general"
+        phase = cycle.phase_for_date(today)
         election_type = phase
         election = Election.objects.filter(
             state="MD", election_type=election_type, election_date=(
@@ -125,19 +128,22 @@ def sync_md_races(self):
 
         client = MdSbeClient()
         csv_text = client.fetch_statewide_candidate_csv(
-            year=cycle.year, cycle_prefix=cycle.cycle_prefix, phase=phase,
+            year=cycle.year, cycle_prefix=cycle.prefix_for_phase(phase), phase=phase,
         )
         rows = parse_statewide_candidate_csv(csv_text)
-        groups = group_candidate_rows(rows)
+        # Primary contests are one race PER PARTY (MD groups every party's
+        # candidates under one Office Name/district row-set); general contests
+        # are one race spanning all parties' nominees. See group_candidate_rows.
+        groups = group_candidate_rows(rows, split_by_party=(phase == "primary"))
 
         created = updated = skipped_out_of_scope = 0
 
-        for (office_name, district), group_rows in groups.items():
+        for (office_name, district, party), group_rows in groups.items():
             if not is_in_scope_office(office_name):
                 skipped_out_of_scope += 1
                 continue
 
-            identity, fields = map_race_identity(office_name, district)
+            identity, fields = map_race_identity(office_name, district, party)
             race, race_created = ingest.ingest_race(
                 election=election, source=_SOURCE, identity=identity, fields=fields,
             )

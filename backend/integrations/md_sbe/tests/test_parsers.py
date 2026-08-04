@@ -56,6 +56,40 @@ def test_parse_county_results_csv_handles_comma_thousands_and_blank_against_colu
     assert rows[0]["total_votes"] == 9231
 
 
+def test_parse_county_results_csv_captures_office_district():
+    """Without Office District, every legislative district's votes for an
+    office collapse into one bogus statewide row that can never match a
+    district-qualified race."""
+    rows = parse_county_results_csv(_load_fixture("md_county01_us_congress.csv"))
+    delaney = next(r for r in rows if r["candidate_name"] == "April McClain Delaney")
+
+    assert delaney["office_name"] == "U.S. Congress"
+    assert delaney["district"] == "06"
+    assert delaney["total_votes"] == 9785
+
+
+def test_parse_county_results_csv_leaves_district_blank_for_statewide_offices():
+    rows = parse_county_results_csv(_load_fixture("md_county01_us_senator.csv"))
+    assert all(r["district"] == "" for r in rows)
+
+
+def test_parse_county_results_csv_handles_primary_per_party_file():
+    """MD's primary per-party files omit "Write-In?" and the "* Against"
+    columns, and pad the final header with a trailing space ("Total Votes ") —
+    header lookups must be whitespace-tolerant or every total reads as 0."""
+    rows = parse_county_results_csv(_load_fixture("md_gp26_county01_democratic.csv"))
+    moore = next(r for r in rows if r["candidate_name"] == "Wes Moore and Aruna Miller")
+
+    assert moore["total_votes"] == 2781
+    assert moore["party"] == "DEM"
+    assert moore["is_winner"] is True
+    assert moore["is_write_in"] is False
+
+    delegate = next(r for r in rows if r["office_name"] == "House of Delegates" and r["district"] == "01B")
+    assert delegate["candidate_name"] == "Rhiannon C. Brown"
+    assert delegate["total_votes"] == 2037
+
+
 def test_parse_county_results_csv_skips_rows_with_no_office_name():
     csv_text = (
         '"Office Name","Candidate Name","Party","Winner","Write-In?","Total Votes"\n'
