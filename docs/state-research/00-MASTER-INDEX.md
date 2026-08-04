@@ -71,7 +71,7 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **TX** | Texas | ✅ Complete | ✅ Complete | ✅ Complete (GoElect ENR) | Full Core |
 | **IL** | Illinois | ✅ Complete | ✅ Complete | ✅ Complete (IL SBE CSV) | Full Core |
 | **NC** | North Carolina | ✅ Complete (`sync_nc_elections`, S3 ENRS/ folder listing) | ✅ Complete (`sync_nc_candidates`, Candidate Filing CSV; federal + state legislative + state executive scope) | ✅ Complete (NCSBE S3) | Full Core |
-| **NY** | New York | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (Flateau DB) | Near Core |
+| **NY** | New York | ✅ Complete (`ny_boe`, `sync_ny_elections`) | ✅ Complete (`ny_boe`, `sync_ny_races`; 433 races/1285 candidates verified) | ✅ Complete (Flateau DB, multi-county) | Full Core |
 | **CA** | California | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (CA SOS) | Near Core |
 | **NJ** | New Jersey | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (multi-county Clarity, ~16/21 counties) | Near Core (partial) |
 | **MN** | Minnesota | ⚠️ POC election upsert | ✅ Complete for federal/state result-file scope | ✅ Complete (MN SOS flat files) | Near Core (partial) |
@@ -88,7 +88,7 @@ Tracks Stage 1 (Election Discovery + Race Creation) and Stage 2 (Results Ingesti
 | **OH** | Ohio | ✅ Available (Civic API) | ⚠️ Untested | ⚠️ Pending CF solver deploy (Clarity ENR) | Near Core (adapter built, CF solver required) |
 | **TN** | Tennessee | ✅ Complete | ✅ Complete | ⚠️ Certified XLSX adapter; live dashboard pending active-election transport capture | Near Core (partial) |
 | **VT** | Vermont | ✅ Complete (vt_sos) | ✅ Complete (vt_sos, incl. contest_variant primary disambiguation) | ✅ Complete (VT static JSON feed, statewide/district totals) | Full Core |
-| **MD** | Maryland | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (county CSVs, statewide offices; 2024 general historical snapshot only) | Results Coverage Only |
+| **MD** | Maryland | ✅ Complete (`md_sbe`, `sync_md_elections`) | ✅ Complete (`md_sbe`, `sync_md_races`; party-split primaries) | ✅ Complete (live cycle, full office scope incl. district matching) | Near Core (pending production verification) |
 | **MO** | Missouri | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (Grand Totals PDF via pdfplumber, statewide top-of-ticket; 2024 general only) | Results Coverage Only |
 | **NM** | New Mexico | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (BPro TotalVote election-wide CSV, hyper-local municipal election data; Civera ElectionStats deferred, issue #84) | Results Coverage Only |
 | **UT** | Utah | ✅ Available (Civic API) | ⚠️ Untested | ✅ Complete (EnhancedVotingAdapter subclass, same platform as GA/VA/WA; statewide `ballotItems` only) | Results Coverage Only |
@@ -118,16 +118,17 @@ Stage 1 and Stage 2 complete for Federal and State offices. Election discovery, 
 - Vermont (VT) — vt_sos (static JSON feed; statewide-only scope, local elections deferred)
 - Virginia (VA) — VA ELECT ENR
 - Washington (WA) — VoteWA ENR
+- New York (NY) — `ny_boe`: `sync_ny_elections` + `sync_ny_races` (Stage 1, shipped PR #100 + #123) alongside the existing Flateau results adapter (Stage 2). Promoted 2026-08-04 after 9 consecutive clean unattended daily cron runs (2026-07-26 through 2026-08-04, `ops_synclog` all `status=completed`/`error_count=0`, steady 433 races/day) with zero recurrences of the #40 `no_election_name` bug and zero candidate-match warnings; 25 `OfficialResult` rows confirmed attached to Stage-1-created races.
 
 ### Near Core Coverage
 
 Stage 2 results adapter is complete and active. Stage 1 race creation relies on Civic API (untested for all state offices) or has a production wiring gap.
 
 - California (CA) — results adapter built; race creation depends on Civic API
+- Maryland (MD) — native Stage 1 (`md_sbe`: `sync_md_elections` + `sync_md_races`, PR #152, merged 2026-08-04) and a widened Stage 2 (live cycle, full office scope, party-split primaries, district-aware result matching) both merged, but **not yet promoted to Full Core** — same bar NY cleared before its own promotion: crontab wiring in production plus several consecutive days of clean unattended `ops_synclog` runs (`sync_md_elections`/`sync_md_races`, `status=completed`/`error_count=0`) and confirmed `OfficialResult` attachment. Known follow-up, not blocking: the results adapter's archived-vs-current-cycle URL path doesn't yet flip correctly once MD archives the 2026 election post-certification.
 - Iowa (IA) — 2026 primary verification created 272 races, 555 candidates, and 555 `OfficialResult` rows from Clarity. The SOS candidate PDF parser returned zero rows, and unattended results-URL discovery remains blocked until `electionresults.iowa.gov` is added to the CF proxy allowlist.
 - Minnesota (MN) — results adapter built for SOS semicolon-delimited flat files; `sync_mn_races` seeds the scoped federal/state race/candidate set from the same official files. Election discovery is still a POC/upsert path, not a full election-manifest adapter.
 - New Jersey (NJ) — results adapter built (multi-county Clarity sweep, ~16 of 21 counties); 5 off-platform counties (Bergen, Camden, Sussex, Warren, Hunterdon) deferred. Includes office/candidate name normalization to handle cross-county inconsistency. See `docs/state-research/NJ/NJ-Election_Research.md`.
-- New York (NY) — results adapter built (Flateau DB); race creation depends on Civic API
 - Oregon (OR) — Stage 1 current-election/race/candidate/local-measure sync built from Oregon SOS + ORESTAR sources; Stage 2 parses structured certified result documents when discoverable or when `or_results_url` is present. PDF/legacy XLS and statewide live results remain out of scope.
 
 ### Results Coverage Only
@@ -137,13 +138,12 @@ Stage 2 results adapter available. No dedicated Stage 1 adapter — elections an
 - Arkansas (AR) — TotalVote ENR
 - Alabama (AL) — Stage 2 ENR Excel export adapter; Stage 1 still Google Civic/manual until state candidate/race source is implemented. Requires `source_metadata["al_ecode"]` until ecode discovery is built.
 - Connecticut (CT) — PCC EMS
-- Maryland (MD) — county CSVs, statewide offices, 2024 general historical snapshot only (PR #82)
 - Missouri (MO) — Grand Totals PDF (pdfplumber), statewide top-of-ticket, 2024 general only (PR #83)
 - New Mexico (NM) — BPro TotalVote election-wide CSV, hyper-local municipal election data (PR #85); Civera ElectionStats deferred, issue #84
 - Utah (UT) — EnhancedVotingAdapter subclass (same platform as GA/VA/WA), statewide `ballotItems` only (PR #86)
 - Clarity sweep states (AK, DE, HI, ID, IN, KS, LA, ME, MS, MT, ND, NE, NH, NV, OK, RI, SD, WI, WV, WY) — requires `results_url` set per election in Django admin. **WV corrected here 2026-07-24** — previously miscategorized as Full Core; it has no dedicated Stage 1 integration (no `integrations/wv_sos/`, no `WV_SOS` in `Race.Source`, no scheduled Stage 1 task), only the Stage 2 `results/adapters/wv.py` Clarity subclass. Election/race creation is Civic-API-driven like every other Clarity sweep state.
 
-**Current focus (issue #87):** migrate CA, NY (results adapters already built, closest to Full Core) and then MD/MO/NM/UT up to Full Core by building native Stage 1 adapters, replacing Civic API's role in election/race creation — not by adding more Results-Coverage-Only states. Vermont (VT) completed this migration 2026-07-22; North Carolina (NC) completed it 2026-07-22 (PR #98, merged; scheduler reloaded) — both have moved to Full Core above.
+**Current focus (issue #87):** migrate CA (results adapter already built, closest to Full Core) and then MO/NM/UT up to Full Core by building native Stage 1 adapters, replacing Civic API's role in election/race creation — not by adding more Results-Coverage-Only states. Vermont (VT) completed this migration 2026-07-22; North Carolina (NC) completed it 2026-07-22 (PR #98, merged; scheduler reloaded); New York (NY) completed it 2026-08-04 (Stage 1 shipped PR #100/#123, promoted after a clean week of unattended cron runs) — all three have moved to Full Core above. Maryland (MD) shipped Stage 1 + widened Stage 2 2026-08-04 (PR #152, merged) but is awaiting the same production-verification bar before promotion — see its Near Core entry above. CA remains blocked on upstream CA SOS ENR API 500s (issue #88).
 
 ### Research/Build Scaffold
 
