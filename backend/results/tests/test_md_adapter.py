@@ -1,3 +1,4 @@
+import datetime
 import os
 from datetime import date
 from unittest.mock import patch
@@ -7,6 +8,8 @@ import pytest
 from integrations.md_sbe.parsers import parse_county_results_csv
 from results.adapters.md import MarylandAdapter
 from results.adapters.md_aggregate import aggregate_county_rows
+
+pytestmark = pytest.mark.django_db
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -144,11 +147,6 @@ def test_md_is_registered_via_app_ready():
 
     assert "MD" in list_supported_states()
     assert get_adapter("MD") is MarylandAdapter
-
-
-import datetime
-
-pytestmark = pytest.mark.django_db
 
 
 def test_fetch_results_uses_active_cycle_not_hardcoded_2024(db):

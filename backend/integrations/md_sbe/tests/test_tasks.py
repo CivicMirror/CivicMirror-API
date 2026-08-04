@@ -9,8 +9,8 @@ pytestmark = pytest.mark.django_db
 
 
 def test_sync_md_elections_creates_election_for_active_cycle():
-    from integrations.md_sbe.tasks import sync_md_elections
     from elections.models import Election
+    from integrations.md_sbe.tasks import sync_md_elections
 
     with patch("integrations.md_sbe.tasks.timezone") as mock_tz:
         mock_tz.localdate.return_value = datetime.date(2026, 3, 1)
@@ -23,8 +23,8 @@ def test_sync_md_elections_creates_election_for_active_cycle():
 
 
 def test_sync_md_races_creates_races_and_candidates_for_in_scope_offices():
+    from elections.models import Candidate, Election, Race
     from integrations.md_sbe.tasks import sync_md_elections, sync_md_races
-    from elections.models import Election, Race, Candidate
 
     csv_text = (
         "﻿Office Name,Contest Run By District Name and Number,"
