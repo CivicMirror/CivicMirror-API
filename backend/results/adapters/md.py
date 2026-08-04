@@ -9,15 +9,32 @@ Schema: per-county CSV, already county-aggregated (no precinct summing) —
         this adapter sums Total Votes for each (office, candidate) pair
         across all 24 counties' files.
 
-Scope (this build): statewide offices on the historical Nov 5, 2024 general
-election only — "President - Vice Pres" and "U.S. Senator". U.S. House,
-State Senate/House of Delegates, judicial, and ballot questions are
-follow-up work (need the separate CongressionalBreakDown/LegislativeBreakDown
-files and district-to-race mapping).
+Scope: offices matching integrations.md_sbe.mappers.IN_SCOPE_OFFICES — the
+same office set Stage 1 uses to create races (Governor/Lt. Governor,
+Attorney General, Comptroller, U.S. Senator, Representative in Congress,
+State Senator, House of Delegates). Judicial and county/local offices are
+out of scope for both stages (see ADR-005/COVERAGE-CLARIFICATION).
 
-Cycle prefix resolution: hardcoded to "PG" (Presidential General) + year 2024
-for this historical POC. Live discovery of the current cycle's prefix for
-future elections is out of scope — see the plan's "Follow-up work" section.
+Cycle year/prefix resolution: sourced live from
+integrations.md_sbe.calendar.get_active_cycle(election_date) — the same
+statutory-dates table Stage 1 (Task 1) uses — falling back to the hardcoded
+2024/"PG" (Presidential General) constants only when the table has no entry
+covering election_date's year. That fallback keeps the historical 2024
+fixture-based tests (results/tests/fixtures/md_county*.csv) working, and is
+also what production would need if this adapter is ever asked to resync an
+election whose cycle predates the maintained table.
+
+KNOWN UNKNOWN: whether the per-county RESULTS CSV's "Office Name" values
+exactly match the candidate-list CSV's "Office Name" values that
+IN_SCOPE_OFFICES was built from (e.g. does the results file say "House of
+Delegates" or something more specific like "Delegate District 1A"?) has not
+been verified — no 2026 results exist yet since the election hasn't
+happened, and the 2024 fixtures only cover "President - Vice Pres" and
+"U.S. Senator". If a live 2026 results CSV later turns out to use different
+Office Name strings than the candidate CSV for the same office, add a small
+alias map in md_aggregate.py at that point — do not widen or rename
+IN_SCOPE_OFFICES itself, since it must stay in sync with Stage 1's race
+office_titles exactly as defined.
 """
 from __future__ import annotations
 
@@ -26,8 +43,10 @@ import logging
 
 from django.core.cache import cache
 
+from integrations.md_sbe.calendar import get_active_cycle
 from integrations.md_sbe.client import MdSbeClient
 from integrations.md_sbe.exceptions import MdSbeRetryableError
+from integrations.md_sbe.mappers import IN_SCOPE_OFFICES
 from integrations.md_sbe.parsers import parse_county_results_csv
 
 from .base import AdapterResult, StateResultsAdapter
@@ -37,7 +56,10 @@ from .registry import register
 logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 86400 * 30  # 30 days
-_OFFICE_ALLOWLIST = frozenset({"President - Vice Pres", "U.S. Senator"})
+_OFFICE_ALLOWLIST = IN_SCOPE_OFFICES  # replaces the old {"President - Vice Pres", "U.S. Senator"}
+# Fallback constants for elections whose cycle predates the maintained
+# MD_ELECTION_CYCLES table (see integrations/md_sbe/calendar.py) — currently
+# only exercised by the historical 2024 fixture-based tests.
 _CYCLE_PREFIX = "PG"
 _YEAR = 2024
 # Read off the real class attribute once at module-import time (before any
@@ -67,6 +89,16 @@ class MarylandAdapter(StateResultsAdapter):
                 notes=f"Election pk={election_id} not found",
             )
 
+        # Resolve the cycle year/prefix live from the maintained statutory-dates
+        # table (same one Stage 1 uses), falling back to the hardcoded 2024/PG
+        # constants only when no table entry covers election_date's year — this
+        # keeps the historical 2024 fixture-based tests passing unmodified.
+        active_cycle = get_active_cycle(election_date)
+        if active_cycle is not None and active_cycle.year == election_date.year:
+            year, cycle_prefix = active_cycle.year, active_cycle.cycle_prefix
+        else:
+            year, cycle_prefix = _YEAR, _CYCLE_PREFIX
+
         client = MdSbeClient()
         all_rows: list[dict] = []
         csv_bytes_for_checksum = bytearray()
@@ -75,7 +107,7 @@ class MarylandAdapter(StateResultsAdapter):
         for county_code in _COUNTY_CODES:
             try:
                 csv_text = client.fetch_county_results(
-                    year=_YEAR, cycle_prefix=_CYCLE_PREFIX, county_code=county_code,
+                    year=year, cycle_prefix=cycle_prefix, county_code=county_code,
                 )
             except MdSbeRetryableError as exc:
                 logger.warning(
@@ -84,7 +116,7 @@ class MarylandAdapter(StateResultsAdapter):
                 continue
             csv_bytes_for_checksum.extend(csv_text.encode("utf-8", errors="ignore"))
             source_url = MdSbeClient.build_url(
-                year=_YEAR, cycle_prefix=_CYCLE_PREFIX, county_code=county_code,
+                year=year, cycle_prefix=cycle_prefix, county_code=county_code,
             )
             all_rows.extend(parse_county_results_csv(csv_text))
 

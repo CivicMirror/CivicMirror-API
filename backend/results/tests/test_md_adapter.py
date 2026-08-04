@@ -144,3 +144,40 @@ def test_md_is_registered_via_app_ready():
 
     assert "MD" in list_supported_states()
     assert get_adapter("MD") is MarylandAdapter
+
+
+import datetime
+
+pytestmark = pytest.mark.django_db
+
+
+def test_fetch_results_uses_active_cycle_not_hardcoded_2024(db):
+    from elections.models import Election
+    from results.adapters.md import MarylandAdapter
+
+    election = Election.objects.create(
+        name="2026 Maryland General Election", state="MD",
+        election_date=datetime.date(2026, 11, 3), election_type="general",
+        jurisdiction_level="state",
+    )
+
+    with patch("results.adapters.md.get_active_cycle") as mock_cycle:
+        from integrations.md_sbe.calendar import MdElectionCycle
+        mock_cycle.return_value = MdElectionCycle(
+            year=2026, primary_date=datetime.date(2026, 6, 23),
+            general_date=datetime.date(2026, 11, 3), cycle_prefix="GG",
+        )
+        with patch("results.adapters.md.MdSbeClient.fetch_county_results", return_value=""):
+            adapter = MarylandAdapter()
+            result = adapter.fetch_results(election.election_date, election.pk)
+
+    # No rows expected from an empty fixture, but the call must not raise
+    # and must not silently fall back to the 2024/PG constants.
+    assert result.source_url == "" or "2026" in result.source_url
+
+
+def test_office_allowlist_includes_state_legislative_offices():
+    from results.adapters.md import _OFFICE_ALLOWLIST
+    assert "Governor / Lt. Governor" in _OFFICE_ALLOWLIST
+    assert "State Senator" in _OFFICE_ALLOWLIST
+    assert "House of Delegates" in _OFFICE_ALLOWLIST

@@ -15,6 +15,21 @@ emitted as one ResultRow with candidate_name="Write-In" and
 is_write_in_aggregate=True — never one row per write-in candidate name,
 since downstream candidate matching treats all is_write_in_aggregate rows
 as candidate=None and would otherwise collide on the same DB key.
+
+NOTE on office_allowlist matching: `office_allowlist` (passed in by
+results/adapters/md.py as integrations.md_sbe.mappers.IN_SCOPE_OFFICES) is
+matched against each row's `office_name` by exact string equality. That set
+was built from the candidate-list CSV's "Office Name" column; whether the
+per-county RESULTS CSV uses the identical strings for every office
+(especially "House of Delegates" — the results file may instead break this
+out per-district, e.g. "Delegate District 1A") has not been verified, since
+no 2026 results CSV exists yet. If a live results CSV is later found to use
+different Office Name strings than the candidate CSV for the same office,
+add a small alias map here (e.g. `_OFFICE_NAME_ALIASES: dict[str, str]`
+translating a results-CSV office_name to the canonical IN_SCOPE_OFFICES
+value before the allowlist check) rather than changing IN_SCOPE_OFFICES
+itself. Do not invent that alias map speculatively without evidence from a
+real results CSV.
 """
 from __future__ import annotations
 
