@@ -115,6 +115,7 @@ class Race(models.Model):
         VT_SOS = 'vt_sos', 'Vermont SOS'
         NC_SBE = 'nc_sbe', 'North Carolina SBE'
         NY_BOE = 'ny_boe', 'New York BOE'
+        MD_SBE = 'md_sbe', 'Maryland SBE'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'
