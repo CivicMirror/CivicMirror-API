@@ -21,8 +21,8 @@ def _build_workbook_bytes(rows: list[tuple]) -> bytes:
 
 
 def test_sync_ut_elections_creates_primary_and_general():
-    from integrations.ut_elections.tasks import sync_ut_elections
     from elections.models import Election
+    from integrations.ut_elections.tasks import sync_ut_elections
 
     with patch("integrations.ut_elections.tasks.timezone") as mock_tz:
         mock_tz.localdate.return_value = datetime.date(2026, 8, 5)
@@ -35,8 +35,8 @@ def test_sync_ut_elections_creates_primary_and_general():
 
 
 def test_sync_ut_races_creates_races_and_candidates_for_in_scope_sections():
+    from elections.models import Candidate, Election, Race
     from integrations.ut_elections.tasks import sync_ut_elections, sync_ut_races
-    from elections.models import Election, Race, Candidate
 
     workbook_bytes = _build_workbook_bytes([
         ("Federal Offices", None, None, None),
