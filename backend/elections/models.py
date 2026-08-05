@@ -116,6 +116,7 @@ class Race(models.Model):
         NC_SBE = 'nc_sbe', 'North Carolina SBE'
         NY_BOE = 'ny_boe', 'New York BOE'
         MD_SBE = 'md_sbe', 'Maryland SBE'
+        UT_ELECTIONS = 'ut_elections', 'Utah Elections'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'
