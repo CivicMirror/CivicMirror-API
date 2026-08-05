@@ -116,3 +116,41 @@ def test_candidate_status_for_filed_returns_none_to_skip():
 def test_candidate_status_for_unknown_status_defaults_to_running():
     from integrations.ut_elections.mappers import candidate_status_for
     assert candidate_status_for("Some New Status UT Adds Later") == "running"
+
+
+def test_map_race_identity_district_office():
+    from integrations.ut_elections.mappers import map_race_identity
+    identity, fields = map_race_identity("U.S. House District 1")
+    assert identity["office_title"] == "U.S. House District 1"
+    assert identity["contest_variant"] == "ut:U.S. House District 1"
+    assert fields["geography_scope"] == "district"
+    assert fields["source"] == "ut_elections"
+
+
+def test_map_race_identity_statewide_office():
+    from integrations.ut_elections.mappers import map_race_identity
+    identity, fields = map_race_identity("Governor / Lieutenant Governor")
+    assert identity["office_title"] == "Governor / Lieutenant Governor"
+    assert fields["geography_scope"] == "statewide"
+
+
+def test_map_candidate_running_status():
+    from integrations.ut_elections.mappers import map_candidate
+    row = {"name": "BEN MCADAMS", "status": "Election Candidate"}
+    fields = map_candidate(row)
+    assert fields is not None
+    assert fields["candidate_status"] == "running"
+    assert fields["source_metadata"]["ut_status"] == "Election Candidate"
+
+
+def test_map_candidate_filed_returns_none():
+    from integrations.ut_elections.mappers import map_candidate
+    row = {"name": "SOMEONE NEW", "status": "Filed"}
+    assert map_candidate(row) is None
+
+
+def test_map_candidate_withdrawn_status():
+    from integrations.ut_elections.mappers import map_candidate
+    row = {"name": "KATHLEEN A. RIEBE", "status": "Withdrew"}
+    fields = map_candidate(row)
+    assert fields["candidate_status"] == "withdrawn"

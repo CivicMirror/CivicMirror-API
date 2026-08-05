@@ -123,3 +123,57 @@ def candidate_status_for(status_raw: str) -> str | None:
     if key in _SKIP_STATUSES:
         return None
     return _CANDIDATE_STATUS_MAP.get(key, "running")
+
+
+def map_race_identity(office: str) -> tuple[dict, dict]:
+    """
+    Return (identity, fields) for aggregation.ingest.ingest_race, from one
+    Office cell value. Utah's workbook already stores the full contest name
+    (office + district, when applicable) in a single cell — no split is
+    needed, unlike Maryland's separate office/district columns.
+    """
+    from elections.models import Race
+
+    office_title = (office or "").strip()
+    is_district = "district" in office_title.lower()
+    variant = f"ut:{office_title}"
+
+    identity = {
+        "office_title": office_title,
+        "ocd_division_id": "",
+        "race_type": Race.RaceType.CANDIDATE,
+        "contest_variant": variant,
+    }
+    fields = {
+        "office_title": office_title,
+        "jurisdiction": "Utah",
+        "geography_scope": "district" if is_district else "statewide",
+        "vote_method": Race.VoteMethod.SINGLE_CHOICE,
+        "max_selections": 1,
+        "source": Race.Source.UT_ELECTIONS,
+        "source_metadata": {
+            "provider": "ut_elections",
+            "office": office_title,
+            "contest_variant": variant,
+        },
+    }
+    return identity, fields
+
+
+def map_candidate(row: dict) -> dict | None:
+    """
+    Map a parsed candidate-filing row to Candidate model fields, or None if
+    the row's status means "never reached a ballot" (see candidate_status_for).
+    """
+    status_raw = (row.get("status") or "").strip()
+    candidate_status = candidate_status_for(status_raw)
+    if candidate_status is None:
+        return None
+
+    return {
+        "candidate_status": candidate_status,
+        "source_metadata": {
+            "provider": "ut_elections",
+            "ut_status": status_raw,
+        },
+    }
