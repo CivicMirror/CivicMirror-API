@@ -171,6 +171,7 @@ INSTALLED_APPS += [
     'integrations.mi_sos',
     'integrations.al_sos',
     'integrations.md_sbe',
+    'integrations.ut_elections',
     'integrations.vt_sos',
     'integrations.ny_boe',
     'internal',
