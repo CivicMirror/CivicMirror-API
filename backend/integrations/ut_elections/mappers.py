@@ -77,3 +77,49 @@ def parse_candidate_filing_workbook(content: bytes) -> list[dict]:
         })
 
     return rows
+
+
+def titlecase_name(raw: str) -> str:
+    """
+    Best-effort display-name casing for the source's ALL-CAPS candidate
+    names. Python's str.title() handles ordinary names and apostrophe names
+    ("O'Dell") correctly but does not special-case Mc/Mac surnames
+    ("MCADAMS" -> "Mcadams", not "McAdams") — accepted as a known
+    display-quality limitation; no name dictionary is available to fix it.
+    """
+    return (raw or "").strip().title()
+
+
+# Statuses observed live 2026-08-05 (post-primary): "Election Candidate",
+# "Out in Convention", "Out in Primary", "Withdrew", "Disqualified".
+# "Primary" and "Filed" are documented in the research doc as earlier-stage
+# statuses (pre-primary) not observed in this snapshot; mapped here from the
+# state's own documented status vocabulary. "Out in Convention"/"Out in
+# Primary" mean the candidate lost a party process and never reached any
+# public ballot — modeled as WITHDRAWN (closest fit in the 4-value
+# CandidateStatus enum; there is no distinct "eliminated" status).
+_CANDIDATE_STATUS_MAP: dict[str, str] = {
+    "election candidate": "running",
+    "primary": "running",
+    "withdrew": "withdrawn",
+    "out in convention": "withdrawn",
+    "out in primary": "withdrawn",
+    "disqualified": "disqualified",
+}
+# "Filed" is the earliest pre-viability stage (declared but not yet advanced
+# past any qualification step) — skip these rows entirely rather than
+# creating a Candidate record for someone who never reached a ballot.
+_SKIP_STATUSES: frozenset[str] = frozenset({"filed"})
+
+
+def candidate_status_for(status_raw: str) -> str | None:
+    """
+    Map a raw filing status to a Candidate.CandidateStatus value.
+    Returns None to signal the row should be skipped entirely (Filed only).
+    Unknown/future statuses default to "running" (least-destructive default,
+    same convention used by every other state adapter's status mapping).
+    """
+    key = (status_raw or "").strip().lower()
+    if key in _SKIP_STATUSES:
+        return None
+    return _CANDIDATE_STATUS_MAP.get(key, "running")

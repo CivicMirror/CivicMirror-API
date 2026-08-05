@@ -77,3 +77,42 @@ def test_parse_candidate_filing_workbook_handles_blank_party():
 
     rows = parse_candidate_filing_workbook(content)
     assert rows[0]["party"] == ""
+
+
+def test_titlecase_name_ordinary_names():
+    from integrations.ut_elections.mappers import titlecase_name
+    assert titlecase_name("RILEY OWEN") == "Riley Owen"
+
+
+def test_titlecase_name_apostrophe_name():
+    from integrations.ut_elections.mappers import titlecase_name
+    assert titlecase_name("JASON O'DELL") == "Jason O'Dell"
+
+
+def test_titlecase_name_does_not_special_case_mc_surnames():
+    # Known, documented limitation: no name dictionary available.
+    from integrations.ut_elections.mappers import titlecase_name
+    assert titlecase_name("BEN MCADAMS") == "Ben Mcadams"
+
+
+@pytest.mark.parametrize("status_raw,expected", [
+    ("Election Candidate", "running"),
+    ("Primary", "running"),
+    ("Withdrew", "withdrawn"),
+    ("Out in Convention", "withdrawn"),
+    ("Out in Primary", "withdrawn"),
+    ("Disqualified", "disqualified"),
+])
+def test_candidate_status_for_maps_known_statuses(status_raw, expected):
+    from integrations.ut_elections.mappers import candidate_status_for
+    assert candidate_status_for(status_raw) == expected
+
+
+def test_candidate_status_for_filed_returns_none_to_skip():
+    from integrations.ut_elections.mappers import candidate_status_for
+    assert candidate_status_for("Filed") is None
+
+
+def test_candidate_status_for_unknown_status_defaults_to_running():
+    from integrations.ut_elections.mappers import candidate_status_for
+    assert candidate_status_for("Some New Status UT Adds Later") == "running"
