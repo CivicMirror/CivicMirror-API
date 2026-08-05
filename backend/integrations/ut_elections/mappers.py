@@ -57,9 +57,12 @@ def parse_candidate_filing_workbook(content: bytes) -> list[dict]:
             section = a
             continue
 
-        if a == "Candidate" and b == "Office":
+        a_norm = a.strip().lower() if isinstance(a, str) else a
+        b_norm = b.strip().lower() if isinstance(b, str) else b
+
+        if a_norm == "candidate" and b_norm == "office":
             continue  # sub-header row within an office section
-        if a == "Judicial Retention" and b == "Status":
+        if a_norm == "judicial retention" and b_norm == "status":
             continue  # sub-header row within the judicial section (out of scope anyway)
 
         if not a or section is None:
@@ -68,10 +71,14 @@ def parse_candidate_filing_workbook(content: bytes) -> list[dict]:
         if not is_in_scope_section(section):
             continue
 
+        office = (b or "").strip() if isinstance(b, str) else (b or "")
+        if not office:
+            continue  # blank Office cell: not a usable candidate/office row
+
         rows.append({
             "section": section,
             "name": a,
-            "office": (b or "").strip() if isinstance(b, str) else (b or ""),
+            "office": office,
             "party": (c or "").strip() if isinstance(c, str) else (c or ""),
             "status": (d or "").strip() if isinstance(d, str) else (d or ""),
         })
@@ -125,6 +132,19 @@ def candidate_status_for(status_raw: str) -> str | None:
     return _CANDIDATE_STATUS_MAP.get(key, "running")
 
 
+# NOTE: does not party-split primary-phase races. Utah runs closed party
+# primaries and the source workbook has a Party column, but contest_variant
+# below is built from office_title alone, with no party component. During
+# `phase == "primary"` (see tasks.py) this would collapse every party's
+# candidates for one office into a single Race with a mixed/empty party.
+# This is the exact same defect Maryland's Stage 1 adapter shipped with and
+# had to fix in a follow-up PR (commit b441806) — see
+# integrations/md_sbe/mappers.py's `contest_variant_key` docstring for the
+# rationale and the party-split shape a real fix would take
+# (group_candidate_rows(split_by_party=...)).
+# Not live-impacting for the 2026 cycle: Utah's June 23, 2026 primary has
+# already passed, so `phase` is permanently "general" for the current cycle.
+# MUST be fixed before Utah's 2028 primary season begins.
 def map_race_identity(office: str) -> tuple[dict, dict]:
     """
     Return (identity, fields) for aggregation.ingest.ingest_race, from one

@@ -79,6 +79,41 @@ def test_parse_candidate_filing_workbook_handles_blank_party():
     assert rows[0]["party"] == ""
 
 
+def test_parse_candidate_filing_workbook_skips_row_with_blank_office():
+    from integrations.ut_elections.mappers import parse_candidate_filing_workbook
+
+    content = _build_workbook([
+        ("Federal Offices", None, None, None),
+        (None, None, None, None),
+        ("Candidate", "Office", "Party", "Status"),
+        ("BEN MCADAMS", "U.S. House District 1", "Democratic", "Election Candidate"),
+        ("NO OFFICE LISTED", None, "Democratic", "Election Candidate"),
+    ])
+
+    rows = parse_candidate_filing_workbook(content)
+
+    assert len(rows) == 1
+    assert rows[0]["name"] == "BEN MCADAMS"
+    assert all(r["name"] != "NO OFFICE LISTED" for r in rows)
+
+
+def test_parse_candidate_filing_workbook_subheader_detection_is_whitespace_and_case_tolerant():
+    from integrations.ut_elections.mappers import parse_candidate_filing_workbook
+
+    content = _build_workbook([
+        ("Federal Offices", None, None, None),
+        (None, None, None, None),
+        ("candidate", "Office ", "Party", "Status"),
+        ("BEN MCADAMS", "U.S. House District 1", "Democratic", "Election Candidate"),
+    ])
+
+    rows = parse_candidate_filing_workbook(content)
+
+    assert len(rows) == 1
+    assert rows[0]["name"] == "BEN MCADAMS"
+    assert all(r["name"] not in ("candidate", "Candidate") for r in rows)
+
+
 def test_titlecase_name_ordinary_names():
     from integrations.ut_elections.mappers import titlecase_name
     assert titlecase_name("RILEY OWEN") == "Riley Owen"

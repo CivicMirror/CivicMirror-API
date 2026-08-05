@@ -36,6 +36,17 @@ def test_fetch_candidate_filing_workbook_raises_on_non_200(mock_get):
 
 
 @patch("integrations.ut_elections.client.requests.Session.get")
+def test_fetch_candidate_filing_workbook_raises_on_soft_404_html_body(mock_get):
+    response = MagicMock(status_code=200)
+    response.content = b"<html><body>Not Found</body></html>"
+    mock_get.return_value = response
+
+    client = UtElectionsClient()
+    with pytest.raises(UtElectionsRetryableError):
+        client.fetch_candidate_filing_workbook(_URL)
+
+
+@patch("integrations.ut_elections.client.requests.Session.get")
 def test_fetch_candidate_filing_workbook_raises_on_connection_error(mock_get):
     mock_get.side_effect = requests.ConnectionError("boom")
 
