@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import hashlib
-import textwrap
 from datetime import date
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,22 +15,22 @@ from results.models import OfficialResult
 pytestmark = pytest.mark.django_db
 
 
-SUMMARY_TEXT = "\n".join([
-    "Format#1",
-    "#Contest ID,Contest Title,Contest Seq Nbr,Contest Type,Contest Party,Mail Blank Votes,In-Person Blank Votes,Mail Over Votes,In-Person Over Votes,Mail Invalid Votes,In-Person Invalid Votes,Registered Voters,Total Precincts,Counted Precincts,Candidate ID,Candidate Name,Candidate Seq Nbr,Candidate Party,Mail Votes,In-Person Votes,Total Votes",
-    '"283","President and Vice President","1","OF",,"4882","128","498","27","0","0","860868","497","497","1","(D) HARRIS, Kamala D. \r\nFor PRESIDENT\r\nWALZ, Tim \r\nFor VICE PRESIDENT","2",,"300312","12732","313044",',
-    '"283","President and Vice President","1","OF",,"4882","128","498","27","0","0","860868","497","497","2","(R) TRUMP, Donald J. \r\nFor PRESIDENT\r\nVANCE, JD \r\nFor VICE PRESIDENT","6",,"168016","25645","193661",',
-    '"297","Question #1","64","MS",,"38098","2793","2010","155","0","0","860868","494","494","2","YES","1",,"253321","14717","268038",',
-    '"297","Question #1","64","MS",,"38098","2793","2010","155","0","0","860868","494","494","1","NO","2",,"189649","21493","211142",',
-]).encode("utf-16")
-
-
-MEDIA_TEXT = "\n".join([
-    "Format#1",
-    '#"Precinct_Name","Split_Name","precinct_splitId","Reg_voters","Ballots","Reporting","Contest_id","Contest_title","Contest_party","Choice_id","Candidate_name","Choice_party","Candidate_Type","Mail votes","In-Person votes"',
-    '"01-01",,"1","6628","4074","1","283","President and Vice President",,"1","(D) HARRIS, Kamala D. \r\nFor PRESIDENT\r\nWALZ, Tim \r\nFor VICE PRESIDENT",,"C","2748","0",',
-    '"01-01",,"1","6628","4074","1","283","President and Vice President",,"2","(R) TRUMP, Donald J. \r\nFor PRESIDENT\r\nVANCE, JD \r\nFor VICE PRESIDENT",,"C","1160","0",',
-]).encode("utf-16")
+# Fixtures are verbatim rows from the real Office of Elections files. Hawaii
+# publishes two different shapes and the adapter has to handle both:
+#
+#   general_summary.txt - Contest Party column empty, party carried as a "(D) "
+#                         prefix on the candidate name
+#   primary_summary.txt - Contest Party column populated (D/R/G/L/N/W/NON),
+#                         candidate names bare
+#
+# The previous hand-written fixture used the general shape while asserting
+# primary-style expectations, which is why every test passed against an adapter
+# that produced empty parties on real primary files.
+_FIXTURES = Path(__file__).parent / "fixtures" / "hi"
+SUMMARY_TEXT = (_FIXTURES / "general_summary.txt").read_bytes()
+PRIMARY_SUMMARY_TEXT = (_FIXTURES / "primary_summary.txt").read_bytes()
+MEDIA_TEXT = (_FIXTURES / "primary_media.txt").read_bytes()
+PLACEHOLDER_TEXT = (_FIXTURES / "placeholder_summary.txt").read_bytes()
 
 
 INDEX_HTML = """
@@ -52,26 +52,70 @@ def _mock_response(*, content: bytes = b"", text: str = "", status_code: int = 2
     return resp
 
 
-def test_parse_summary_text_extracts_rows_and_normalizes_party_prefix():
+def test_parse_summary_text_reads_party_from_general_name_prefix():
     from results.adapters.hi import _parse_summary_text
 
     rows = _parse_summary_text(SUMMARY_TEXT, source_url="https://elections.hawaii.gov/election-results/")
-
-    assert len(rows) == 4
 
     dem = next(row for row in rows if row.candidate_name == "HARRIS, Kamala D.")
     rep = next(row for row in rows if row.candidate_name == "TRUMP, Donald J.")
     yes = next(row for row in rows if row.candidate_name == "YES")
 
     assert dem.vote_count == 313044
-    assert dem.is_winner is True
     assert dem.raw["party_code"] == "D"
     assert dem.raw["contest_variant"] == "hi:president and vice president:democratic"
-    assert rep.vote_count == 193661
-    assert rep.is_winner is True
+    assert rep.raw["contest_variant"] == "hi:president and vice president:republican"
     assert yes.option_label is None
-    assert yes.office_title == "Question #1"
     assert yes.raw["contest_type"] == "MS"
+
+
+def test_parse_summary_text_reads_party_from_primary_contest_column():
+    """Primary files leave candidate names bare and put the party in column 4."""
+    from results.adapters.hi import _parse_summary_text
+
+    rows = _parse_summary_text(PRIMARY_SUMMARY_TEXT, source_url="https://elections.hawaii.gov/")
+
+    assert rows, "fixture should contain rows"
+    # Every row must resolve a party. Reading only the name prefix left all of
+    # them empty, which broke the join to Stage 1 races entirely.
+    assert all(row.raw["party_name"] for row in rows)
+
+    senator = [r for r in rows if r.raw["contest_title"] == "U.S. Senator"]
+    assert {r.raw["party_name"] for r in senator} == {"GREEN", "REPUBLICAN"}
+
+    # "NON" is how the primary files spell the candidate report's
+    # "NONPARTISAN SPECIAL" (county and OHA contests).
+    mayor = next(r for r in rows if r.raw["contest_title"] == "Mayor")
+    assert mayor.raw["party_name"] == "NONPARTISAN SPECIAL"
+    assert mayor.raw["contest_variant"] == "hi:mayor:nonpartisan special"
+
+
+def test_parse_summary_text_marks_one_winner_per_contest():
+    """A general contest has a single winner, not one winner per party."""
+    from results.adapters.hi import _parse_summary_text
+
+    rows = _parse_summary_text(SUMMARY_TEXT, source_url="https://elections.hawaii.gov/")
+
+    president = [r for r in rows if r.raw["contest_id"] == "283"]
+    winners = [r for r in president if r.is_winner]
+
+    assert len(president) > 1
+    assert [w.candidate_name for w in winners] == ["HARRIS, Kamala D."]
+
+
+def test_parse_summary_text_keeps_same_titled_contests_distinct():
+    """'Mayor' covers two counties in 2024; contest_id keeps them apart."""
+    from results.adapters.hi import _parse_summary_text
+
+    rows = _parse_summary_text(PRIMARY_SUMMARY_TEXT, source_url="https://elections.hawaii.gov/")
+
+    mayor_ids = {r.raw["contest_id"] for r in rows if r.raw["contest_title"] == "Mayor"}
+    assert len(mayor_ids) == 2
+
+    # Winners are scoped per contest id, so each county gets exactly one.
+    for contest_id in mayor_ids:
+        group = [r for r in rows if r.raw["contest_id"] == contest_id]
+        assert sum(1 for r in group if r.is_winner) == 1
 
 
 def test_parse_media_text_extracts_precinct_rows():
@@ -79,11 +123,54 @@ def test_parse_media_text_extracts_precinct_rows():
 
     rows = _parse_media_text(MEDIA_TEXT, source_url="https://elections.hawaii.gov/election-results/")
 
-    assert len(rows) == 2
-    assert rows[0].jurisdiction_fragment == "1"
-    assert rows[0].vote_count == 2748
-    assert rows[0].raw["precinct_name"] == "01-01"
-    assert rows[0].raw["contest_variant"] == "hi:president and vice president:democratic"
+    assert rows
+    assert all(row.jurisdiction_fragment for row in rows)
+    assert all(row.raw["file_kind"] == "media" for row in rows)
+    assert all(row.raw["party_name"] for row in rows)
+
+
+def test_discover_result_urls_does_not_fall_back_to_another_year():
+    """A 2026 election must never resolve to the 2024 files sitting on the index."""
+    from results.adapters.hi import _discover_result_urls
+
+    election = Election(
+        election_date=date(2026, 8, 8), election_type="primary", state="HI",
+    )
+    index_html = (
+        '<a href="https://files.hawaii.gov/elections/files/results/2024/General/summary.txt">2024</a>'
+        '<a href="https://files.hawaii.gov/elections/files/results/2024/General/media.txt">2024</a>'
+    )
+
+    assert _discover_result_urls(index_html, election) == ("", "")
+
+
+def test_discover_result_urls_matches_year_and_section():
+    from results.adapters.hi import _discover_result_urls
+
+    election = Election(
+        election_date=date(2024, 11, 5), election_type="general", state="HI",
+    )
+    index_html = (
+        '<a href="https://files.hawaii.gov/elections/files/results/2024/Primary/summary.txt">p</a>'
+        '<a href="https://files.hawaii.gov/elections/files/results/2024/General/summary.txt">g</a>'
+        '<a href="https://files.hawaii.gov/elections/files/results/2024/General/media.txt">g</a>'
+    )
+
+    summary_url, media_url = _discover_result_urls(index_html, election)
+
+    assert summary_url.endswith("/2024/General/summary.txt")
+    assert media_url.endswith("/2024/General/media.txt")
+
+
+def test_decode_result_text_handles_non_utf16_placeholder():
+    """The pre-election stub is plain ASCII; utf-16 decoding raised on it."""
+    from results.adapters.hi import _decode_result_text, _looks_like_result_file
+
+    text = _decode_result_text(PLACEHOLDER_TEXT)
+
+    assert "later date" in text
+    assert _looks_like_result_file(text) is False
+    assert _looks_like_result_file(_decode_result_text(SUMMARY_TEXT)) is True
 
 
 @patch("results.adapters.hi.requests.get")

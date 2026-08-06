@@ -559,6 +559,19 @@ source_url|retrieved_at|content_hash
 
 Treat contest and choice IDs as election-scoped unless cross-election stability is separately demonstrated.
 
+#### Adapter conformance (added August 6, 2026)
+
+The shipped `results/adapters/hi.py` does **not** yet join on `official_contest_id`. It builds a `contest_variant` string of `hi:{contest_title}:{party_name}` and matches that against `Race.source_metadata`. Measured against the real 2024 primary, 121 of 145 result variants match the candidate report. The 24 that do not divide as:
+
+- **22 county contests**, where the candidate report carries the county ("HAWAII COUNCILMEMBER, DIST 1") and the result files do not ("Councilmember, Dist 1"). No result column contains the county. It is inferable only from `media.txt` precinct prefixes, which are state house districts and therefore tied to the reapportionment vintage — so it must not be hardcoded as a static range table.
+- **2 write-in aggregate rows**, which have no filed candidate and therefore no Stage 1 race. Expected.
+
+A third, general-election-specific case: nonpartisan county and OHA contests carry no party in *either* location in general files, so party alone cannot separate them from statewide nonpartisan contests.
+
+Same-titled contests do not corrupt vote totals today — the ingest filters rows to a race and then matches each row to a candidate by name, so rows belonging to another county's contest are dropped with a warning. The cost is spurious `PARTIAL_RESULTS` status and log noise, not wrong numbers.
+
+Moving to the `election_key|official_contest_id` join recommended above remains the durable fix. It requires Stage 1 to attach the contest id to the Race after results publish, since the candidate report has no contest identifier of its own.
+
 ### Extraction procedure
 
 1. Fetch the results index.
