@@ -16,7 +16,28 @@ from .parsers import parse_candidate_report_csv
 logger = logging.getLogger(__name__)
 
 _SOURCE = "hi_olvr"
-_PRIMARY_STATUS = "In Primary"
+
+# Candidate Report statuses that mean "this candidate reached a ballot".
+# The portal advances a candidate's status after the primary ("In General",
+# "Elected", "Elected After Primary"), so filtering to "In Primary" alone
+# would drop every primary winner and — via the withdrawn sweep below — mark
+# them WITHDRAWN the morning after the election.
+#
+# Caveat: "In General" cannot distinguish a candidate who advanced from the
+# primary from one who only ever appears on the general ballot (nonpartisan
+# special and vacancy contests). Both are currently attached to the primary
+# Election that map_election() creates. Splitting primary vs general into
+# separate Elections is tracked as the Stage 1 identity rework.
+_BALLOT_QUALIFIED_STATUSES = frozenset({
+    "In Primary",
+    "In General",
+    "Elected",
+    "Elected After Primary",
+})
+# "Issued" means nomination papers were handed out, not that the candidate
+# filed; "Withdrawn"/"Void" are terminal non-ballot states.
+_NON_BALLOT_STATUSES = frozenset({"Issued", "Withdrawn", "Void"})
+_KNOWN_STATUSES = _BALLOT_QUALIFIED_STATUSES | _NON_BALLOT_STATUSES
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
@@ -32,8 +53,14 @@ def sync_hi_elections(self=None):
     try:
         client = HawaiiOlvrClient()
         _landing_html, report_url, elid = client.resolve_candidate_report()
-        csv_bytes = client.fetch_candidate_report_csv(report_url)
-        rows = [row for row in parse_candidate_report_csv(csv_bytes) if row.status == _PRIMARY_STATUS]
+        csv_bytes = client.fetch_candidate_report_csv(report_url, expected_elid=elid)
+        all_rows = parse_candidate_report_csv(csv_bytes)
+        rows = [row for row in all_rows if row.status in _BALLOT_QUALIFIED_STATUSES]
+        unknown_statuses = sorted(
+            {row.status for row in all_rows if row.status and row.status not in _KNOWN_STATUSES}
+        )
+        if unknown_statuses:
+            logger.warning("hi_olvr.sync_elections.unknown_statuses statuses=%s", unknown_statuses)
 
         election_fields = map_election()
         election, election_created = ingest.ingest_election(
