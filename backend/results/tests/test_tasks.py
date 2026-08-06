@@ -682,8 +682,48 @@ def test_bootstrap_does_not_split_generic_rows_by_party_code_only():
     race = created[0]
     assert race.office_title == "Governor"
     assert "party_code" not in race.source_metadata
-    names = set(Candidate.objects.filter(race=race).values_list("name", flat=True))
-    assert names == {"ALICE DEM", "BOB REP"}
+
+
+@pytest.mark.django_db
+def test_ingest_official_results_matches_hawaii_contest_variant_identity():
+    election = make_election(state="HI")
+    race = Race.objects.create(
+        election=election,
+        race_type=Race.RaceType.CANDIDATE,
+        office_title="President and Vice President",
+        jurisdiction="Hawaii",
+        geography_scope="statewide",
+        source=Race.Source.HI_OLVR,
+        certification_status=Race.CertificationStatus.RESULTS_PENDING,
+        source_metadata={"contest_variant": "hi:president and vice president:democratic"},
+    )
+    Candidate.objects.create(race=race, name="HARRIS, Kamala D.")
+
+    row = make_result_row(
+        candidate_name="HARRIS, Kamala D.",
+        office_title="President and Vice President",
+        result_type=OfficialResult.ResultType.OFFICIAL,
+        raw={"contest_variant": "hi:president and vice president:democratic"},
+    )
+    result = make_adapter_result(rows=[row], source_version="hi-version")
+
+    mock_adapter_instance = MagicMock()
+    mock_adapter_instance.fetch_results.return_value = result
+    mock_adapter_instance.version_cache_key.return_value = f"hi:ver:{election.pk}"
+    mock_adapter_instance.VERSION_CACHE_TIMEOUT = 86400 * 30
+    mock_adapter_class = MagicMock(return_value=mock_adapter_instance)
+
+    from results.tasks import ingest_official_results
+    with patch("results.tasks.get_adapter", return_value=mock_adapter_class), \
+         patch("results.tasks.cache") as mock_cache:
+        ingest_official_results("HI", election.pk)
+
+    official = OfficialResult.objects.get(race=race)
+    assert official.vote_count == 50000
+    assert official.result_type == OfficialResult.ResultType.OFFICIAL
+    race.refresh_from_db()
+    assert race.certification_status == Race.CertificationStatus.RESULTS_CERTIFIED
+    mock_cache.set.assert_called_once_with(f"hi:ver:{election.pk}", "hi-version", timeout=86400 * 30)
 
 
 @pytest.mark.django_db

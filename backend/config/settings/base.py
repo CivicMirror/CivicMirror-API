@@ -170,6 +170,7 @@ INSTALLED_APPS += [
     'integrations.tn_sos',
     'integrations.mi_sos',
     'integrations.al_sos',
+    'integrations.hi_olvr',
     'integrations.md_sbe',
     'integrations.vt_sos',
     'integrations.ny_boe',

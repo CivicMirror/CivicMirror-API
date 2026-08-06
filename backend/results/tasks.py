@@ -126,14 +126,21 @@ def _is_measure_race(office_title: str) -> bool:
     return any(kw in normalized for kw in _MEASURE_TITLE_KEYWORDS)
 
 
+def _identity_keys(source: dict) -> tuple[str, ...]:
+    # contest_variant is a standalone identity for adapters with no
+    # contest_code (e.g. HI). When contest_code is present, other adapters
+    # (e.g. MD) may still carry a contest_variant in Race.source_metadata for
+    # unrelated ingest matching, so it must not be pulled into row filtering.
+    contest_code = str(source.get("contest_code") or "").strip()
+    if contest_code:
+        return ("contest_code", "party_code")
+    return ("contest_variant",)
+
+
 def _row_source_identity(row) -> dict[str, str]:
     raw = row.raw or {}
-    contest_code = str(raw.get("contest_code") or "").strip()
-    if not contest_code:
-        return {}
-
     identity = {}
-    for key in ("contest_code", "party_code"):
+    for key in _identity_keys(raw):
         value = str(raw.get(key) or "").strip()
         if value:
             identity[key] = value
@@ -143,7 +150,7 @@ def _row_source_identity(row) -> dict[str, str]:
 def _race_source_identity(race) -> dict[str, str]:
     metadata = race.source_metadata or {}
     identity = {}
-    for key in ("contest_code", "party_code"):
+    for key in _identity_keys(metadata):
         value = str(metadata.get(key) or "").strip()
         if value:
             identity[key] = value
