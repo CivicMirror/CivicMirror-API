@@ -1,6 +1,14 @@
 # ADR-002: Scheduler Architecture — Cloud Scheduler over Celery Beat
 
 ## Status
+**Superseded 2026-08-06.** Production no longer runs on Cloud Run / Cloud Scheduler — it
+runs from local Docker Compose (`/data/DockerConfigs/CivicMirror`), with the schedule
+defined in `scheduler/crontab` on the `civicmirror-scheduler` container (cron → `trigger.sh`
+→ `http://civicmirror-api:8080/internal/tasks/...`). The GCP job registry and endpoint
+table below describe the retired Cloud Scheduler deployment and are kept for historical
+reference only; the crontab file is the current source of truth for the schedule. See
+issue #163.
+
 Accepted — Revised 2026-05-27 to reflect live production configuration
 
 ### Revision History

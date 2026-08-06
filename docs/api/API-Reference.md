@@ -1,7 +1,6 @@
 # CivicMirror API — Reference
 
-**Base URL (Production):** `https://civicmirror-api-866677508588.us-central1.run.app`
-**Custom Domain:** `https://api.civicmirror.welshrd.com` *(canonical — use this in frontend builds)*
+**Base URL (Production):** `https://civicmirror.app/api/` *(frontend nginx proxies `/api/` to the `civicmirror-api` container; the API itself is not directly internet-facing)*
 **API Version:** v1
 **All endpoints prefixed with:** `/api/v1/` (an unversioned `/api/` alias also exists — see note below)
 

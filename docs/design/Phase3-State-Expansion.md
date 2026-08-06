@@ -217,20 +217,15 @@ Currently only a subset of states have sample addresses configured. Adding one a
 ## Verification Per Deployed State
 
 ```bash
-INTERNAL_TOKEN=$(gcloud secrets versions access latest --secret=INTERNAL_TASK_TOKEN --project=civicmirror-2026)
-API_KEY=$(gcloud secrets versions access latest --secret=CIVICMIRROR_API_KEY --project=civicmirror-2026)
-
 # 1. Trigger sync
-curl -s -X POST "https://api.civicmirror.welshrd.com/internal/tasks/sync-XX-sos/" \
-  -H "Authorization: Bearer $INTERNAL_TOKEN"
+docker exec civicmirror-scheduler /usr/local/bin/trigger.sh /internal/tasks/sync-XX-sos/
 
 # 2. Verify canonical rows exist with this state as a source
-curl -s "https://api.civicmirror.welshrd.com/api/elections/?state=XX" \
-  -H "X-Api-Key: $API_KEY" | python3 -m json.tool | grep -E "canonical_key|sources"
+curl -s "https://civicmirror.app/api/elections/?state=XX" \
+  -H "X-Api-Key: $CIVICMIRROR_API_KEY" | python3 -m json.tool | grep -E "canonical_key|sources"
 
 # 3. Trigger results poll (after setting results_url in admin)
-curl -s -X POST "https://api.civicmirror.welshrd.com/internal/tasks/poll-results/" \
-  -H "Authorization: Bearer $INTERNAL_TOKEN"
+docker exec civicmirror-scheduler /usr/local/bin/trigger.sh /internal/tasks/poll-results/
 ```
 
 Expected: `canonical_key` is non-null; `sources` array contains `"xx_sos"`.
