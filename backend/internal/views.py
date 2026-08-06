@@ -31,7 +31,7 @@ from integrations.or_sos.tasks import sync_or_elections
 from integrations.pa_sos.tasks import sync_pa_elections
 from integrations.sc_enr.tasks import poll_sc_enr_elections, sync_sc_enr_results
 from integrations.sc_vrems.tasks import sync_sc_elections
-from integrations.tn_sos.tasks import sync_tn_elections
+from integrations.tn_sos.tasks import sync_tn_elections, sync_tn_result_index
 from integrations.tx_goelect.tasks import sync_tx_elections as _sync_tx_elections
 from integrations.ut_elections.tasks import sync_ut_elections, sync_ut_races
 from integrations.va_elect.tasks import sync_va_elections
@@ -355,6 +355,13 @@ def sync_pa_sos_trigger(request):
 @require_internal_task_token
 def sync_tn_sos_trigger(request):
     return _trigger("sync_tn_sos", sync_tn_elections, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_tn_result_index_trigger(request):
+    return _trigger("sync_tn_result_index", sync_tn_result_index, request)
 
 
 @csrf_exempt
