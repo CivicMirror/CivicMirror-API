@@ -33,6 +33,7 @@ from integrations.sc_enr.tasks import poll_sc_enr_elections, sync_sc_enr_results
 from integrations.sc_vrems.tasks import sync_sc_elections
 from integrations.tn_sos.tasks import sync_tn_elections
 from integrations.tx_goelect.tasks import sync_tx_elections as _sync_tx_elections
+from integrations.ut_elections.tasks import sync_ut_elections, sync_ut_races
 from integrations.va_elect.tasks import sync_va_elections
 from integrations.vt_sos.tasks import sync_vt_elections
 from integrations.wa_votewa.tasks import sync_wa_elections
@@ -221,6 +222,20 @@ def sync_md_elections_trigger(request):
 @require_internal_task_token
 def sync_md_races_trigger(request):
     return _trigger("sync_md_races", sync_md_races, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_ut_elections_trigger(request):
+    return _trigger("sync_ut_elections", sync_ut_elections, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_ut_races_trigger(request):
+    return _trigger("sync_ut_races", sync_ut_races, request)
 
 
 @csrf_exempt
