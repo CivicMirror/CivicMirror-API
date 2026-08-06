@@ -112,6 +112,7 @@ class Race(models.Model):
         OR_SOS = 'or_sos', 'Oregon SOS'
         KY_SOS = 'ky_sos', 'Kentucky SOS'
         AL_SOS = 'al_sos', 'Alabama SOS'
+        HI_OLVR = 'hi_olvr', 'Hawaii OLVR'
         VT_SOS = 'vt_sos', 'Vermont SOS'
         NC_SBE = 'nc_sbe', 'North Carolina SBE'
         NY_BOE = 'ny_boe', 'New York BOE'
