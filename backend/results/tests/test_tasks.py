@@ -438,6 +438,30 @@ def test_process_race_matches_party_suffixed_contests_to_consolidated_race():
 
 
 @pytest.mark.django_db
+def test_process_race_matches_contest_ignoring_punctuation_after_party_strip():
+    """SC's candidate-metadata source (sc_vrems) names a local race "City
+    Council at Large, Florence" (comma), but the Clarity results contest for
+    the same race is "City Council at Large Florence - DEM" (no comma, party
+    suffix). Neither the exact nor the party-suffix-only match handles the
+    punctuation difference — only the loose (punctuation-stripped) fallback
+    does."""
+    election = make_election(state="SC")
+    race = make_race(election, office_title="City Council at Large, Florence")
+    candidate = Candidate.objects.create(race=race, name="George D Jebaily")
+
+    row = make_result_row(
+        candidate_name="George D Jebaily",
+        office_title="City Council at Large Florence - DEM",
+    )
+    result = make_adapter_result(rows=[row])
+
+    from results.tasks import _process_race_results
+    _process_race_results(race, result, "SC")
+
+    assert OfficialResult.objects.filter(race=race, candidate=candidate).exists()
+
+
+@pytest.mark.django_db
 def test_process_race_no_office_titles_uses_all_rows():
     """When feed has no office_titles, fall back to all rows (non-Clarity adapters)."""
     election = make_election()

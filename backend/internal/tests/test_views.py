@@ -507,3 +507,13 @@ def test_md_elections_task_lock_registered():
 def test_md_races_task_lock_registered():
     from internal.task_locks import TASK_LOCKS
     assert TASK_LOCKS["sync_md_races"] == ("daily", 23 * 60 * 60)
+
+
+def test_ut_elections_task_lock_registered():
+    from internal.task_locks import TASK_LOCKS
+    assert TASK_LOCKS["sync_ut_elections"] == ("daily", 23 * 60 * 60)
+
+
+def test_ut_races_task_lock_registered():
+    from internal.task_locks import TASK_LOCKS
+    assert TASK_LOCKS["sync_ut_races"] == ("daily", 23 * 60 * 60)
