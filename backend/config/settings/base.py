@@ -101,7 +101,7 @@ ALLOWED_HOSTS = _csv_env('DJANGO_ALLOWED_HOSTS', default=['localhost', '127.0.0.
 
 # CORS — allow the frontend origin(s) to call this API directly.
 # In production, set CORS_ALLOWED_ORIGINS env var to a comma-separated list of
-# origins, e.g. "https://civicmirror.welshrd.com,https://www.civicmirror.welshrd.com".
+# origins, e.g. "https://civicmirror.app".
 # Defaults allow local development only.
 CORS_ALLOWED_ORIGINS: list[str] = _csv_env(
     'CORS_ALLOWED_ORIGINS',

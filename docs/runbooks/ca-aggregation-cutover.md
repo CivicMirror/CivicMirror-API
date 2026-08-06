@@ -35,17 +35,14 @@ python manage.py shell -c "from elections.models import Election; Election.objec
 ## 4. Re-sync the migrated sources
 
 ```bash
-INTERNAL_TOKEN=$(gcloud secrets versions access latest --secret=INTERNAL_TASK_TOKEN --project=civicmirror-2026)
-BASE="https://api.civicmirror.welshrd.com/internal/tasks"
-curl -s -X POST "$BASE/sync-elections/" -H "Authorization: Bearer $INTERNAL_TOKEN"   # Civic
-curl -s -X POST "$BASE/sync-ca-sos/"    -H "Authorization: Bearer $INTERNAL_TOKEN"   # CA SOS
+docker exec civicmirror-scheduler /usr/local/bin/trigger.sh /internal/tasks/sync-elections/   # Civic
+docker exec civicmirror-scheduler /usr/local/bin/trigger.sh /internal/tasks/sync-ca-sos/       # CA SOS
 ```
 
 ## 5. Verify the merge
 
 ```bash
-API_KEY=$(gcloud secrets versions access latest --secret=CIVICMIRROR_API_KEY --project=civicmirror-2026)
-curl -s "https://api.civicmirror.welshrd.com/api/elections/?state=CA" -H "X-Api-Key: $API_KEY"
+curl -s "https://civicmirror.app/api/elections/?state=CA" -H "X-Api-Key: $CIVICMIRROR_API_KEY"
 ```
 
 Expect a single CA primary with `canonical_key = "CA:primary:2026-06-02:state"` and
