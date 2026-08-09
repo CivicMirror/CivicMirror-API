@@ -343,11 +343,16 @@ def _discover_result_urls(index_html: str, election: Election) -> tuple[str, str
 
     def _pick(filename: str) -> str:
         lowered = filename.lower()
+        # Two known index path shapes: older years nest year and section as
+        # separate segments (".../2024/Primary/summary.txt"); 2026 collapses
+        # them into one segment with a space (".../2026 Primary/summary.txt").
         direct_matches = [
             href for href in candidates
-            if f"/{year}/" in href.lower()
-            and f"/{section}/" in href.lower()
-            and href.lower().endswith(lowered)
+            if href.lower().endswith(lowered)
+            and (
+                (f"/{year}/" in href.lower() and f"/{section}/" in href.lower())
+                or f"/{year} {section}/" in href.lower()
+            )
         ]
         if direct_matches:
             return direct_matches[0]
