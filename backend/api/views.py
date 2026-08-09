@@ -112,6 +112,15 @@ class RaceViewSet(ReadOnlyModelViewSet):
         # {count,next,previous,results} which the client could not read.
         race = self.get_object()
         qs = race.official_results.all()
+        # Some adapters (HI, WA, TX, PA) additionally persist a per-precinct/
+        # county breakdown alongside the statewide total, using the same
+        # jurisdiction_fragment='' natural key for the aggregate row. When an
+        # aggregate row exists, prefer it — otherwise this list balloons to
+        # one row per sub-jurisdiction per candidate instead of one row per
+        # candidate. States that only ever emit sub-jurisdiction rows (no
+        # empty-fragment aggregate) are unaffected by this filter.
+        if qs.filter(jurisdiction_fragment='').exists():
+            qs = qs.filter(jurisdiction_fragment='')
         return Response(OfficialResultSerializer(qs, many=True).data)
 
 
