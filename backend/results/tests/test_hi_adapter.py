@@ -162,6 +162,25 @@ def test_discover_result_urls_matches_year_and_section():
     assert media_url.endswith("/2024/General/media.txt")
 
 
+def test_discover_result_urls_matches_single_segment_year_section():
+    """2026 moved from /{year}/{section}/ to a single "{year} {section}" segment."""
+    from results.adapters.hi import _discover_result_urls
+
+    election = Election(
+        election_date=date(2026, 8, 8), election_type="primary", state="HI",
+    )
+    index_html = (
+        '<a href="https://elections.hawaii.gov/wp-content/results/2026 Primary/summary.txt">2026</a>'
+        '<a href="https://elections.hawaii.gov/wp-content/results/2026 Primary/media.txt">2026</a>'
+        '<a href="https://files.hawaii.gov/elections/files/results/2024/Primary/summary.txt">2024</a>'
+    )
+
+    summary_url, media_url = _discover_result_urls(index_html, election)
+
+    assert summary_url.endswith("2026 Primary/summary.txt")
+    assert media_url.endswith("2026 Primary/media.txt")
+
+
 def test_decode_result_text_handles_non_utf16_placeholder():
     """The pre-election stub is plain ASCII; utf-16 decoding raised on it."""
     from results.adapters.hi import _decode_result_text, _looks_like_result_file
