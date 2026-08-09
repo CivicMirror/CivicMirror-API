@@ -103,6 +103,21 @@ def test_parse_summary_text_marks_one_winner_per_contest():
     assert [w.candidate_name for w in winners] == ["HARRIS, Kamala D."]
 
 
+def test_parse_summary_text_computes_vote_pct_from_contest_total():
+    """The summary file has no percent column; derive it from each
+    candidate's share of the contest's own total votes."""
+    from results.adapters.hi import _parse_summary_text
+
+    rows = _parse_summary_text(SUMMARY_TEXT, source_url="https://elections.hawaii.gov/")
+
+    president = [r for r in rows if r.raw["contest_id"] == "283"]
+    contest_total = sum(r.vote_count for r in president)
+
+    for row in president:
+        assert row.vote_pct == pytest.approx(row.vote_count / contest_total * 100, abs=0.01)
+    assert abs(sum(row.vote_pct for row in president) - 100) < 0.1
+
+
 def test_parse_summary_text_keeps_same_titled_contests_distinct():
     """'Mayor' covers two counties in 2024; contest_id keeps them apart."""
     from results.adapters.hi import _parse_summary_text

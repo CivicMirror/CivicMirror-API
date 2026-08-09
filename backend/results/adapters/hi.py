@@ -202,6 +202,14 @@ def _mark_summary_winners(rows: list[ResultRow]) -> None:
     for group_rows in groups.values():
         if not group_rows:
             continue
+
+        # The summary file has no percent column, so derive vote_pct as each
+        # candidate's share of the contest's own total (not registered voters
+        # or turnout) — the number frontends actually render next to a race.
+        contest_total = sum(row.vote_count for row in group_rows)
+        for row in group_rows:
+            row.vote_pct = round(row.vote_count / contest_total * 100, 2) if contest_total > 0 else None
+
         top_vote = max(row.vote_count for row in group_rows)
         if top_vote <= 0:
             for row in group_rows:
