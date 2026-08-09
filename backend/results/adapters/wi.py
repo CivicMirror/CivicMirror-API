@@ -19,23 +19,37 @@ for the certified-vs-unofficial split this adapter follows. Election-night
 unofficial results are explicitly out of scope (72 independent county
 sites, no statewide feed) — tracked as a long-term item on #87/#170.
 
-XLSX shape ("... County by County Report.xlsx"), confirmed against a real
-captured file:
+WEC publishes at least two report shapes, confirmed against two real
+captured files (2025 Spring Election "County by County Report" and the
+2024 Partisan Primary "Ward by Ward Report" — the latter is what WEC
+actually posted for the closest real precedent to a partisan primary; a
+"County by County Report" was not published for every contest that cycle).
+Both share the same sheet layout, so the parser is written to handle
+either without caring which one it was given:
     Sheet 1 ("Document map"): title row, then one contest-title row per
         remaining sheet, in order. Not used for parsing — each contest
         sheet carries its own title, so Sheet 1 is skipped entirely.
     Sheet 2..N (one per contest):
-        Row 1: "WEC Canvass Reporting System\\nCounty by County Report"
-        Row 2: election name
-        Row 3: (blank)
-        Row 4: contest title (e.g. "STATE SUPERINTENDENT OF PUBLIC INSTRUCTION")
-        Row 5: (blank)
-        Row 6: header row — "County", "", "Total Votes Cast", then one
-            party code per candidate column ("NP", "DEM", "REP", ...)
-        Row 7: candidate name per column, aligned to row 6
-        Row 8+: one row per county — county name, blank, total votes cast,
-            then vote count per candidate column, aligned to row 6/7
-        A row ending the county list is blank/None in column A.
+        A few title/blank rows, then a contest title row (e.g.
+        "STATE SUPERINTENDENT OF PUBLIC INSTRUCTION", or, for partisan
+        contests, "REPRESENTATIVE IN CONGRESS DISTRICT 8 - Republican" —
+        confirmed to already match civic_api's "<OFFICE> - <Party>" Stage 1
+        title convention, full party name not an abbreviation).
+        Then a header row containing a "Total Votes Cast" cell — the
+        anchor this parser keys off, rather than a "County" label in
+        column A, because the Ward by Ward shape's column-A header cell
+        is blank. One party code follows per candidate column ("NP",
+        "DEM", "REP", ...).
+        Then a candidate-name row, aligned to the header row's columns.
+        Then one data row per geography — county name in column A for
+        the County by County shape; for Ward by Ward, county name is
+        forward-filled only on each county's first ward row and blank on
+        every row after, with the municipality/ward label in column B
+        instead. Column A therefore can't be used to detect the end of
+        data either way — the parser stops when the "Total Votes Cast"
+        column stops being numeric, and just sums every data row's
+        candidate columns into a statewide total regardless of whether
+        the rows are county- or ward-granularity.
 
 A "SCATTERING" column is WEC's catch-all for scattered write-in votes with
 no qualified candidate — treated as a write-in aggregate (candidate=None),
@@ -45,19 +59,6 @@ candidates and are treated as ordinary candidate rows.
 
 Because this file is WEC's own canvass report, all rows are OFFICIAL —
 there is no separate "unofficial election night" version to reconcile.
-
-Open risk, not yet verified against a real partisan-primary file: WI's
-Stage 1 (civic_api) races are titled with a party suffix, e.g.
-"ATTORNEY GENERAL - Democratic". This adapter's office titles come
-straight from each sheet's row 4 with no party suffix observed in the
-one real (nonpartisan, nonpartisan-primary-shaped) file checked so far.
-results/tasks.py's office-title fallback matching only strips
-abbreviated suffixes ("- DEM"/"- REP", not "- Democratic") and won't
-bridge that gap — if WI's partisan sheets also carry a party suffix in
-a different form, or don't split by party at all, races may fail to
-match and fall to PARTIAL_RESULTS the same way HI's title collisions do
-(see #161). Re-check office-title matching once the first partisan
-primary file is captured.
 """
 from __future__ import annotations
 
@@ -86,24 +87,30 @@ def _safe_int(value) -> int:
         return 0
 
 
-def _find_header_row(ws) -> int | None:
-    for row in ws.iter_rows(min_row=1, max_row=10):
-        first = row[0].value
-        if isinstance(first, str) and first.strip().lower() == "county":
-            return row[0].row
+def _find_header_row(ws) -> tuple[int, int] | None:
+    """Locate the header row by its "Total Votes Cast" cell rather than a
+    "County" label in column A — the County by County shape has one there,
+    but the Ward by Ward shape's column-A header cell is blank (county name
+    is forward-filled only on each county's first data row, so column A
+    can't be used to anchor the header either)."""
+    for row in ws.iter_rows(min_row=1, max_row=15):
+        for cell in row:
+            if isinstance(cell.value, str) and cell.value.strip().lower() == "total votes cast":
+                return cell.row, cell.column
     return None
 
 
 def _parse_contest_sheet(ws) -> list[ResultRow]:
-    header_row_idx = _find_header_row(ws)
-    if header_row_idx is None:
+    header_pos = _find_header_row(ws)
+    if header_pos is None:
         logger.warning("wi_sos.parse.no_header_row sheet=%s", ws.title)
         return []
+    header_row_idx, total_col = header_pos
 
     office_title = None
     for row in ws.iter_rows(min_row=1, max_row=header_row_idx - 1):
         value = row[0].value
-        if isinstance(value, str) and value.strip() and "County by County Report" not in value:
+        if isinstance(value, str) and value.strip():
             office_title = value.strip()
     if not office_title:
         logger.warning("wi_sos.parse.no_office_title sheet=%s", ws.title)
@@ -114,6 +121,8 @@ def _parse_contest_sheet(ws) -> list[ResultRow]:
 
     candidate_cols: dict[int, tuple[str, str]] = {}
     for cell in name_row:
+        if cell.column <= total_col:
+            continue
         name = cell.value.strip() if isinstance(cell.value, str) else None
         if not name:
             continue
@@ -125,10 +134,14 @@ def _parse_contest_sheet(ws) -> list[ResultRow]:
         logger.warning("wi_sos.parse.no_candidate_columns sheet=%s office=%s", ws.title, office_title)
         return []
 
+    # A real data row always has a numeric "Total Votes Cast"; county names
+    # are forward-filled in the Ward by Ward shape (blank on every row but
+    # each county's first), so column A can't be used to detect the end of
+    # data — anchor on the total-votes column going non-numeric instead.
     vote_counts: dict[int, int] = {col: 0 for col in candidate_cols}
     for row in ws.iter_rows(min_row=header_row_idx + 2):
-        county = row[0].value
-        if not isinstance(county, str) or not county.strip():
+        total_cell = row[total_col - 1].value
+        if not isinstance(total_cell, (int, float)):
             break
         for col in candidate_cols:
             vote_counts[col] += _safe_int(row[col - 1].value)

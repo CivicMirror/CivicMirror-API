@@ -50,6 +50,52 @@ def _build_workbook(sheets: list[dict]) -> bytes:
     return buf.getvalue()
 
 
+def _build_ward_workbook(sheets: list[dict]) -> bytes:
+    """Build a WEC "Ward by Ward Report" workbook — the shape actually used
+    for the 2024 Partisan Primary (confirmed from a real captured file, see
+    docs/state-research/WI/). Differs from the County by County shape:
+
+    - No "County" label in the header row (col A header cell is blank).
+    - County name is forward-filled: present only on each county's first
+      ward row, blank on every subsequent ward row for that county.
+    - Column B carries the municipality/ward label instead of being blank.
+
+    Both shapes anchor their header row on a "Total Votes Cast" cell in the
+    same column, which is what the parser must key off instead of column A.
+    """
+    wb = openpyxl.Workbook()
+    doc_map = wb.active
+    doc_map.title = "Document map"
+    doc_map.append(["Ward by Ward Report"])
+    for sheet in sheets:
+        doc_map.append([None, sheet["office_title"]])
+
+    for i, sheet in enumerate(sheets, start=2):
+        ws = wb.create_sheet(f"Sheet{i}")
+        ws.append(["WEC Canvass Reporting System"])
+        ws.append([])
+        ws.append(["Ward by Ward Report"])
+        ws.append([])
+        ws.append([sheet.get("election_name", "2026 Fall Partisan Primary")])
+        ws.append([])
+        ws.append([])
+        ws.append([sheet["office_title"]])
+        ws.append([])
+        header = ["", None, "Total Votes Cast"] + [c["party"] for c in sheet["candidates"]]
+        ws.append(header)
+        names = [None, None, None] + [c["name"] for c in sheet["candidates"]]
+        ws.append(names)
+        for county_name, wards in sheet["counties"]:
+            for j, (ward_label, votes) in enumerate(wards):
+                total = sum(votes)
+                county_cell = county_name if j == 0 else None
+                ws.append([county_cell, ward_label, total, *votes])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 _SAMPLE_SHEETS = [
     {
         "office_title": "STATE SUPERINTENDENT OF PUBLIC INSTRUCTION",
@@ -149,6 +195,57 @@ def test_parse_workbook_handles_multiple_contests():
 
     titles = {r.office_title for r in rows}
     assert titles == {"STATE SUPERINTENDENT OF PUBLIC INSTRUCTION", "ATTORNEY GENERAL"}
+
+
+def test_parse_workbook_sums_all_ward_rows_including_forward_filled_county():
+    """Ward by Ward Report shape: county name is blank after each county's
+    first ward row. The parser must not stop there — it must keep summing
+    every ward row until real data ends."""
+    from results.adapters.wi import _parse_workbook
+
+    sheets = [
+        {
+            "office_title": "REPRESENTATIVE IN CONGRESS DISTRICT 8 - Democratic",
+            "candidates": [
+                {"party": "DEM", "name": "Kristin Lyerly"},
+                {"party": "", "name": "SCATTERING"},
+            ],
+            "counties": [
+                ("BROWN", [
+                    ("Town of EATON", [95, 0]),
+                    ("Town of GLENMORE", [55, 0]),
+                    ("Town of GREEN BAY", [128, 1]),
+                ]),
+                ("OUTAGAMIE", [
+                    ("Town of BLACK CREEK", [40, 0]),
+                ]),
+            ],
+        },
+    ]
+    file_bytes = _build_ward_workbook(sheets)
+    rows = _parse_workbook(file_bytes)
+
+    lyerly = next(r for r in rows if r.candidate_name == "Kristin Lyerly")
+    scattering = next(r for r in rows if r.is_write_in_aggregate)
+
+    assert lyerly.vote_count == 95 + 55 + 128 + 40
+    assert scattering.vote_count == 0 + 0 + 1 + 0
+
+
+def test_parse_workbook_office_title_carries_party_suffix_for_partisan_contests():
+    from results.adapters.wi import _parse_workbook
+
+    sheets = [
+        {
+            "office_title": "UNITED STATES SENATOR - Democratic",
+            "candidates": [{"party": "DEM", "name": "Some, Candidate"}],
+            "counties": [("BROWN", [("Town of EATON", [10])])],
+        },
+    ]
+    file_bytes = _build_ward_workbook(sheets)
+    rows = _parse_workbook(file_bytes)
+
+    assert rows[0].office_title == "UNITED STATES SENATOR - Democratic"
 
 
 def test_parse_workbook_skips_document_map_sheet():
