@@ -192,6 +192,53 @@ def test_decode_result_text_handles_non_utf16_placeholder():
     assert _looks_like_result_file(_decode_result_text(SUMMARY_TEXT)) is True
 
 
+def test_decode_result_text_prefers_utf8_over_blind_utf16_guess():
+    """No-BOM ASCII bytes must not be misread as UTF-16 mojibake.
+
+    2026's files ship as plain UTF-8 with no BOM, unlike every prior year's
+    UTF-16+BOM export. A bare "try utf-16 first" guess rarely raises
+    UnicodeDecodeError on ASCII-ish bytes -- it just silently produces
+    garbage instead of falling through to utf-8.
+    """
+    from results.adapters.hi import _decode_result_text, _looks_like_result_file
+
+    no_bom_utf8 = (
+        "#FormatVersion 1\r\n"
+        "#Contest ID\tContest Title\tContest Type\r\n"
+        "338\tU.S. Representative, Dist I\tOF\r\n"
+    ).encode("utf-8")
+
+    text = _decode_result_text(no_bom_utf8)
+
+    assert text.startswith("#FormatVersion 1")
+    assert _looks_like_result_file(text) is True
+
+
+def test_parse_summary_text_handles_tab_delimited_2026_shape():
+    """2026 switched from comma-delimited "Format#1" files to tab-delimited
+    "#FormatVersion 1" files. The parser must detect the delimiter instead
+    of hardcoding comma, or every row is dropped as short/malformed.
+    """
+    from results.adapters.hi import _parse_summary_text
+
+    tab_delimited = (
+        "#FormatVersion 1\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\r\n"
+        "#Contest ID\tContest Title\tContest Seq Nbr\tContest Type\tContest Party\t"
+        "Mail Blank Votes\tIn-Person Blank Votes\tMail Over Votes\tIn-Person Over Votes\t"
+        "Mail Invalid Votes\tIn-Person Invalid Votes\tRegistered Voters\tTotal Precincts\t"
+        "Counted Precincts\tCandidate ID\tCandidate Name\tCandidate Seq Nbr\t"
+        "Candidate Party\tMail Votes\tIn-Person Votes\tTotal Votes\r\n"
+        '338\t"U.S. Representative, Dist I"\t1\tOF\tN\t696\t17\t0\t0\t1912\t38\t846543\t223\t1\t'
+        '1\t"BERNING, Nathan M."\t1\t\t856\t21\t877\r\n'
+    ).encode("utf-8")
+
+    rows = _parse_summary_text(tab_delimited, source_url="https://elections.hawaii.gov/")
+
+    assert len(rows) == 1
+    assert rows[0].candidate_name == "BERNING, Nathan M."
+    assert rows[0].vote_count == 877
+
+
 @patch("results.adapters.hi.requests.get")
 @patch("results.adapters.hi.cache")
 def test_fetch_results_discovers_files_from_index_and_matches_contest_variant(mock_cache, mock_get):
