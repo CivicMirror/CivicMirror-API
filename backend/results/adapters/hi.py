@@ -89,7 +89,12 @@ def _decode_result_text(file_bytes: bytes) -> str:
         return file_bytes.decode("utf-16")
     if file_bytes.startswith(codecs.BOM_UTF8):
         return file_bytes.decode("utf-8-sig")
-    for encoding in ("utf-16", "utf-8", "latin-1"):
+    # No BOM: try utf-8 first. A bare "utf-16" guess here is unsafe — decoding
+    # ASCII-ish bytes as UTF-16 rarely raises (it just pairs bytes into BMP
+    # code points), so it silently produces mojibake instead of falling
+    # through, which is exactly what happened to the 2026 files: they publish
+    # as plain UTF-8 with no BOM, unlike every prior year's UTF-16+BOM files.
+    for encoding in ("utf-8", "utf-16", "latin-1"):
         try:
             return file_bytes.decode(encoding)
         except UnicodeDecodeError:
@@ -197,6 +202,14 @@ def _mark_summary_winners(rows: list[ResultRow]) -> None:
     for group_rows in groups.values():
         if not group_rows:
             continue
+
+        # The summary file has no percent column, so derive vote_pct as each
+        # candidate's share of the contest's own total (not registered voters
+        # or turnout) — the number frontends actually render next to a race.
+        contest_total = sum(row.vote_count for row in group_rows)
+        for row in group_rows:
+            row.vote_pct = round(row.vote_count / contest_total * 100, 2) if contest_total > 0 else None
+
         top_vote = max(row.vote_count for row in group_rows)
         if top_vote <= 0:
             for row in group_rows:
@@ -206,9 +219,21 @@ def _mark_summary_winners(rows: list[ResultRow]) -> None:
             row.is_winner = row.vote_count == top_vote
 
 
+def _detect_delimiter(text: str) -> str:
+    """Hawaii's export delimiter isn't stable across years: older files are
+    comma-delimited with a "Format#1" header; 2026 switched to tab-delimited
+    with a "#FormatVersion 1" header. Pick the delimiter from the first
+    non-blank line rather than hardcoding comma.
+    """
+    for line in text.splitlines():
+        if line.strip():
+            return "\t" if "\t" in line else ","
+    return ","
+
+
 def _parse_summary_text(file_bytes: bytes, source_url: str) -> list[ResultRow]:
     text = _decode_result_text(file_bytes)
-    reader = csv.reader(io.StringIO(text))
+    reader = csv.reader(io.StringIO(text), delimiter=_detect_delimiter(text))
 
     rows: list[ResultRow] = []
     for record in reader:
@@ -265,7 +290,7 @@ def _parse_summary_text(file_bytes: bytes, source_url: str) -> list[ResultRow]:
 
 def _parse_media_text(file_bytes: bytes, source_url: str) -> list[ResultRow]:
     text = _decode_result_text(file_bytes)
-    reader = csv.reader(io.StringIO(text))
+    reader = csv.reader(io.StringIO(text), delimiter=_detect_delimiter(text))
 
     rows: list[ResultRow] = []
     for record in reader:

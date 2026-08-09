@@ -203,6 +203,67 @@ def test_race_results_action(client, candidate_race, candidate):
 
 
 @pytest.mark.django_db
+def test_race_results_action_prefers_aggregate_over_precinct_rows(client, candidate_race, candidate):
+    """When a race carries both a statewide total and a per-precinct
+    breakdown (HI, WA, TX, PA), the endpoint must return one row per
+    candidate, not one row per precinct per candidate."""
+    OfficialResult.objects.create(
+        race=candidate_race,
+        candidate=candidate,
+        vote_count=164685,
+        jurisdiction_fragment='',
+        result_type=OfficialResult.ResultType.OFFICIAL,
+    )
+    OfficialResult.objects.create(
+        race=candidate_race,
+        candidate=candidate,
+        vote_count=422,
+        jurisdiction_fragment='142',
+        result_type=OfficialResult.ResultType.OFFICIAL,
+    )
+    OfficialResult.objects.create(
+        race=candidate_race,
+        candidate=candidate,
+        vote_count=369,
+        jurisdiction_fragment='143',
+        result_type=OfficialResult.ResultType.OFFICIAL,
+    )
+
+    response = client.get(f'/api/v1/races/{candidate_race.id}/results/')
+
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) == 1
+    assert results[0]['vote_count'] == 164685
+
+
+@pytest.mark.django_db
+def test_race_results_action_returns_all_rows_when_no_aggregate_exists(client, candidate_race, candidate):
+    """States that only ever emit sub-jurisdiction rows (no empty-fragment
+    aggregate) must be unaffected by the aggregate-preference filter."""
+    OfficialResult.objects.create(
+        race=candidate_race,
+        candidate=candidate,
+        vote_count=200,
+        jurisdiction_fragment='precinct-1',
+        result_type=OfficialResult.ResultType.OFFICIAL,
+    )
+    OfficialResult.objects.create(
+        race=candidate_race,
+        candidate=candidate,
+        vote_count=150,
+        jurisdiction_fragment='precinct-2',
+        result_type=OfficialResult.ResultType.OFFICIAL,
+    )
+
+    response = client.get(f'/api/v1/races/{candidate_race.id}/results/')
+
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) == 2
+
+
+@pytest.mark.django_db
 def test_archived_race_results_action_returns_plain_array(client, election):
     race = Race.objects.create(
         election=election,
