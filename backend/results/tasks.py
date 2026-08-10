@@ -484,3 +484,50 @@ def poll_pending_results(self):
 
     logger.info("poll_pending_results: queued %d elections", queued)
     return {"queued": queued}
+
+
+_UPCOMING_WINDOW_DAYS = 14
+
+
+@shared_task(bind=True, max_retries=3)
+def poll_upcoming_results(self):
+    """
+    Poll elections in the next _UPCOMING_WINDOW_DAYS days that have a supported
+    (results-only-bootstrap) adapter, so candidate lists populate ahead of
+    election day instead of waiting for poll_pending_results the day after.
+
+    Only elections not yet certified/archived are polled — RESULTS_CERTIFIED
+    and ARCHIVED elections are done and shouldn't be re-bootstrapped.
+    Triggered daily via POST /internal/tasks/poll-upcoming-results/.
+    """
+    from datetime import timedelta
+
+    from elections.models import Election
+
+    supported = set(list_supported_states())
+    if not supported:
+        logger.warning("poll_upcoming_results: no adapters registered; skipping")
+        return {"queued": 0}
+
+    today = timezone.now().date()
+    elections = Election.objects.filter(
+        election_date__gte=today,
+        election_date__lte=today + timedelta(days=_UPCOMING_WINDOW_DAYS),
+        status__in=[
+            Election.Status.UPCOMING,
+            Election.Status.ACTIVE,
+            Election.Status.RESULTS_PENDING,
+        ],
+        state__in=supported,
+    )
+    queued = 0
+    for election in elections:
+        ingest_official_results.delay(election.state, election.pk)
+        logger.info(
+            "poll_upcoming_results: queued ingest for election %s (%s, %s)",
+            election.pk, election.state, election.election_date,
+        )
+        queued += 1
+
+    logger.info("poll_upcoming_results: queued %d elections", queued)
+    return {"queued": queued}

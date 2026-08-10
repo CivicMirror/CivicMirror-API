@@ -15,7 +15,15 @@ set source_metadata["totalvote_election_id"] and switch to a TotalVote adapter
 targeting cId="connecticut" (or whatever slug CT is assigned).
 
 Required Election.source_metadata key:
-    ct_election_id   str  PCC EMS election ID (e.g. "91", "97")
+    ct_election_ids  list[{"id": str, "party": str}]  PCC EMS election IDs.
+        Connecticut routinely represents one logical election (e.g. a state
+        primary) as multiple EMS elections, one per party — e.g.
+        [{"id": "111", "party": "Democratic"}, {"id": "112", "party": "Republican"}]
+        for the 2026-08-11 primary. Each sub-election is fetched independently
+        and merged into a single AdapterResult; rows are tagged with
+        raw["contest_code"] (office ID) and raw["party_code"] (party) so
+        _bootstrap_races_from_results keeps Democratic and Republican
+        contests for the same office as distinct races.
 
 Ingestion flow:
     1. GET /election/{id}/Version.json              → {"Version": 70782}
@@ -310,56 +318,20 @@ class ConnecticutAdapter(StateResultsAdapter):
     def version_cache_key(cls, election_id: int) -> str:
         return f"ct_elect:ver:{election_id}"
 
-    def fetch_results(self, election_date, election_id: int) -> AdapterResult:
-        from elections.models import Election
+    @staticmethod
+    def _parse_ct_election_ids(meta: dict) -> list[dict]:
+        parsed = []
+        for entry in meta.get('ct_election_ids') or []:
+            if not isinstance(entry, dict):
+                continue
+            ct_id = str(entry.get('id', '')).strip()
+            if not ct_id:
+                continue
+            parsed.append({'id': ct_id, 'party': str(entry.get('party', '')).strip()})
+        return parsed
 
-        try:
-            election = Election.objects.get(pk=election_id)
-        except Election.DoesNotExist:
-            logger.error("ct_elect.adapter.missing_election pk=%d", election_id)
-            return AdapterResult(
-                rows=[], source_url='', mapping_confidence='none',
-                notes=f'Election pk={election_id} not found',
-            )
-
-        meta = election.source_metadata or {}
-        ct_id = str(meta.get('ct_election_id', '')).strip()
-
-        if not ct_id:
-            logger.warning(
-                "ct_elect.adapter.no_election_id election=%s pk=%d",
-                getattr(election, 'source_id', '?'), election_id,
-            )
-            return AdapterResult(
-                rows=[], source_url='', mapping_confidence='none',
-                notes='Set ct_election_id in Election.source_metadata',
-            )
-
-        # --- Version poll --------------------------------------------------------
-        ver_url = f"{_EMS_BASE}/election/{ct_id}/Version.json"
-        try:
-            ver_resp = requests.get(ver_url, timeout=_TIMEOUT_SHORT)
-            ver_resp.raise_for_status()
-            ver_data = ver_resp.json()
-        except requests.RequestException as exc:
-            logger.error(
-                "ct_elect.adapter.version_fetch_failed ct_id=%s: %s", ct_id, exc,
-            )
-            raise
-
-        current_ver = str(ver_data.get('Version', ''))
-        cache_key = self.version_cache_key(election_id)
-        if current_ver and cache.get(cache_key) == current_ver:
-            logger.debug(
-                "ct_elect.adapter.unchanged ct_id=%s ver=%s", ct_id, current_ver,
-            )
-            return AdapterResult(
-                rows=[], source_url=ver_url, mapping_confidence='full',
-                unchanged=True, source_version=current_ver,
-            )
-
-        # --- Fetch data files ----------------------------------------------------
-        base = f"{_EMS_BASE}/election/{ct_id}/{current_ver}"
+    def _fetch_sub_election(self, ct_id: str, party: str, version: str) -> list[ResultRow]:
+        base = f"{_EMS_BASE}/election/{ct_id}/{version}"
 
         try:
             reports = requests.get(
@@ -374,8 +346,8 @@ class ConnecticutAdapter(StateResultsAdapter):
             lookup_resp.raise_for_status()
             lookup = lookup_resp.json()
 
-            sv_url = f"{base}/stateVotes_Electiondata.json"
-            sv_resp = requests.get(sv_url, timeout=_TIMEOUT_LONG)
+            self._last_source_url = f"{base}/stateVotes_Electiondata.json"
+            sv_resp = requests.get(self._last_source_url, timeout=_TIMEOUT_LONG)
             sv_resp.raise_for_status()
             state_votes = sv_resp.json()
 
@@ -394,11 +366,10 @@ class ConnecticutAdapter(StateResultsAdapter):
         except requests.RequestException as exc:
             logger.error(
                 "ct_elect.adapter.data_fetch_failed ct_id=%s ver=%s: %s",
-                ct_id, current_ver, exc,
+                ct_id, version, exc,
             )
             raise
 
-        # --- Build reference maps -----------------------------------------------
         is_official = str(report_data.get('IO', 'False')).lower() == 'true'
         result_type = 'official' if is_official else 'unofficial'
 
@@ -408,20 +379,87 @@ class ConnecticutAdapter(StateResultsAdapter):
         town_name_set = set(town_ids.values())
         office_town_map = _build_office_town_map(town_votes, town_ids, office_map)
 
-        # --- Parse ---------------------------------------------------------------
         rows = _parse_state_votes(
             state_votes, office_map, candidate_map, office_town_map, result_type,
         )
         rows += _parse_ballot_questions(ballot_questions, town_name_set, result_type)
 
+        for row in rows:
+            row.raw['party_code'] = party
+            row.raw['contest_code'] = row.raw.get('officeID', '')
+
         logger.info(
-            "ct_elect.adapter.fetched ct_id=%s ver=%s rows=%d official=%s",
-            ct_id, current_ver, len(rows), is_official,
+            "ct_elect.adapter.fetched ct_id=%s party=%s ver=%s rows=%d official=%s",
+            ct_id, party, version, len(rows), is_official,
         )
+        return rows
+
+    def fetch_results(self, election_date, election_id: int) -> AdapterResult:
+        from elections.models import Election
+
+        try:
+            election = Election.objects.get(pk=election_id)
+        except Election.DoesNotExist:
+            logger.error("ct_elect.adapter.missing_election pk=%d", election_id)
+            return AdapterResult(
+                rows=[], source_url='', mapping_confidence='none',
+                notes=f'Election pk={election_id} not found',
+            )
+
+        meta = election.source_metadata or {}
+        ct_ids = self._parse_ct_election_ids(meta)
+
+        if not ct_ids:
+            logger.warning(
+                "ct_elect.adapter.no_election_ids election=%s pk=%d",
+                getattr(election, 'source_id', '?'), election_id,
+            )
+            return AdapterResult(
+                rows=[], source_url='', mapping_confidence='none',
+                notes='Set ct_election_ids in Election.source_metadata',
+            )
+
+        # --- Version poll for every sub-election ----------------------------------
+        cache_key = self.version_cache_key(election_id)
+        cached_versions = cache.get(cache_key) or {}
+        current_versions: dict[str, str] = {}
+        for entry in ct_ids:
+            ct_id = entry['id']
+            ver_url = f"{_EMS_BASE}/election/{ct_id}/Version.json"
+            try:
+                ver_resp = requests.get(ver_url, timeout=_TIMEOUT_SHORT)
+                ver_resp.raise_for_status()
+                ver_data = ver_resp.json()
+            except requests.RequestException as exc:
+                logger.error(
+                    "ct_elect.adapter.version_fetch_failed ct_id=%s: %s", ct_id, exc,
+                )
+                raise
+            current_versions[ct_id] = str(ver_data.get('Version', ''))
+
+        source_version = ','.join(f"{k}:{current_versions[k]}" for k in sorted(current_versions))
+
+        if all(cached_versions.get(k) == v for k, v in current_versions.items()):
+            logger.debug(
+                "ct_elect.adapter.unchanged versions=%s", current_versions,
+            )
+            return AdapterResult(
+                rows=[], source_url='', mapping_confidence='full',
+                unchanged=True, source_version=source_version,
+            )
+
+        # --- Fetch and merge each sub-election -------------------------------------
+        self._last_source_url = ''
+        all_rows: list[ResultRow] = []
+        for entry in ct_ids:
+            ct_id = entry['id']
+            all_rows.extend(
+                self._fetch_sub_election(ct_id, entry['party'], current_versions[ct_id]),
+            )
 
         return AdapterResult(
-            rows=rows,
-            source_url=sv_url,
+            rows=all_rows,
+            source_url=self._last_source_url,
             mapping_confidence='full',
-            source_version=current_ver,
+            source_version=source_version,
         )

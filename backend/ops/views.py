@@ -23,7 +23,8 @@ _US_STATE_CODES = frozenset([
 _GLOBAL_SOURCES = frozenset(["civic_api"])
 
 _FULL_CORE_STATES = frozenset([
-    "AL", "AZ", "CO", "FL", "GA", "IL", "MA", "MI", "PA", "SC", "TX", "VA", "WA", "WV",
+    "AL", "AZ", "CO", "CT", "FL", "GA", "IL", "MA", "MI", "NC", "NY", "PA", "SC", "TX", "VA",
+    "VT", "WA",
 ])
 
 _STATE_INTEGRATION_STATES = frozenset(["KY"])

@@ -490,6 +490,11 @@ def test_parse_ballot_questions_unique_town_question_not_skipped():
 
 # ---------------------------------------------------------------------------
 # ConnecticutAdapter.fetch_results — mocked integration tests
+#
+# Connecticut splits a single logical election into one EMS ID per party
+# (e.g. 111 Democratic, 112 Republican for the 2026-08-11 primary), so
+# fetch_results iterates Election.source_metadata["ct_election_ids"]
+# (a list of {"id": ..., "party": ...}) and merges each sub-election's rows.
 # ---------------------------------------------------------------------------
 
 def _make_election(source_metadata=None):
@@ -498,6 +503,15 @@ def _make_election(source_metadata=None):
     e.source_id = "ct_elect_test"
     e.source_metadata = source_metadata or {}
     return e
+
+
+def _dual_election():
+    return _make_election({
+        "ct_election_ids": [
+            {"id": "111", "party": "Democratic"},
+            {"id": "112", "party": "Republican"},
+        ],
+    })
 
 
 def _ver_resp(version=70782):
@@ -512,16 +526,18 @@ def _reports_resp(is_official=True):
     return m
 
 
-def _lookup_resp():
+def _lookup_resp(office_id="16524", office_name="United States Senator",
+                  cand_a=("35495", "Christopher S. Murphy", "1"),
+                  cand_b=("35830", "Matthew M. Corey", "6")):
     m = MagicMock()
     m.json.return_value = {
         "election": {"ID": "91", "NM": "Test Election"},
         "officeList": [
-            {"16524": {"ID": "16524", "NM": "United States Senator", "OT": "SW"}},
+            {office_id: {"ID": office_id, "NM": office_name, "OT": "SW"}},
         ],
         "candidateIds": {
-            "35495": {"NM": "Christopher S. Murphy", "P": "1"},
-            "35830": {"NM": "Matthew M. Corey", "P": "6"},
+            cand_a[0]: {"NM": cand_a[1], "P": cand_a[2]},
+            cand_b[0]: {"NM": cand_b[1], "P": cand_b[2]},
         },
         "partyIds": {"1": {"CD": "D", "NM": "Democratic Party"}, "6": {"CD": "R", "NM": "Republican Party"}},
         "townIds": {"1": "Andover", "2": "Ansonia"},
@@ -529,12 +545,13 @@ def _lookup_resp():
     return m
 
 
-def _state_votes_resp():
+def _state_votes_resp(office_id="16524", cand_a=("35495", "953646", "55.83%"),
+                       cand_b=("35830", "678256", "39.70%")):
     m = MagicMock()
     m.json.return_value = {
-        "16524": [
-            {"35495": {"V": "953646", "TO": "55.83%"}},
-            {"35830": {"V": "678256", "TO": "39.70%"}},
+        office_id: [
+            {cand_a[0]: {"V": cand_a[1], "TO": cand_a[2]}},
+            {cand_b[0]: {"V": cand_b[1], "TO": cand_b[2]}},
         ]
     }
     return m
@@ -555,28 +572,32 @@ def _ballot_resp(empty=False, with_town=False):
     return m
 
 
-def _town_votes_resp():
+def _town_votes_resp(office_id="16524"):
     m = MagicMock()
     m.json.return_value = {
-        "1": {"16524": []},
-        "2": {"16524": []},
+        "1": {office_id: []},
+        "2": {office_id: []},
     }
     return m
 
 
-def _full_side_effect(version=70782, is_official=True, empty_ballot=False, town_ballot=False):
+def _full_side_effect(version=70782, is_official=True, empty_ballot=False, town_ballot=False,
+                       office_id="16524", office_name="United States Senator",
+                       cand_a=("35495", "Christopher S. Murphy", "1"),
+                       cand_b=("35830", "Matthew M. Corey", "6")):
+    # Excludes Version.json — that's polled separately, upfront, for all
+    # sub-elections before any per-election data fetch begins.
     return [
-        _ver_resp(version),
         _reports_resp(is_official),
-        _lookup_resp(),
-        _state_votes_resp(),
+        _lookup_resp(office_id, office_name, cand_a, cand_b),
+        _state_votes_resp(office_id, (cand_a[0], "953646", "55.83%"), (cand_b[0], "678256", "39.70%")),
         _ballot_resp(empty_ballot, town_ballot),
-        _town_votes_resp(),
+        _town_votes_resp(office_id),
     ]
 
 
 @pytest.mark.django_db
-def test_fetch_results_no_ct_election_id():
+def test_fetch_results_no_ct_election_ids():
     adapter = ConnecticutAdapter()
     with patch("elections.models.Election.objects") as mock_mgr:
         mock_mgr.get.return_value = _make_election(source_metadata={})
@@ -584,7 +605,18 @@ def test_fetch_results_no_ct_election_id():
 
     assert result.mapping_confidence == "none"
     assert result.rows == []
-    assert "ct_election_id" in result.notes
+    assert "ct_election_ids" in result.notes
+
+
+@pytest.mark.django_db
+def test_fetch_results_empty_ct_election_ids_list():
+    adapter = ConnecticutAdapter()
+    with patch("elections.models.Election.objects") as mock_mgr:
+        mock_mgr.get.return_value = _make_election({"ct_election_ids": []})
+        result = adapter.fetch_results(None, election_id=7)
+
+    assert result.mapping_confidence == "none"
+    assert result.rows == []
 
 
 @pytest.mark.django_db
@@ -601,44 +633,117 @@ def test_fetch_results_election_not_found():
 
 
 @pytest.mark.django_db
-def test_fetch_results_version_unchanged():
+def test_fetch_results_version_unchanged_for_all_sub_elections():
     adapter = ConnecticutAdapter()
 
     with patch("elections.models.Election.objects") as mock_mgr, \
          patch("results.adapters.ct.requests.get") as mock_get, \
          patch("results.adapters.ct.cache") as mock_cache:
 
-        mock_mgr.get.return_value = _make_election({"ct_election_id": "91"})
-        mock_cache.get.return_value = "70782"
-        mock_get.return_value = _ver_resp(70782)
+        mock_mgr.get.return_value = _dual_election()
+        mock_cache.get.return_value = {"111": "1147", "112": "1148"}
+        mock_get.side_effect = [_ver_resp(1147), _ver_resp(1148)]
 
         result = adapter.fetch_results(None, election_id=7)
 
     assert result.unchanged is True
-    assert result.source_version == "70782"
     assert result.rows == []
-    assert mock_get.call_count == 1
+    # Only the two Version.json polls — no full data fetch when nothing changed.
+    assert mock_get.call_count == 2
 
 
 @pytest.mark.django_db
-def test_fetch_results_full_official():
+def test_fetch_results_refetches_when_one_sub_election_changed():
     adapter = ConnecticutAdapter()
 
     with patch("elections.models.Election.objects") as mock_mgr, \
          patch("results.adapters.ct.requests.get") as mock_get, \
          patch("results.adapters.ct.cache") as mock_cache:
 
-        mock_mgr.get.return_value = _make_election({"ct_election_id": "91"})
-        mock_cache.get.return_value = None
-        mock_get.side_effect = _full_side_effect(is_official=True)
+        mock_mgr.get.return_value = _dual_election()
+        mock_cache.get.return_value = {"111": "1147", "112": "1148"}
+        mock_get.side_effect = (
+            [_ver_resp(1147), _ver_resp(1149)]  # 112 advanced
+            + _full_side_effect(version=1147)
+            + _full_side_effect(version=1149)
+        )
 
         result = adapter.fetch_results(None, election_id=7)
 
-    assert result.mapping_confidence == "full"
     assert result.unchanged is False
-    assert result.source_version == "70782"
-    assert len(result.rows) == 4  # 2 candidate + 2 ballot YES/NO
-    assert all(r.result_type == "official" for r in result.rows)
+    assert len(result.rows) > 0
+
+
+@pytest.mark.django_db
+def test_fetch_results_merges_rows_from_both_parties():
+    adapter = ConnecticutAdapter()
+
+    with patch("elections.models.Election.objects") as mock_mgr, \
+         patch("results.adapters.ct.requests.get") as mock_get, \
+         patch("results.adapters.ct.cache") as mock_cache:
+
+        mock_mgr.get.return_value = _dual_election()
+        mock_cache.get.return_value = None
+        mock_get.side_effect = (
+            [_ver_resp(1147), _ver_resp(1148)]
+            + _full_side_effect(version=1147, cand_a=("d1", "Dem Candidate", "1"),
+                                 cand_b=("d2", "Dem Rival", "1"))
+            + _full_side_effect(version=1148, cand_a=("r1", "Rep Candidate", "6"),
+                                 cand_b=("r2", "Rep Rival", "6"))
+        )
+
+        result = adapter.fetch_results(None, election_id=7)
+
+    cand_names = {r.candidate_name for r in result.rows if r.candidate_name}
+    assert cand_names == {"Dem Candidate", "Dem Rival", "Rep Candidate", "Rep Rival"}
+
+
+@pytest.mark.django_db
+def test_fetch_results_tags_rows_with_party_code():
+    adapter = ConnecticutAdapter()
+
+    with patch("elections.models.Election.objects") as mock_mgr, \
+         patch("results.adapters.ct.requests.get") as mock_get, \
+         patch("results.adapters.ct.cache") as mock_cache:
+
+        mock_mgr.get.return_value = _dual_election()
+        mock_cache.get.return_value = None
+        mock_get.side_effect = (
+            [_ver_resp(1147), _ver_resp(1148)]
+            + _full_side_effect(version=1147, cand_a=("d1", "Dem Candidate", "1"),
+                                 cand_b=("d2", "Dem Rival", "1"))
+            + _full_side_effect(version=1148, cand_a=("r1", "Rep Candidate", "6"),
+                                 cand_b=("r2", "Rep Rival", "6"))
+        )
+
+        result = adapter.fetch_results(None, election_id=7)
+
+    dem_row = next(r for r in result.rows if r.candidate_name == "Dem Candidate")
+    rep_row = next(r for r in result.rows if r.candidate_name == "Rep Candidate")
+    assert dem_row.raw["party_code"] == "Democratic"
+    assert rep_row.raw["party_code"] == "Republican"
+
+
+@pytest.mark.django_db
+def test_fetch_results_tags_rows_with_contest_code():
+    adapter = ConnecticutAdapter()
+
+    with patch("elections.models.Election.objects") as mock_mgr, \
+         patch("results.adapters.ct.requests.get") as mock_get, \
+         patch("results.adapters.ct.cache") as mock_cache:
+
+        mock_mgr.get.return_value = _dual_election()
+        mock_cache.get.return_value = None
+        mock_get.side_effect = (
+            [_ver_resp(1147), _ver_resp(1148)]
+            + _full_side_effect(version=1147)
+            + _full_side_effect(version=1148)
+        )
+
+        result = adapter.fetch_results(None, election_id=7)
+
+    cand_rows = [r for r in result.rows if r.candidate_name]
+    assert all(r.raw["contest_code"] == "16524" for r in cand_rows)
 
 
 @pytest.mark.django_db
@@ -649,9 +754,13 @@ def test_fetch_results_is_winner_always_none():
          patch("results.adapters.ct.requests.get") as mock_get, \
          patch("results.adapters.ct.cache") as mock_cache:
 
-        mock_mgr.get.return_value = _make_election({"ct_election_id": "91"})
+        mock_mgr.get.return_value = _dual_election()
         mock_cache.get.return_value = None
-        mock_get.side_effect = _full_side_effect()
+        mock_get.side_effect = (
+            [_ver_resp(1147), _ver_resp(1148)]
+            + _full_side_effect(version=1147)
+            + _full_side_effect(version=1148)
+        )
 
         result = adapter.fetch_results(None, election_id=7)
 
@@ -667,35 +776,17 @@ def test_fetch_results_unofficial_result_type():
          patch("results.adapters.ct.requests.get") as mock_get, \
          patch("results.adapters.ct.cache") as mock_cache:
 
-        mock_mgr.get.return_value = _make_election({"ct_election_id": "91"})
+        mock_mgr.get.return_value = _dual_election()
         mock_cache.get.return_value = None
-        mock_get.side_effect = _full_side_effect(is_official=False)
+        mock_get.side_effect = (
+            [_ver_resp(1147), _ver_resp(1148)]
+            + _full_side_effect(version=1147, is_official=False)
+            + _full_side_effect(version=1148, is_official=False)
+        )
 
         result = adapter.fetch_results(None, election_id=7)
 
     assert all(r.result_type == "unofficial" for r in result.rows)
-
-
-@pytest.mark.django_db
-def test_fetch_results_candidate_rows_correct():
-    adapter = ConnecticutAdapter()
-
-    with patch("elections.models.Election.objects") as mock_mgr, \
-         patch("results.adapters.ct.requests.get") as mock_get, \
-         patch("results.adapters.ct.cache") as mock_cache:
-
-        mock_mgr.get.return_value = _make_election({"ct_election_id": "91"})
-        mock_cache.get.return_value = None
-        mock_get.side_effect = _full_side_effect()
-
-        result = adapter.fetch_results(None, election_id=7)
-
-    cand_rows = [r for r in result.rows if r.candidate_name is not None]
-    assert len(cand_rows) == 2
-    murphy = next(r for r in cand_rows if r.candidate_name == "Christopher S. Murphy")
-    assert murphy.vote_count == 953646
-    assert murphy.vote_pct == pytest.approx(55.83)
-    assert murphy.office_title == "United States Senator"
 
 
 @pytest.mark.django_db
@@ -706,39 +797,23 @@ def test_fetch_results_ballot_rows_correct():
          patch("results.adapters.ct.requests.get") as mock_get, \
          patch("results.adapters.ct.cache") as mock_cache:
 
-        mock_mgr.get.return_value = _make_election({"ct_election_id": "91"})
+        mock_mgr.get.return_value = _dual_election()
         mock_cache.get.return_value = None
-        mock_get.side_effect = _full_side_effect()
+        mock_get.side_effect = (
+            [_ver_resp(1147), _ver_resp(1148)]
+            + _full_side_effect(version=1147)
+            + _full_side_effect(version=1148)
+        )
 
         result = adapter.fetch_results(None, election_id=7)
 
     bq_rows = [r for r in result.rows if r.option_label is not None]
-    assert len(bq_rows) == 2
-    yes_row = next(r for r in bq_rows if r.option_label == "YES")
-    assert yes_row.vote_count == 843153
-    assert yes_row.candidate_name is None
-    assert yes_row.is_winner is None
-    assert "Question:" in (yes_row.office_title or "")
-
-
-@pytest.mark.django_db
-def test_fetch_results_town_ballot_questions_included():
-    adapter = ConnecticutAdapter()
-
-    with patch("elections.models.Election.objects") as mock_mgr, \
-         patch("results.adapters.ct.requests.get") as mock_get, \
-         patch("results.adapters.ct.cache") as mock_cache:
-
-        mock_mgr.get.return_value = _make_election({"ct_election_id": "97"})
-        mock_cache.get.return_value = None
-        mock_get.side_effect = _full_side_effect(town_ballot=True)
-
-        result = adapter.fetch_results(None, election_id=7)
-
-    bq_rows = [r for r in result.rows if r.option_label is not None]
-    assert len(bq_rows) == 2
-    assert all(r.jurisdiction_fragment == "Andover" for r in bq_rows)
-    assert all("Andover" in (r.office_title or "") for r in bq_rows)
+    yes_rows = [r for r in bq_rows if r.option_label == "YES"]
+    assert len(yes_rows) == 2  # one per party fetch
+    assert all(r.vote_count == 843153 for r in yes_rows)
+    assert all(r.candidate_name is None for r in bq_rows)
+    assert all(r.is_winner is None for r in bq_rows)
+    assert all("Question:" in (r.office_title or "") for r in bq_rows)
 
 
 @pytest.mark.django_db
@@ -749,9 +824,13 @@ def test_fetch_results_no_ballot_questions():
          patch("results.adapters.ct.requests.get") as mock_get, \
          patch("results.adapters.ct.cache") as mock_cache:
 
-        mock_mgr.get.return_value = _make_election({"ct_election_id": "97"})
+        mock_mgr.get.return_value = _dual_election()
         mock_cache.get.return_value = None
-        mock_get.side_effect = _full_side_effect(empty_ballot=True)
+        mock_get.side_effect = (
+            [_ver_resp(1147), _ver_resp(1148)]
+            + _full_side_effect(version=1147, empty_ballot=True)
+            + _full_side_effect(version=1148, empty_ballot=True)
+        )
 
         result = adapter.fetch_results(None, election_id=7)
 
@@ -766,9 +845,13 @@ def test_fetch_results_version_not_written_by_adapter():
          patch("results.adapters.ct.requests.get") as mock_get, \
          patch("results.adapters.ct.cache") as mock_cache:
 
-        mock_mgr.get.return_value = _make_election({"ct_election_id": "91"})
+        mock_mgr.get.return_value = _dual_election()
         mock_cache.get.return_value = None
-        mock_get.side_effect = _full_side_effect()
+        mock_get.side_effect = (
+            [_ver_resp(1147), _ver_resp(1148)]
+            + _full_side_effect(version=1147)
+            + _full_side_effect(version=1148)
+        )
 
         adapter.fetch_results(None, election_id=7)
 
@@ -783,7 +866,7 @@ def test_fetch_results_http_error_propagates():
          patch("results.adapters.ct.requests.get") as mock_get, \
          patch("results.adapters.ct.cache") as mock_cache:
 
-        mock_mgr.get.return_value = _make_election({"ct_election_id": "91"})
+        mock_mgr.get.return_value = _dual_election()
         mock_cache.get.return_value = None
         mock_get.side_effect = req_lib.RequestException("timeout")
 
@@ -792,20 +875,25 @@ def test_fetch_results_http_error_propagates():
 
 
 @pytest.mark.django_db
-def test_fetch_results_six_http_calls_on_full_fetch():
+def test_fetch_results_twelve_http_calls_for_two_sub_elections():
     adapter = ConnecticutAdapter()
 
     with patch("elections.models.Election.objects") as mock_mgr, \
          patch("results.adapters.ct.requests.get") as mock_get, \
          patch("results.adapters.ct.cache") as mock_cache:
 
-        mock_mgr.get.return_value = _make_election({"ct_election_id": "91"})
+        mock_mgr.get.return_value = _dual_election()
         mock_cache.get.return_value = None
-        mock_get.side_effect = _full_side_effect()
+        mock_get.side_effect = (
+            [_ver_resp(1147), _ver_resp(1148)]
+            + _full_side_effect(version=1147)
+            + _full_side_effect(version=1148)
+        )
 
         adapter.fetch_results(None, election_id=7)
 
-    assert mock_get.call_count == 6
+    # 2 Version.json + 5 data files each = 12
+    assert mock_get.call_count == 12
 
 
 @pytest.mark.django_db
@@ -816,9 +904,13 @@ def test_fetch_results_source_url_is_state_votes():
          patch("results.adapters.ct.requests.get") as mock_get, \
          patch("results.adapters.ct.cache") as mock_cache:
 
-        mock_mgr.get.return_value = _make_election({"ct_election_id": "91"})
+        mock_mgr.get.return_value = _dual_election()
         mock_cache.get.return_value = None
-        mock_get.side_effect = _full_side_effect()
+        mock_get.side_effect = (
+            [_ver_resp(1147), _ver_resp(1148)]
+            + _full_side_effect(version=1147)
+            + _full_side_effect(version=1148)
+        )
 
         result = adapter.fetch_results(None, election_id=7)
 

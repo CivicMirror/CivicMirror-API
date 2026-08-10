@@ -29,14 +29,14 @@ Use this table to identify the next best integration target. States with multipl
 | **AZ** | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **CA** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **CO** | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| **CT** | ⚠️ | ⚠️ | ❌ | ✅ | ❌ | ✅ | ✅ |
+| **CT** | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ |
 | **DE** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **FL** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **FL** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **GA** | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ |
 | **HI** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **IA** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **ID** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **IL** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **IL** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **IN** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **KS** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **KY** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
@@ -49,14 +49,14 @@ Use this table to identify the next best integration target. States with multipl
 | **MO** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **MS** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **MT** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **NC** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **NC** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **ND** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **NE** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **NH** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **NJ** | ⚠️ | ⚠️ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **NM** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **NV** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **NY** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **NY** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **OH** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **OK** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **OR** | ✅ | ✅ | ⚠️ | ⚠️ | ❌ | ⚠️ | ✅ |
@@ -65,11 +65,11 @@ Use this table to identify the next best integration target. States with multipl
 | **SC** | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **SD** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **TN** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **TX** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **TX** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **UT** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **VA** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **VT** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **WA** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **VT** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| **WA** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **WI** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **WV** | ⚠️ | ⚠️ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **WY** | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ✅ | ✅ |
@@ -96,10 +96,10 @@ States closest to a full ✅ row based on available public data:
 
 | State | Opportunity | Source |
 |---|---|---|
-| **NC** | Results adapter built; add Stage 1 (native election/race creation) to drop Civic API reliance | NC SBE FTP site |
-| **NY** | Results adapter built; add Stage 1 | Flateau DB |
-| **CA** | Results adapter built; add Stage 1 | CA SOS |
-| **KY** | Add certified recap/live results ingestion to existing SOS race/candidate adapter | Kentucky SOS recaps / election-night portal |
+| **MD** | Stage 1 + results shipped; pending production verification to confirm Full Core | Maryland SBE |
+| **NJ** | Results adapter built (multi-county Clarity); add Stage 1 (native election/race creation) to drop Civic API reliance | NJ county Clarity portals |
+| **CA** | Results adapter built; add Stage 1 — note results are currently down (issue [#88](https://github.com/CivicMirror/CivicMirror-API/issues/88), CA SOS ENR API 500s) | CA SOS |
+| **KY** | Add certified recap/live results ingestion to existing SOS race/candidate adapter; blocked on Akamai bot-protection 403 (issue [#44](https://github.com/CivicMirror/CivicMirror-API/issues/44)) | Kentucky SOS recaps / election-night portal |
 | **TN** | Stage 1 + certified results shipped; live election-night dashboard still needs endpoint discovery | Tennessee SOS / ENR |
 
 > Tracking issue [#87](https://github.com/CivicMirror/CivicMirror-API/issues/87) tracks the wave of migrations from Results-Coverage-Only / Near Core to Full Core Coverage.

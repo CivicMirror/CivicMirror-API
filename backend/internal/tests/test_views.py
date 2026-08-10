@@ -168,6 +168,27 @@ def test_poll_results_valid_token(client, internal_token):
 
 @pytest.mark.django_db
 @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+def test_poll_upcoming_results_valid_token(client, internal_token):
+    with patch("internal.views.poll_upcoming_results") as mock_task:
+        mock_result = MagicMock()
+        mock_result.id = "ghi-789"
+        mock_task.apply_async.return_value = mock_result
+        response = client.post(
+            "/internal/tasks/poll-upcoming-results/",
+            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
+        )
+    assert response.status_code == 202
+    assert response.json()["task_id"] == "ghi-789"
+
+
+@pytest.mark.django_db
+def test_poll_upcoming_results_no_auth(client, internal_token):
+    response = client.post("/internal/tasks/poll-upcoming-results/")
+    assert response.status_code == 401
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
 def test_sync_pa_sos_valid_token(client, internal_token):
     with patch("internal.views.sync_pa_elections") as mock_task:
         mock_result = MagicMock()
