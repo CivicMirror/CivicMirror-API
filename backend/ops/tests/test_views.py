@@ -50,7 +50,14 @@ def test_coverage_tiers_reflect_full_core_definition(client):
     assert tiers["IL"] == "full"
     assert tiers["TX"] == "full"
     assert tiers["WA"] == "full"
-    assert tiers["NC"] == "results"
+    assert tiers["NC"] == "full"
+    assert tiers["NY"] == "full"
+    assert tiers["VT"] == "full"
+    assert tiers["CT"] == "full"
+    # WV has no dedicated Stage 1 integration — Civic-API-driven race
+    # creation like every other Clarity-sweep state (corrected in the
+    # master index 2026-07-24; was never fixed here until now).
+    assert tiers["WV"] == "results"
 
 
 @pytest.mark.django_db

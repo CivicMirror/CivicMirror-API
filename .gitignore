@@ -28,6 +28,7 @@ docs/state-research/UT/Beaver County Official Results Primary Election Summary J
 docs/state-research/TN/sse_governor_capture_2026-08-06.json
 docs/state-research/WI/*.xlsx
 docs/state-research/WI/*.pdf
+docs/state-research/CT/*.json
 
 # Ad-hoc DB inspection scripts
 backend/sqlcheck.py

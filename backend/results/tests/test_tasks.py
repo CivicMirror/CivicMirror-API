@@ -124,6 +124,99 @@ def test_poll_pending_no_adapters_returns_zero(mock_ingest):
 
 
 # ---------------------------------------------------------------------------
+# poll_upcoming_results
+# ---------------------------------------------------------------------------
+
+def make_upcoming_election(state="CT", status=Election.Status.UPCOMING, days_ahead=1):
+    from datetime import date, timedelta
+    return Election.objects.create(
+        name=f"Upcoming Election {state}",
+        election_date=date.today() + timedelta(days=days_ahead),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state=state,
+        source_id=f"test-upcoming-{state}-{days_ahead}",
+        status=status,
+    )
+
+
+@pytest.mark.django_db
+@patch("results.tasks.ingest_official_results")
+def test_poll_upcoming_queues_election_within_window(mock_ingest):
+    election = make_upcoming_election(state="CT", days_ahead=1)
+    from results.tasks import poll_upcoming_results
+    with patch("results.tasks.list_supported_states", return_value=["CT"]):
+        result = poll_upcoming_results()
+    assert result["queued"] == 1
+    mock_ingest.delay.assert_called_once_with("CT", election.pk)
+
+
+@pytest.mark.django_db
+@patch("results.tasks.ingest_official_results")
+def test_poll_upcoming_skips_election_beyond_window(mock_ingest):
+    make_upcoming_election(state="CT", days_ahead=30)
+    from results.tasks import poll_upcoming_results
+    with patch("results.tasks.list_supported_states", return_value=["CT"]):
+        result = poll_upcoming_results()
+    assert result["queued"] == 0
+    mock_ingest.delay.assert_not_called()
+
+
+@pytest.mark.django_db
+@patch("results.tasks.ingest_official_results")
+def test_poll_upcoming_skips_past_election(mock_ingest):
+    make_election(state="CT", days_ago=1, status=Election.Status.RESULTS_PENDING)
+    from results.tasks import poll_upcoming_results
+    with patch("results.tasks.list_supported_states", return_value=["CT"]):
+        result = poll_upcoming_results()
+    assert result["queued"] == 0
+    mock_ingest.delay.assert_not_called()
+
+
+@pytest.mark.django_db
+@patch("results.tasks.ingest_official_results")
+def test_poll_upcoming_skips_unsupported_state(mock_ingest):
+    make_upcoming_election(state="ZZ", days_ahead=1)
+    from results.tasks import poll_upcoming_results
+    with patch("results.tasks.list_supported_states", return_value=["CT"]):
+        result = poll_upcoming_results()
+    assert result["queued"] == 0
+    mock_ingest.delay.assert_not_called()
+
+
+@pytest.mark.django_db
+@patch("results.tasks.ingest_official_results")
+def test_poll_upcoming_skips_archived_election(mock_ingest):
+    make_upcoming_election(state="CT", status=Election.Status.ARCHIVED, days_ahead=1)
+    from results.tasks import poll_upcoming_results
+    with patch("results.tasks.list_supported_states", return_value=["CT"]):
+        result = poll_upcoming_results()
+    assert result["queued"] == 0
+    mock_ingest.delay.assert_not_called()
+
+
+@pytest.mark.django_db
+@patch("results.tasks.ingest_official_results")
+def test_poll_upcoming_includes_active_status(mock_ingest):
+    election = make_upcoming_election(state="CT", status=Election.Status.ACTIVE, days_ahead=1)
+    from results.tasks import poll_upcoming_results
+    with patch("results.tasks.list_supported_states", return_value=["CT"]):
+        result = poll_upcoming_results()
+    assert result["queued"] == 1
+    mock_ingest.delay.assert_called_once_with("CT", election.pk)
+
+
+@pytest.mark.django_db
+@patch("results.tasks.ingest_official_results")
+def test_poll_upcoming_no_adapters_returns_zero(mock_ingest):
+    make_upcoming_election(state="CT", days_ahead=1)
+    from results.tasks import poll_upcoming_results
+    with patch("results.tasks.list_supported_states", return_value=[]):
+        result = poll_upcoming_results()
+    assert result["queued"] == 0
+    mock_ingest.delay.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # ingest_official_results
 # ---------------------------------------------------------------------------
 

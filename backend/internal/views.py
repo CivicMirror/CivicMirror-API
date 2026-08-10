@@ -37,7 +37,7 @@ from integrations.ut_elections.tasks import sync_ut_elections, sync_ut_races
 from integrations.va_elect.tasks import sync_va_elections
 from integrations.vt_sos.tasks import sync_vt_elections
 from integrations.wa_votewa.tasks import sync_wa_elections
-from results.tasks import poll_pending_results
+from results.tasks import poll_pending_results, poll_upcoming_results
 
 from .auth import require_internal_task_token
 from .task_locks import TASK_LOCKS, current_window, lock_key
@@ -103,6 +103,13 @@ def sync_elections_trigger(request):
 @require_internal_task_token
 def poll_results_trigger(request):
     return _trigger("poll_pending_results", poll_pending_results, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def poll_upcoming_results_trigger(request):
+    return _trigger("poll_upcoming_results", poll_upcoming_results, request)
 
 
 @csrf_exempt
