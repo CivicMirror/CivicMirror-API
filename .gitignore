@@ -25,6 +25,9 @@ docs/state-research/GA/export-06162026GeneralPrimaryRunoff.json
 docs/state-research/CA/
 docs/state-research/UT/export-Primary06232026.json
 docs/state-research/UT/Beaver County Official Results Primary Election Summary July 6 2026_3c6527d8-8547-4580-abea-8a10d5a73365.pdf
+docs/state-research/TN/sse_governor_capture_2026-08-06.json
+docs/state-research/WI/*.xlsx
+docs/state-research/WI/*.pdf
 
 # Ad-hoc DB inspection scripts
 backend/sqlcheck.py
