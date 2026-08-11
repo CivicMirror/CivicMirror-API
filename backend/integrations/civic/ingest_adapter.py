@@ -35,7 +35,7 @@ def ingest_civic_election(payload: dict):
         "state": parse_state_from_ocd(ocd),
         "election_type": infer_election_type(payload["name"]),
         "election_date": election_date,
-        "jurisdiction_level": parse_jurisdiction_level(ocd),
+        "jurisdiction_level": parse_jurisdiction_level(ocd, payload["name"]),
     }
     fields = {"name": payload["name"], "status": infer_election_status(election_date)}
     return ingest.ingest_election(
