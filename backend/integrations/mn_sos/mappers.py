@@ -66,14 +66,19 @@ def map_election(election) -> dict:
     }
 
 
-def map_race(office_id: str, office_title: str) -> dict:
+def map_race(office_id: str, office_title: str, election: Election) -> dict:
     """Map an in-scope MN office to Race model field values."""
+    certification_status = (
+        Race.CertificationStatus.UPCOMING
+        if election.status in {Election.Status.UPCOMING, Election.Status.ACTIVE}
+        else Race.CertificationStatus.RESULTS_PENDING
+    )
     return {
         "race_type": Race.RaceType.CANDIDATE,
         "office_title": office_title,
         "jurisdiction": "Minnesota",
         "geography_scope": "district" if "District" in office_title else "statewide",
-        "certification_status": Race.CertificationStatus.RESULTS_CERTIFIED,
+        "certification_status": certification_status,
         "source": "mn_sos",
         "race_status": Race.RaceStatus.ACTIVE,
         "vote_method": Race.VoteMethod.SINGLE_CHOICE,

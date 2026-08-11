@@ -108,7 +108,7 @@ def _sync_one_election(client, election) -> dict:
             office_titles_by_id[office_id],
             district_by_id.get(office_id, ""),
         )
-        race_defaults = map_race(office_id, office_title)
+        race_defaults = map_race(office_id, office_title, election_obj)
         race_identity = {
             "office_title": race_defaults.pop("office_title"),
             "ocd_division_id": race_defaults.pop("ocd_division_id", "") or "",

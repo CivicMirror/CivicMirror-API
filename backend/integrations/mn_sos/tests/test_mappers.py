@@ -91,11 +91,19 @@ def test_map_election_omits_ers_id_metadata_when_absent():
 
 
 def test_map_race_builds_statewide_office_fields():
-    fields = map_race(office_id="0102", office_title="U.S. Senator")
+    election = Election(status=Election.Status.ACTIVE)
+    fields = map_race(office_id="0102", office_title="U.S. Senator", election=election)
     assert fields["office_title"] == "U.S. Senator"
     assert fields["race_type"] == Race.RaceType.CANDIDATE
     assert fields["source"] == "mn_sos"
     assert fields["source_metadata"]["mn_office_id"] == "0102"
+    assert fields["certification_status"] == Race.CertificationStatus.UPCOMING
+
+
+def test_map_race_certification_status_pending_when_election_not_active():
+    election = Election(status=Election.Status.RESULTS_PENDING)
+    fields = map_race(office_id="0102", office_title="U.S. Senator", election=election)
+    assert fields["certification_status"] == Race.CertificationStatus.RESULTS_PENDING
 
 
 def test_map_candidate_maps_party_and_source_metadata():
