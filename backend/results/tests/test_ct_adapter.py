@@ -641,7 +641,7 @@ def test_fetch_results_version_unchanged_for_all_sub_elections():
          patch("results.adapters.ct.cache") as mock_cache:
 
         mock_mgr.get.return_value = _dual_election()
-        mock_cache.get.return_value = {"111": "1147", "112": "1148"}
+        mock_cache.get.return_value = "111:1147,112:1148"
         mock_get.side_effect = [_ver_resp(1147), _ver_resp(1148)]
 
         result = adapter.fetch_results(None, election_id=7)
@@ -661,7 +661,7 @@ def test_fetch_results_refetches_when_one_sub_election_changed():
          patch("results.adapters.ct.cache") as mock_cache:
 
         mock_mgr.get.return_value = _dual_election()
-        mock_cache.get.return_value = {"111": "1147", "112": "1148"}
+        mock_cache.get.return_value = "111:1147,112:1148"
         mock_get.side_effect = (
             [_ver_resp(1147), _ver_resp(1149)]  # 112 advanced
             + _full_side_effect(version=1147)

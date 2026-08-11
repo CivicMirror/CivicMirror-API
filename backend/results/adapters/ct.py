@@ -421,7 +421,7 @@ class ConnecticutAdapter(StateResultsAdapter):
 
         # --- Version poll for every sub-election ----------------------------------
         cache_key = self.version_cache_key(election_id)
-        cached_versions = cache.get(cache_key) or {}
+        cached_version = cache.get(cache_key)
         current_versions: dict[str, str] = {}
         for entry in ct_ids:
             ct_id = entry['id']
@@ -439,7 +439,9 @@ class ConnecticutAdapter(StateResultsAdapter):
 
         source_version = ','.join(f"{k}:{current_versions[k]}" for k in sorted(current_versions))
 
-        if all(cached_versions.get(k) == v for k, v in current_versions.items()):
+        # cache stores the joined source_version string (results/tasks.py writes
+        # result.source_version verbatim), same convention as every other adapter.
+        if cached_version == source_version:
             logger.debug(
                 "ct_elect.adapter.unchanged versions=%s", current_versions,
             )
