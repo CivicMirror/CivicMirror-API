@@ -24,7 +24,18 @@ def parse_state_from_ocd(ocd_division_id: str) -> str | None:
     return match.group(1).upper() if match else None
 
 
-def parse_jurisdiction_level(ocd_division_id: str) -> str:
+# Federal offices (U.S. Senate/House, President) get an OCD division scoped to
+# the represented state (e.g. "state:sc"), which reads as STATE by geography
+# alone. Checking the election name against the same keywords other sources
+# (e.g. sc_vrems) use for federal detection keeps jurisdiction_level — and
+# therefore election_canonical_key — consistent across sources for the same
+# real-world election, instead of splitting it into two Election rows.
+_FEDERAL_KEYWORDS = {"u.s.", "congress", "us house", "u.s. house", "u.s. senate", "us senate", "president"}
+
+
+def parse_jurisdiction_level(ocd_division_id: str, name: str = "") -> str:
+    if any(kw in (name or "").lower() for kw in _FEDERAL_KEYWORDS):
+        return Election.JurisdictionLevel.NATIONAL
     lowered = (ocd_division_id or "").lower()
     if "state:" not in lowered:
         return Election.JurisdictionLevel.NATIONAL

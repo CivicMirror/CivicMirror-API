@@ -28,6 +28,17 @@ def test_parse_jurisdiction_level():
     assert parse_jurisdiction_level("ocd-division/country:us/state:wv/county:kanawha") == Election.JurisdictionLevel.LOCAL
 
 
+def test_parse_jurisdiction_level_federal_office_overrides_state_scoped_ocd():
+    # U.S. Senate/House OCD ids are scoped to the represented state
+    # (state:sc), which reads as STATE by geography alone — but the office
+    # is federal, so the election name must win to keep jurisdiction_level
+    # consistent with other sources (e.g. sc_vrems) for the same election.
+    assert parse_jurisdiction_level(
+        "ocd-division/country:us/state:sc", "South Carolina U.S. Senate Republican Special Primary",
+    ) == Election.JurisdictionLevel.NATIONAL
+    assert parse_jurisdiction_level("ocd-division/country:us/state:sc", "South Carolina Governor Primary") == Election.JurisdictionLevel.STATE
+
+
 @pytest.mark.django_db
 def test_infer_election_status():
     future = date.today() + timedelta(days=10)
