@@ -82,7 +82,7 @@ def sync_nc_elections(self):
         date_strs = client.list_election_date_strs()
         logger.info("nc_sbe.sync_elections.discovered count=%d", len(date_strs))
 
-        created = updated = skipped = 0
+        created = updated = skipped = skipped_special = 0
         today = timezone.localdate()
 
         for date_str in date_strs:
@@ -101,6 +101,14 @@ def sync_nc_elections(self):
                 continue
 
             etype = election_type_from_date(d)
+            if etype == "special":
+                # Contest names aren't known yet at this stage (S3 only gives
+                # dates) — Stage 2 (sync_nc_candidates) creates the correctly
+                # per-contest-scoped Election(s) once it parses the candidate
+                # CSV. See issue #187.
+                skipped_special += 1
+                continue
+
             source_id = f"nc_sbe_{date_str}"
             results_url = _results_zip_url(date_str)
 
@@ -138,17 +146,19 @@ def sync_nc_elections(self):
                 updated += 1
 
         logger.info(
-            "nc_sbe.sync_elections.done created=%d updated=%d skipped=%d",
-            created, updated, skipped,
+            "nc_sbe.sync_elections.done created=%d updated=%d skipped=%d skipped_special=%d",
+            created, updated, skipped, skipped_special,
         )
 
         sync_log.records_created = created
-        sync_log.notes = f"updated={updated} skipped_pre_{_MIN_YEAR}={skipped}"
+        sync_log.notes = (
+            f"updated={updated} skipped_pre_{_MIN_YEAR}={skipped} skipped_special={skipped_special}"
+        )
         sync_log.status = SyncLog.Status.COMPLETED
         sync_log.completed_at = timezone.now()
         sync_log.save(update_fields=["records_created", "notes", "status", "completed_at"])
 
-        return {"created": created, "updated": updated, "skipped": skipped}
+        return {"created": created, "updated": updated, "skipped": skipped, "skipped_special": skipped_special}
 
     except NcSbeRetryableError as exc:
         logger.warning("nc_sbe.sync_elections.retryable_error: %s", exc)
@@ -212,10 +222,42 @@ def sync_nc_candidates(self):
                     continue
 
                 d = parse_candidate_filing_date(election_dt)
-                election = elections_by_date.get(d) if d else None
-                if election is None:
+                if d is None:
                     skipped_no_election += 1
                     continue
+
+                if election_type_from_date(d) == "special":
+                    # No Election exists yet for special dates (Stage 1 skips
+                    # them — see sync_nc_elections). Create the correctly
+                    # per-contest-scoped Election here, once contest names are
+                    # known. See issue #187.
+                    election, _ = ingest.ingest_election(
+                        source=_SOURCE,
+                        source_id=f"nc_sbe_{d.isoformat()}_{contest_name.strip().lower()}",
+                        identity={
+                            "state": "NC",
+                            "election_type": "special",
+                            "election_date": d,
+                            "jurisdiction_level": Election.JurisdictionLevel.STATE,
+                            "contest_group": contest_name.strip().lower(),
+                        },
+                        fields={
+                            "name": f"{contest_name.strip().title()} Special Election ({d.strftime('%B %-d, %Y')})",
+                            "status": (
+                                Election.Status.RESULTS_PENDING
+                                if d <= timezone.localdate() else Election.Status.UPCOMING
+                            ),
+                            "source_metadata": {
+                                "nc_date_str": d.strftime("%Y_%m_%d"),
+                                "results_url": _results_zip_url(d.strftime("%Y_%m_%d")),
+                            },
+                        },
+                    )
+                else:
+                    election = elections_by_date.get(d)
+                    if election is None:
+                        skipped_no_election += 1
+                        continue
 
                 deduped = dedupe_candidate_rows(group_rows)
                 if not deduped:
