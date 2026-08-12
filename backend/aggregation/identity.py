@@ -121,9 +121,23 @@ def normalize_party(party: str) -> str:
 
 
 def election_canonical_key(
-    state: str, election_type: str, election_date: date, jurisdiction_level: str
+    state: str, election_type: str, election_date: date, jurisdiction_level: str,
+    contest_group: str = "",
 ) -> str:
-    return f"{state}:{election_type}:{election_date.isoformat()}:{jurisdiction_level}"
+    """
+    contest_group is an optional, source-supplied disambiguator for elections
+    that the (state, election_type, election_date, jurisdiction_level) tuple
+    alone cannot tell apart — e.g. two unrelated special elections in
+    different districts that happen to share a date (see issue #187).
+    Omitted (the default), this is a no-op and produces the exact same key
+    as before, so existing sources are unaffected. Mirrors
+    race_canonical_key's contest_variant parameter.
+    """
+    key = f"{state}:{election_type}:{election_date.isoformat()}:{jurisdiction_level}"
+    normalized_group = _squash(contest_group or "").lower()
+    if normalized_group:
+        key = f"{key}|{normalized_group}"
+    return key
 
 
 def _normalize_variant(contest_variant: str) -> str:

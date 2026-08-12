@@ -52,6 +52,44 @@ def test_two_sources_merge_onto_one_election(ca_precedence):
 
 
 @pytest.mark.django_db
+def test_ingest_election_contest_group_splits_same_day_specials(ca_precedence):
+    """Two unrelated same-day special elections must NOT merge when the
+    caller supplies distinct contest_group values. Regression test for
+    issue #187 (MA 6th Essex / 3rd Bristol collision)."""
+    identity_base = dict(
+        state="MA", election_type="special",
+        election_date=date(2025, 5, 13), jurisdiction_level="state",
+    )
+    essex, _ = ingest.ingest_election(
+        source="ma_sos", source_id="ma_sos:171339",
+        identity={**identity_base, "contest_group": "state representative:6th essex"},
+        fields={"name": "6th Essex Special General"},
+    )
+    bristol, _ = ingest.ingest_election(
+        source="ma_sos", source_id="ma_sos:171341",
+        identity={**identity_base, "contest_group": "state representative:3rd bristol"},
+        fields={"name": "3rd Bristol Special Primary — Republican"},
+    )
+    assert essex.pk != bristol.pk
+    assert essex.canonical_key == "MA:special:2025-05-13:state|state representative:6th essex"
+    assert bristol.canonical_key == "MA:special:2025-05-13:state|state representative:3rd bristol"
+
+
+@pytest.mark.django_db
+def test_ingest_election_omitted_contest_group_still_merges(ca_precedence):
+    """Backward compatibility: callers that don't supply contest_group keep
+    today's merge-by-date behavior."""
+    identity = _election_identity()
+    e1, _ = ingest.ingest_election(
+        source="ca_sos", source_id="a", identity=identity, fields={"name": "A"},
+    )
+    e2, _ = ingest.ingest_election(
+        source="civic_api", source_id="b", identity=identity, fields={"name": "B"},
+    )
+    assert e1.pk == e2.pk
+
+
+@pytest.mark.django_db
 def test_higher_precedence_source_wins_per_field(ca_precedence):
     e, _ = ingest.ingest_election(source="ca_sos", source_id="x", identity=_election_identity(), fields={})
     # results field group: ca_sos outranks civic in CA
