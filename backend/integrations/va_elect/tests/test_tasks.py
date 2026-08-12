@@ -78,6 +78,46 @@ def test_sync_va_elections_dispatches_subtasks(db=None):
     assert mock_subtask.apply_async.call_count == 2
 
 
+def test_sync_va_elections_special_populates_contest_group():
+    """Regression test for issue #187: VA bundles unrelated same-day
+    House of Delegates specials — contest_group must use the per-contest
+    ENR slug so they don't collapse into one Election."""
+    d1 = _make_election_dict(slug="2025-January-Special-HD10")
+    d1["election_type"] = "special"
+    d1["election_date"] = _date(2025, 1, 7)
+    d2 = _make_election_dict(slug="2025-January-Special-HD26")
+    d2["election_type"] = "special"
+    d2["election_date"] = _date(2025, 1, 7)
+
+    ingest_calls = []
+
+    def fake_ingest_election(**kwargs):
+        ingest_calls.append(kwargs)
+        m = MagicMock()
+        m.pk = len(ingest_calls)
+        m.source_metadata = {}
+        return m, True
+
+    with patch("integrations.va_elect.tasks.VaElectClient") as MockClient, \
+         patch("integrations.va_elect.tasks.SyncLog") as MockLog, \
+         patch("integrations.va_elect.tasks.sync_va_races"), \
+         patch("integrations.va_elect.tasks.map_election", side_effect=[d1, d2]), \
+         patch("aggregation.ingest.ingest_election", side_effect=fake_ingest_election):
+
+        client = MockClient.return_value
+        client.get_election_slugs.return_value = ["2025-January-Special-HD10", "2025-January-Special-HD26"]
+        client.get_election_metadata.side_effect = lambda slug: {}
+
+        mock_log = MagicMock()
+        MockLog.objects.create.return_value = mock_log
+
+        sync_va_elections()
+
+    groups = {c["identity"].get("contest_group", "") for c in ingest_calls}
+    assert "" not in groups
+    assert len(groups) == 2
+
+
 def test_sync_va_elections_records_error(db=None):
     """Client exceptions are caught and written to SyncLog, then re-raised."""
     with patch("integrations.va_elect.tasks.VaElectClient") as MockClient, \
