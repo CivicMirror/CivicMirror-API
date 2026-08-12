@@ -58,6 +58,8 @@ def sync_sc_elections(self, years: list[int] | None = None):
                 "election_date":      mapped["election_date"],
                 "jurisdiction_level": mapped["jurisdiction_level"],
             }
+            if mapped["election_type"] == Election.ElectionType.SPECIAL:
+                identity["contest_group"] = str(vrems_election.get("electionId", "")).lower()
             fields = {k: v for k, v in mapped.items() if k not in identity}
 
             election_obj, was_created = ingest.ingest_election(

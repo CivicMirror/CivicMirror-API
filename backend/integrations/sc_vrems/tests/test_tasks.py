@@ -41,6 +41,39 @@ def test_sync_sc_elections_creates_election(MockClient):
 
 @pytest.mark.django_db
 @patch("integrations.sc_vrems.tasks.VremsClient")
+def test_sync_sc_elections_special_populates_contest_group(MockClient):
+    """Regression test for issue #187: unrelated same-day SC specials
+    (different towns/counties) must not collapse into one Election."""
+    MockClient.return_value.get_all_elections.return_value = [
+        {
+            "electionId": "22744",
+            "electionName": "City of Johnsonville Special Election",
+            "displayName": "6/23/2026 City of Johnsonville Special Election",
+            "electionDate": "2026-06-23T00:00:00",
+            "filingPeriodBeginDate": "2020-03-16T12:00:00",
+            "electionType": "Special",
+        },
+        {
+            "electionId": "22746",
+            "electionName": "Lexington School Board District 1 Special Election",
+            "displayName": "6/23/2026 Lexington School Board District 1 Special Election",
+            "electionDate": "2026-06-23T00:00:00",
+            "filingPeriodBeginDate": "2020-03-16T12:00:00",
+            "electionType": "Special",
+        },
+    ]
+    with patch("integrations.sc_vrems.tasks.sync_sc_races"):
+        from integrations.sc_vrems.tasks import sync_sc_elections
+        sync_sc_elections()
+
+    from elections.models import Election
+    johnsonville = Election.objects.get(canonical_key__endswith="|22744")
+    lexington = Election.objects.get(canonical_key__endswith="|22746")
+    assert johnsonville.pk != lexington.pk
+
+
+@pytest.mark.django_db
+@patch("integrations.sc_vrems.tasks.VremsClient")
 def test_sync_sc_elections_skips_referendum(MockClient):
     MockClient.return_value.get_all_elections.return_value = [
         {
