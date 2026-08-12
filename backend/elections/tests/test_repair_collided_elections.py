@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.core.management import call_command
+from django.core.management.base import CommandError
 
 from elections.models import Election, ElectionSourceLink, Race
 
@@ -507,3 +508,230 @@ def test_repair_group_by_metadata_converges_with_tx_goelect_live_contest_group()
     )
 
     assert live_keys == repaired_keys
+
+
+# ---------------------------------------------------------------------------
+# Task 8 review, Finding #1 (Critical): a race whose grouping key resolves to
+# empty must never be silently reparented onto (and then CASCADE-deleted
+# with) the original collided Election. Reproduces the reviewer's own repro:
+# a 2-race SC fixture where one race's source_metadata is missing the
+# grouping key went from 2 races to 1 after --yes, pre-fix.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_repair_group_by_metadata_raises_on_empty_group_key_instead_of_deleting_races():
+    """The reviewer's exact reproduction: a 2-race SC fixture, one race
+    missing vrems_election_id entirely. Pre-fix this went 2 races -> 1 after
+    --yes (the empty-key race silently reparented onto, then CASCADE-deleted
+    with, the original Election). Must now raise CommandError with zero
+    mutation instead."""
+    collided = Election.objects.create(
+        state="SC", election_type="special",
+        election_date=datetime.date(2026, 6, 23),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        status=Election.Status.RESULTS_PENDING,
+        canonical_key="SC:special:2026-06-23:state",
+        name="Collided",
+    )
+    race_with_key = Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="City Council", jurisdiction="Johnsonville",
+        geography_scope="local", certification_status=Race.CertificationStatus.RESULTS_PENDING,
+        source=Race.Source.SC_VREMS, canonical_key="race-johnsonville",
+        source_metadata={"vrems_election_id": "22744"},
+    )
+    race_missing_key = Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="School Board District 1", jurisdiction="Lexington",
+        geography_scope="local", certification_status=Race.CertificationStatus.RESULTS_PENDING,
+        source=Race.Source.SC_VREMS, canonical_key="race-lexington",
+        source_metadata={},  # vrems_election_id entirely absent — the reviewer's repro
+    )
+
+    with pytest.raises(CommandError):
+        call_command(
+            "repair_collided_elections", state="SC",
+            group_by_metadata="vrems_election_id", yes=True,
+        )
+
+    # Zero mutation: both races and the original Election survive unchanged.
+    assert Race.objects.count() == 2
+    assert Election.objects.count() == 1
+    assert Election.objects.filter(pk=collided.pk).exists()
+    race_with_key.refresh_from_db()
+    race_missing_key.refresh_from_db()
+    assert race_with_key.election_id == collided.pk
+    assert race_missing_key.election_id == collided.pk
+
+
+@pytest.mark.django_db
+def test_repair_group_by_compound_raises_on_empty_field_instead_of_silently_splitting():
+    """Same guard, compound mode. Unlike --group-by-metadata, --group-by-compound's
+    "f1:f2" joined format always contains the ':' separator, so a race with one
+    empty constituent field never produces a literal "" joined key — the
+    CASCADE-delete mechanism from the metadata-mode test above can't reproduce
+    verbatim here. The guard instead checks each constituent field individually
+    (see _resolve_grouping's is_empty_fn), because a key built from an empty
+    field can't converge with the live adapter's own contest_group either (the
+    module docstring's --group-by-compound precondition) — refusing here is
+    still required, just for a related-but-distinct reason than the metadata
+    case."""
+    collided = Election.objects.create(
+        state="MA", election_type="special",
+        election_date=datetime.date(2025, 5, 13),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        status=Election.Status.RESULTS_PENDING,
+        canonical_key="MA:special:2025-05-13:state",
+        name="Collided",
+    )
+    race_with_district = Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative", jurisdiction="6th Essex",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_CERTIFIED,
+        source=Race.Source.MA_SOS, canonical_key="race-essex",
+    )
+    race_empty_district = Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative", jurisdiction="",  # empty compound field
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_CERTIFIED,
+        source=Race.Source.MA_SOS, canonical_key="race-empty-district",
+    )
+
+    with pytest.raises(CommandError):
+        call_command(
+            "repair_collided_elections", state="MA",
+            group_by_compound="office_title,jurisdiction", yes=True,
+        )
+
+    assert Race.objects.count() == 2
+    assert Election.objects.count() == 1
+    assert Election.objects.filter(pk=collided.pk).exists()
+    race_with_district.refresh_from_db()
+    race_empty_district.refresh_from_db()
+    assert race_with_district.election_id == collided.pk
+    assert race_empty_district.election_id == collided.pk
+
+
+# ---------------------------------------------------------------------------
+# Task 8 review, Finding #2 (Important): GA/VA must be a hard, code-level
+# refusal, not just a docstring warning. Their "collided" special elections
+# are legitimate single ballots (multi-jurisdiction, one public_id/enr_slug
+# each), not genuine collisions — splitting them would be destructive.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_repair_refuses_ga_and_does_not_touch_the_database():
+    existing = Election.objects.create(
+        state="GA", election_type="special",
+        election_date=datetime.date(2025, 6, 17),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        status=Election.Status.RESULTS_PENDING,
+        canonical_key="GA:special:2025-06-17:state",
+        name="GA collided (legitimate multi-district ballot)",
+    )
+    Race.objects.create(
+        election=existing, race_type=Race.RaceType.CANDIDATE,
+        office_title="State House District 1", jurisdiction="District 1",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_PENDING,
+        source=Race.Source.GA_SOS, canonical_key="ga-race-1",
+    )
+    Race.objects.create(
+        election=existing, race_type=Race.RaceType.CANDIDATE,
+        office_title="State House District 2", jurisdiction="District 2",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_PENDING,
+        source=Race.Source.GA_SOS, canonical_key="ga-race-2",
+    )
+
+    with pytest.raises(CommandError):
+        call_command("repair_collided_elections", state="GA", group_by="jurisdiction", yes=True)
+
+    existing.refresh_from_db()
+    assert Election.objects.count() == 1
+    assert Election.objects.get(pk=existing.pk).canonical_key == "GA:special:2025-06-17:state"
+    assert Race.objects.count() == 2
+
+
+@pytest.mark.django_db
+def test_repair_refuses_va_and_does_not_touch_the_database():
+    with pytest.raises(CommandError):
+        call_command("repair_collided_elections", state="VA", group_by="jurisdiction", yes=True)
+    assert Election.objects.count() == 0
+
+
+# ---------------------------------------------------------------------------
+# Task 8 review, Finding #3 (Important): --group-by-compound's dry-run
+# preview must warn when a group's value contains a known default-placeholder
+# literal ("statewide"), since a mapper-applied default (e.g. MA's
+# jurisdiction defaulting to "Statewide" for an empty district) will not
+# converge with the live adapter's own un-defaulted contest_group.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_repair_compound_dry_run_warns_on_statewide_placeholder_value(capsys):
+    collided = Election.objects.create(
+        state="MA", election_type="special",
+        election_date=datetime.date(2025, 9, 2),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        status=Election.Status.RESULTS_PENDING,
+        canonical_key="MA:special:2025-09-02:state",
+        name="Collided",
+    )
+    Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative", jurisdiction="6th Essex",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_CERTIFIED,
+        source=Race.Source.MA_SOS, canonical_key="race-essex-2",
+    )
+    # A mapper-defaulted placeholder value, not a genuine source value — the
+    # scenario Finding #3 is about (ma_sos/mappers.py:277-279 defaults
+    # Race.jurisdiction to "Statewide" when the raw district is empty).
+    Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="Governor's Council 3rd District", jurisdiction="Statewide",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_CERTIFIED,
+        source=Race.Source.MA_SOS, canonical_key="race-gc-statewide",
+    )
+
+    call_command(
+        "repair_collided_elections", state="MA",
+        group_by_compound="office_title,jurisdiction",
+        no_color=True,  # avoid ANSI wrapping so a plain substring check is reliable
+    )  # dry run, no --yes
+
+    output = capsys.readouterr().out
+    assert "WARNING" in output and "statewide" in output.lower()
+
+
+@pytest.mark.django_db
+def test_repair_compound_dry_run_does_not_warn_for_normal_districted_group(capsys):
+    """No 'statewide' warning for an ordinary districted compound group —
+    the warning is a targeted heuristic, not noise on every dry run."""
+    collided = Election.objects.create(
+        state="MA", election_type="special",
+        election_date=datetime.date(2025, 5, 13),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        status=Election.Status.RESULTS_PENDING,
+        canonical_key="MA:special:2025-05-13:state",
+        name="Collided",
+    )
+    Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative", jurisdiction="6th Essex",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_CERTIFIED,
+        source=Race.Source.MA_SOS, canonical_key="race-essex-3",
+    )
+    Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative", jurisdiction="3rd Bristol",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_CERTIFIED,
+        source=Race.Source.MA_SOS, canonical_key="race-bristol-no-warning",
+    )
+
+    call_command(
+        "repair_collided_elections", state="MA",
+        group_by_compound="office_title,jurisdiction",
+        no_color=True,
+    )  # dry run, no --yes
+
+    output = capsys.readouterr().out
+    assert "WARNING" not in output
