@@ -1,9 +1,20 @@
 import datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.core.management import call_command
 
 from elections.models import Election, ElectionSourceLink, Race
+
+# NOTE on the tests below that use --group-by jurisdiction for MA fixtures
+# (Task 2, issue #187): they predate --group-by-compound (Task 8) and were
+# written to exercise the split/reparent/dedup *mechanism*, not MA's specific
+# grouping-key convergence with ma_sos's live contest_group. jurisdiction
+# alone still correctly separates "6th Essex" from "3rd Bristol" in these
+# fixtures, so they're left as plain --group-by jurisdiction mechanism tests.
+# The production-recommended MA invocation is --group-by-compound
+# office_title,jurisdiction (see the convergence test at the bottom of this
+# file) — that property is proven there, not by changing these.
 
 
 @pytest.mark.django_db
@@ -199,3 +210,300 @@ def test_repair_is_idempotent():
     call_command("repair_collided_elections", state="MA", group_by="jurisdiction", yes=True)
 
     assert Election.objects.count() == count_after_first_run
+
+
+# ---------------------------------------------------------------------------
+# Task 8 (issue #187 follow-up): CLI grouping-mode selection
+# ---------------------------------------------------------------------------
+
+def test_repair_requires_exactly_one_group_by_mode():
+    """No mode supplied at all must be rejected by argparse."""
+    from io import StringIO
+
+    from django.core.management.base import CommandError
+
+    with pytest.raises(CommandError):
+        call_command("repair_collided_elections", state="MA", stderr=StringIO())
+
+
+def test_repair_rejects_multiple_group_by_modes():
+    """Supplying more than one --group-by* mode must be rejected — they are
+    mutually exclusive (argparse add_mutually_exclusive_group)."""
+    from io import StringIO
+
+    from django.core.management.base import CommandError
+
+    with pytest.raises(CommandError):
+        call_command(
+            "repair_collided_elections", state="MA",
+            group_by="jurisdiction", group_by_metadata="vrems_election_id",
+            stderr=StringIO(),
+        )
+
+
+def test_repair_group_by_compound_rejects_wrong_field_count():
+    """--group-by-compound must receive exactly two comma-separated fields."""
+    from django.core.management.base import CommandError
+
+    with pytest.raises(CommandError):
+        call_command(
+            "repair_collided_elections", state="MA",
+            group_by_compound="office_title", yes=True,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Task 8 (issue #187 follow-up): grouping-key convergence with live adapters
+#
+# The whole point of this task: the repair command's new grouping-key formula
+# must produce the exact same canonical_key that each state's live adapter
+# computes for contest_group at ingest time. Each test below proves this by
+# (1) reproducing a pre-fix collided Election exactly as it would exist in
+# production and repairing it with the new grouping mode, then (2) running
+# the REAL (unmocked) adapter sync task — only its HTTP client is mocked —
+# against equivalent synthetic source data, letting it hit the real
+# aggregation.ingest.ingest_election / election_canonical_key. If the two
+# code paths' canonical_keys don't match byte-for-byte, the live sync would
+# create a second, duplicate Election instead of updating the repaired one;
+# these tests assert that does NOT happen.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_repair_group_by_compound_converges_with_ma_sos_live_contest_group():
+    """MA convergence proof. ma_sos's live contest_group is computed at
+    integrations/ma_sos/tasks.py:159 as
+    `identity["contest_group"] = f"{office}:{district}".strip().lower()`,
+    where office/district come straight from electionstats discovery and are
+    written onto Race.office_title / Race.jurisdiction by
+    integrations/ma_sos/mappers.py:277-279 (office_title=office,
+    jurisdiction=district). --group-by-compound office_title,jurisdiction
+    must reconstruct that exact string from the persisted Race fields."""
+    # --- reproduce the pre-fix collided production row (mirrors production
+    # Election id 2158) and repair it with the new compound mode ---
+    collided = Election.objects.create(
+        state="MA", election_type="special",
+        election_date=datetime.date(2025, 5, 13),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        status=Election.Status.RESULTS_PENDING,
+        canonical_key="MA:special:2025-05-13:state",
+        name="Collided",
+    )
+    Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative", jurisdiction="6th Essex",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_CERTIFIED,
+        source=Race.Source.MA_SOS, canonical_key="race-essex",
+    )
+    Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative", jurisdiction="3rd Bristol",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_CERTIFIED,
+        source=Race.Source.MA_SOS, canonical_key="race-bristol",
+    )
+
+    call_command(
+        "repair_collided_elections", state="MA",
+        group_by_compound="office_title,jurisdiction", yes=True,
+    )
+    repaired_keys = set(
+        Election.objects.filter(
+            state="MA", election_type="special", election_date=datetime.date(2025, 5, 13),
+        ).values_list("canonical_key", flat=True)
+    )
+    assert len(repaired_keys) == 2, "fixture setup did not actually split into two rows"
+
+    # --- run the REAL (unmocked) sync_ma_elections against equivalent
+    # discovery data for the same two contests; only MaSosClient is mocked ---
+    from integrations.ma_sos.tasks import sync_ma_elections
+
+    mock_client = MagicMock()
+    mock_client.get_ocpf_schedule.return_value = {"generalElectionDate": "", "primaryElectionDate": ""}
+
+    def fake_get_election_ids(year, stage):
+        if year == 2025 and stage == "General":
+            return [{
+                "election_id": 171339, "office": "State Representative",
+                "district": "6th Essex", "stage": "General", "year": 2025,
+            }]
+        if year == 2025 and stage == "Republican":
+            return [{
+                "election_id": 171341, "office": "State Representative",
+                "district": "3rd Bristol", "stage": "Republican", "year": 2025,
+            }]
+        return []
+
+    mock_client.get_election_ids.side_effect = fake_get_election_ids
+    mock_client.get_ballot_question_ids.return_value = []
+    mock_client.get_election_detail.side_effect = lambda eid: {
+        171339: {"election_id": 171339, "date": "2025-05-13", "is_special": True, "year": 2025},
+        171341: {"election_id": 171341, "date": "2025-05-13", "is_special": True, "year": 2025},
+    }[eid]
+
+    with patch("integrations.ma_sos.tasks.MaSosClient", return_value=mock_client), \
+         patch("integrations.ma_sos.tasks.sync_ma_races"), \
+         patch("integrations.ma_sos.tasks.sync_ma_ballot_question"), \
+         patch("integrations.ma_sos.tasks.date") as mock_date:
+        mock_date.today.return_value = datetime.date(2025, 12, 1)
+        sync_ma_elections.run()
+
+    live_keys = set(
+        Election.objects.filter(
+            state="MA", election_type="special", election_date=datetime.date(2025, 5, 13),
+        ).values_list("canonical_key", flat=True)
+    )
+
+    # If the grouping keys didn't converge, this would be 4 rows (2 repaired
+    # + 2 new duplicates from the live sync) instead of the same 2.
+    assert live_keys == repaired_keys
+
+
+@pytest.mark.django_db
+@patch("integrations.sc_vrems.tasks.VremsClient")
+def test_repair_group_by_metadata_converges_with_sc_vrems_live_contest_group(MockClient):
+    """SC convergence proof. sc_vrems's live contest_group is computed at
+    integrations/sc_vrems/tasks.py:62 as
+    `identity["contest_group"] = str(vrems_election.get("electionId", "")).lower()`,
+    and that same electionId is what Stage 2 (sync_sc_races) writes onto
+    Race.source_metadata["vrems_election_id"] (tasks.py:194). --group-by-metadata
+    vrems_election_id must reconstruct that exact string from the persisted
+    Race metadata."""
+    collided = Election.objects.create(
+        state="SC", election_type="special",
+        election_date=datetime.date(2026, 6, 23),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        status=Election.Status.RESULTS_PENDING,
+        canonical_key="SC:special:2026-06-23:state",
+        name="Collided",
+    )
+    Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="City Council", jurisdiction="Johnsonville",
+        geography_scope="local", certification_status=Race.CertificationStatus.RESULTS_PENDING,
+        source=Race.Source.SC_VREMS, canonical_key="race-johnsonville",
+        source_metadata={"vrems_election_id": "22744"},
+    )
+    Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="School Board District 1", jurisdiction="Lexington",
+        geography_scope="local", certification_status=Race.CertificationStatus.RESULTS_PENDING,
+        source=Race.Source.SC_VREMS, canonical_key="race-lexington",
+        source_metadata={"vrems_election_id": "22746"},
+    )
+
+    call_command(
+        "repair_collided_elections", state="SC",
+        group_by_metadata="vrems_election_id", yes=True,
+    )
+    repaired_keys = set(
+        Election.objects.filter(
+            state="SC", election_type="special", election_date=datetime.date(2026, 6, 23),
+        ).values_list("canonical_key", flat=True)
+    )
+    assert len(repaired_keys) == 2, "fixture setup did not actually split into two rows"
+
+    MockClient.return_value.get_all_elections.return_value = [
+        {
+            "electionId": "22744",
+            "electionName": "City of Johnsonville Special Election",
+            "displayName": "6/23/2026 City of Johnsonville Special Election",
+            "electionDate": "2026-06-23T00:00:00",
+            "filingPeriodBeginDate": "2020-03-16T12:00:00",
+            "electionType": "Special",
+        },
+        {
+            "electionId": "22746",
+            "electionName": "Lexington School Board District 1 Special Election",
+            "displayName": "6/23/2026 Lexington School Board District 1 Special Election",
+            "electionDate": "2026-06-23T00:00:00",
+            "filingPeriodBeginDate": "2020-03-16T12:00:00",
+            "electionType": "Special",
+        },
+    ]
+    with patch("integrations.sc_vrems.tasks.sync_sc_races"):
+        from integrations.sc_vrems.tasks import sync_sc_elections
+        sync_sc_elections()
+
+    live_keys = set(
+        Election.objects.filter(
+            state="SC", election_type="special", election_date=datetime.date(2026, 6, 23),
+        ).values_list("canonical_key", flat=True)
+    )
+
+    assert live_keys == repaired_keys
+
+
+@pytest.mark.django_db
+def test_repair_group_by_metadata_converges_with_tx_goelect_live_contest_group():
+    """TX convergence proof. tx_goelect's live contest_group is computed at
+    integrations/tx_goelect/tasks.py:102 as
+    `identity["contest_group"] = str(election_id).lower()`, and that same
+    election_id is what Stage 2's map_race writes onto
+    Race.source_metadata["tx_election_id"] (integrations/tx_goelect/mappers.py:126).
+    --group-by-metadata tx_election_id must reconstruct that exact string
+    from the persisted Race metadata (including the int -> str coercion,
+    since tx_election_id is stored as an int, not a str)."""
+    collided = Election.objects.create(
+        state="TX", election_type="special",
+        election_date=datetime.date(2025, 11, 4),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        status=Election.Status.RESULTS_PENDING,
+        canonical_key="TX:special:2025-11-04:state",
+        name="Collided",
+    )
+    Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="U.S. Representative District 18", jurisdiction="District 18",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_PENDING,
+        source=Race.Source.TX_GOELECT, canonical_key="race-cd18",
+        source_metadata={"tx_election_id": 11090},  # int, matching mappers.py:126
+    )
+    Race.objects.create(
+        election=collided, race_type=Race.RaceType.CANDIDATE,
+        office_title="State Senator District 9", jurisdiction="District 9",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_PENDING,
+        source=Race.Source.TX_GOELECT, canonical_key="race-sd9",
+        source_metadata={"tx_election_id": 11088},
+    )
+
+    call_command(
+        "repair_collided_elections", state="TX",
+        group_by_metadata="tx_election_id", yes=True,
+    )
+    repaired_keys = set(
+        Election.objects.filter(
+            state="TX", election_type="special", election_date=datetime.date(2025, 11, 4),
+        ).values_list("canonical_key", flat=True)
+    )
+    assert len(repaired_keys) == 2, "fixture setup did not actually split into two rows"
+
+    constants = {
+        "electionInfo": {
+            "2025": {
+                "S": {
+                    "11090": {"O": "Y", "N": "SPECIAL ELECTION CONGRESSIONAL DISTRICT 18"},
+                    "11088": {"O": "Y", "N": "SPECIAL ELECTION STATE SENATE DISTRICT 9"},
+                }
+            }
+        }
+    }
+    home = {"ElecDate": "11042025", "CountiesReporting": {"CR": 1, "CT": 1}}
+
+    with patch("integrations.tx_goelect.tasks.TxGoElectClient") as MockClient, \
+         patch("integrations.tx_goelect.tasks.cache") as mock_cache, \
+         patch("integrations.tx_goelect.tasks.sync_tx_races"):
+        client = MockClient.return_value
+        client.get_election_constants.return_value = constants
+        client.get_election_data.return_value = {"version": 1, "home": home, "lookups": {}}
+        client.probe_election.return_value = False
+        mock_cache.get.side_effect = lambda key, default=None: 99999 if "watermark" in key else default
+
+        from integrations.tx_goelect.tasks import sync_tx_elections
+        sync_tx_elections.run()
+
+    live_keys = set(
+        Election.objects.filter(
+            state="TX", election_type="special", election_date=datetime.date(2025, 11, 4),
+        ).values_list("canonical_key", flat=True)
+    )
+
+    assert live_keys == repaired_keys

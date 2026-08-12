@@ -2,13 +2,34 @@
 Split Election rows that collapsed unrelated same-day special elections
 before contest_group existed on election_canonical_key. See issue #187.
 
+The grouping key used here must match, byte-for-byte after normalization,
+what the state's live adapter computes for `contest_group` at ingest time
+(aggregation/identity.py's election_canonical_key) — otherwise the very
+next scheduled sync after repair won't recognize the repaired row and will
+mint a duplicate Election. Three grouping modes are supported, one per
+invocation:
+
+  --group-by <field>            plain Race model field (NC: office_title)
+  --group-by-metadata <key>     Race.source_metadata[key] (SC: vrems_election_id,
+                                 TX: tx_election_id)
+  --group-by-compound f1,f2     "f1:f2" from two Race model fields (MA:
+                                 office_title,jurisdiction, matching ma_sos's
+                                 own f"{office}:{district}" join)
+
+Do NOT run this command for GA or VA: every one of their "collided" special
+elections (27 for GA, 4 for VA) is a legitimate single ballot bundling
+multiple districts under one public_id/enr_slug, not a genuine collision —
+the multi-jurisdiction + type=special heuristic false-positives on them.
+Splitting these would shatter real ballots into fake separate Elections.
+See issue #187 / Task 8.
+
 Usage:
-    python manage.py repair_collided_elections --state MA --group-by jurisdiction
-    python manage.py repair_collided_elections --state MA --group-by jurisdiction --yes
+    python manage.py repair_collided_elections --state MA --group-by-compound office_title,jurisdiction
+    python manage.py repair_collided_elections --state SC --group-by-metadata vrems_election_id --yes
+    python manage.py repair_collided_elections --state NC --group-by office_title --yes
 """
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from django.db.models import Count
 
 from aggregation.identity import election_canonical_key
 from elections.models import Election, ElectionSourceLink, Race
@@ -16,14 +37,32 @@ from elections.models import Election, ElectionSourceLink, Race
 _GROUP_FIELDS = {"jurisdiction", "office_title"}
 
 
+def _normalize(raw_value: str) -> str:
+    """Match election_canonical_key's own contest_group normalization
+    (aggregation/identity.py: _squash(...).lower()) so a repaired
+    canonical_key is byte-identical to what the live adapter would compute."""
+    return " ".join((raw_value or "").split()).lower()
+
+
 class Command(BaseCommand):
     help = "Split Election rows whose Races span more than one distinct contest (issue #187)."
 
     def add_arguments(self, parser):
         parser.add_argument("--state", required=True, help="Two-letter state code, e.g. MA")
-        parser.add_argument(
-            "--group-by", required=True, choices=sorted(_GROUP_FIELDS),
+        mode = parser.add_mutually_exclusive_group(required=True)
+        mode.add_argument(
+            "--group-by", choices=sorted(_GROUP_FIELDS), default=None,
             help="Race field that distinguishes the collided contests",
+        )
+        mode.add_argument(
+            "--group-by-metadata", metavar="KEY", default=None,
+            help="Race.source_metadata key that distinguishes the collided contests "
+                 "(e.g. vrems_election_id for SC, tx_election_id for TX)",
+        )
+        mode.add_argument(
+            "--group-by-compound", metavar="FIELD1,FIELD2", default=None,
+            help="Two comma-separated Race model fields joined with ':' "
+                 "(e.g. office_title,jurisdiction for MA)",
         )
         parser.add_argument(
             "--yes", action="store_true",
@@ -32,37 +71,67 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         state = options["state"]
-        group_by = options["group_by"]
         apply_changes = options["yes"]
+        key_fn, label = self._resolve_grouping(options)
 
         collided = (
             Election.objects.filter(state=state, election_type=Election.ElectionType.SPECIAL)
-            .annotate(n_groups=Count(f"races__{group_by}", distinct=True))
-            .filter(n_groups__gt=1)
             .order_by("election_date")
         )
 
-        if not collided.exists():
-            self.stdout.write(self.style.SUCCESS(f"No collided special elections found for {state}."))
-            return
-
+        found_any = False
         for election in collided:
-            self._split_one(election, group_by, apply_changes)
+            races = list(election.races.all())
+            if len({key_fn(r) for r in races}) <= 1:
+                continue
+            found_any = True
+            self._split_one(election, key_fn, label, apply_changes)
 
-    def _split_one(self, election: Election, group_by: str, apply_changes: bool) -> None:
+        if not found_any:
+            self.stdout.write(self.style.SUCCESS(f"No collided special elections found for {state}."))
+
+    def _resolve_grouping(self, options):
+        """Return (key_fn, label) for whichever mutually-exclusive --group-by*
+        option was supplied. key_fn(race) -> normalized grouping key string."""
+        group_by = options.get("group_by")
+        group_by_metadata = options.get("group_by_metadata")
+        group_by_compound = options.get("group_by_compound")
+
+        if group_by:
+            return (lambda race: _normalize(getattr(race, group_by) or "")), f"--group-by {group_by}"
+
+        if group_by_metadata:
+            def key_fn(race, _key=group_by_metadata):
+                raw_value = (race.source_metadata or {}).get(_key, "")
+                return _normalize(str(raw_value or ""))
+            return key_fn, f"--group-by-metadata {group_by_metadata}"
+
+        fields = [f.strip() for f in group_by_compound.split(",")]
+        if len(fields) != 2 or not all(fields):
+            raise CommandError(
+                "--group-by-compound requires exactly two comma-separated field names, "
+                f"got {group_by_compound!r}"
+            )
+        field1, field2 = fields
+
+        def key_fn(race, _f1=field1, _f2=field2):
+            raw_value = f"{getattr(race, _f1) or ''}:{getattr(race, _f2) or ''}"
+            return _normalize(raw_value)
+
+        return key_fn, f"--group-by-compound {group_by_compound}"
+
+    def _split_one(self, election: Election, key_fn, label: str, apply_changes: bool) -> None:
         races = list(election.races.all())
         groups: dict[str, list[Race]] = {}
         for race in races:
-            raw_value = getattr(race, group_by) or ""
-            key = " ".join(raw_value.split()).lower()
-            groups.setdefault(key, []).append(race)
+            groups.setdefault(key_fn(race), []).append(race)
 
         if len(groups) <= 1:
-            return  # annotate() can be stale mid-loop after a prior split; skip if already fixed
+            return  # stale mid-loop read after a prior split; skip if already fixed
 
         self.stdout.write(
             f"Election {election.pk} ({election.name!r}, {election.canonical_key}): "
-            f"splitting into {len(groups)} groups by {group_by}"
+            f"splitting into {len(groups)} groups by {label}"
         )
 
         original_links = list(election.source_links_rel.all()) if apply_changes else []
