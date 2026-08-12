@@ -1440,27 +1440,89 @@ unchanged."
 
 ---
 
-### Task 8: Full-system verification across all 6 states
+### Task 8: Fix `repair_collided_elections` grouping-key convergence for MA/SC/TX; exclude GA/VA from repair
 
-**Files:** none (verification only)
+**Discovered during Task 7's review, not in the original plan.** The repair command (Task 2) groups races by a generic Race model field (`jurisdiction` or `office_title`) to decide how to split a collided `Election`. But each adapter's live `contest_group` (Tasks 2-7) is computed from a different, adapter-specific value. Verified directly against the merged code and production data:
 
-- [ ] **Step 1: Confirm zero remaining collisions for `special` elections, across all 6 states**
+| State | Repair grouped by (as merged) | Live `contest_group` | Converge? |
+|---|---|---|---|
+| MA | `jurisdiction` | `f"{office}:{district}"` | ❌ |
+| SC | `jurisdiction` | `vrems_election_id` (verified reliable per-race via `Race.source_metadata`) | ❌ |
+| TX | `jurisdiction` | `tx_election_id` (verified reliable per-race via `Race.source_metadata`) | ❌ |
+| NC | `office_title` | `contest_name` (= office_title) | ✅ already converges, no change needed |
+| GA | `jurisdiction` | `public_id` | N/A — **no genuine collisions exist**, see below |
+| VA | `jurisdiction` | `enr_slug` | N/A — **no genuine collisions exist**, see below |
+
+Left as-is, running repair against MA/SC/TX would produce a `canonical_key` that each state's *next scheduled sync* won't recognize — `ingest_election` would fail to find the repaired row and mint a duplicate Election, silently reintroducing the exact problem being fixed.
+
+**GA and VA additionally need to be excluded from repair entirely** — verified against production that every one of GA's 27 and VA's 4 "collided" rows shares exactly **one** distinct `public_id`/`enr_slug` (confirmed via `r.source_metadata->>'ga_public_election_id'` / `'enr_slug'` grouped counts). These are legitimate single-ballot, multi-district special-election days that GA/VA bundle by design (e.g. GA's "Special Election State House 23 and 121" literally names two districts as one combined event; GA's 2022 general/special row has 274 races under one `public_id`). The original collision-detection heuristic (multi-jurisdiction + `election_type='special'`) false-positived on all 31 of these rows. Running `repair --group-by jurisdiction` against them would shatter legitimate ballots into fake separate Elections — actively destructive, not a fix. GA's and VA's Tasks 3/6 code changes stay merged as harmless no-ops (each state's `public_id`/`enr_slug` is already ~1:1 with its true collision boundary, so `contest_group` never actually disambiguates anything for these two states, but it also never hurts anything).
+
+NC's true collision count is also corrected here: **19 rows**, not the 6 originally estimated (the original jurisdiction-based audit undercounted NC since its `jurisdiction` field is a hardcoded constant; Task 7's fix and repair invocation are unaffected — this is a scope correction only, no code change).
+
+**Revised real scope: MA (1) + SC (4) + TX (2) + NC (19) = 26 genuine collided rows to repair. GA and VA: 0.**
+
+**Files:**
+- Modify: `backend/elections/management/commands/repair_collided_elections.py`
+- Test: `backend/elections/tests/test_repair_collided_elections.py`
+
+- [ ] **Step 1: Add `--group-by-metadata <key>` support**
+
+Add a new mutually-exclusive CLI option that groups races by `race.source_metadata.get(key, "")` instead of a model field, for SC (`vrems_election_id`) and TX (`tx_election_id`).
+
+- [ ] **Step 2: Add `--group-by-compound field1,field2` support**
+
+Add a new mutually-exclusive CLI option that groups races by joining multiple model fields with `:` (matching `ma_sos`'s own join character), for MA (`office_title,jurisdiction`).
+
+- [ ] **Step 3: Add a convergence test per state (MA, SC, TX), mirroring NC's verified pattern from Task 7**
+
+For each state, assert that the repair command's computed grouping key, run through `election_canonical_key(..., contest_group=<key>)`, produces the **exact same string** as that state's adapter would compute for `contest_group` on the same synthetic race/discovery data. This is the property the whole fix rests on — it must be proven equal, not assumed.
+
+- [ ] **Step 4: Run the full `elections/` test suite**
+
+Run: `cd backend && pytest elections/ -q --no-migrations`
+Expected: PASS, including all pre-existing repair-command tests (MA's Task 2 tests must still pass under the new `--group-by-compound` invocation).
+
+- [ ] **Step 5: Commit**
+
+---
+
+### Task 9: Full-system verification and production repair — MA, SC, TX, NC only
+
+**Files:** none (verification and production commands only)
+
+- [ ] **Step 1: Dry-run then apply the repair command for MA, SC, TX, NC — NOT GA or VA**
+
+```bash
+docker exec civicmirror-api python manage.py repair_collided_elections --state MA --group-by-compound office_title,jurisdiction
+docker exec civicmirror-api python manage.py repair_collided_elections --state MA --group-by-compound office_title,jurisdiction --yes
+
+docker exec civicmirror-api python manage.py repair_collided_elections --state SC --group-by-metadata vrems_election_id
+docker exec civicmirror-api python manage.py repair_collided_elections --state SC --group-by-metadata vrems_election_id --yes
+
+docker exec civicmirror-api python manage.py repair_collided_elections --state TX --group-by-metadata tx_election_id
+docker exec civicmirror-api python manage.py repair_collided_elections --state TX --group-by-metadata tx_election_id --yes
+
+docker exec civicmirror-api python manage.py repair_collided_elections --state NC --group-by office_title
+docker exec civicmirror-api python manage.py repair_collided_elections --state NC --group-by office_title --yes
+```
+
+Review each dry-run's printed output before applying `--yes`. Do not run this command for GA or VA — see Task 8.
+
+- [ ] **Step 2: Confirm zero remaining genuine collisions for MA/SC/TX/NC**
 
 ```bash
 docker exec civicmirror-postgres psql -U civicmirror -d civicmirror_api -c "
 SELECT e.state, e.id, e.election_date, e.name
 FROM elections_election e
 JOIN elections_race r ON r.election_id = e.id
-WHERE e.election_type = 'special' AND e.state IN ('MA','GA','NC','SC','TX','VA')
+WHERE e.election_type = 'special' AND e.state IN ('MA','SC','TX','NC')
 GROUP BY e.id, e.state, e.election_date, e.name
 HAVING COUNT(DISTINCT r.jurisdiction) > 1 AND COUNT(DISTINCT r.office_title) > 1;
 "
 ```
-Expected: 0 rows. (Using both `jurisdiction` and `office_title` in the `HAVING` clause here avoids the NC false-positive noted in Task 7 — a real collision changes both fields together in every state's data, per the original issue's audit.)
+Expected: 0 rows. (GA and VA are intentionally excluded from this check — their remaining "collisions" are the legitimate multi-district bundles documented in Task 8, expected to persist, not a bug.)
 
-- [ ] **Step 2: Confirm general/primary elections are untouched, per state**
-
-For each of the 6 states, verify at least one known multi-race general or primary day still has exactly one `Election` row with multiple `Race` rows attached (proving the `election_type == "special"` guard correctly left non-special days alone):
+- [ ] **Step 3: Confirm general/primary elections are untouched, per state**
 
 ```bash
 docker exec civicmirror-postgres psql -U civicmirror -d civicmirror_api -c "
@@ -1475,23 +1537,20 @@ LIMIT 12;
 ```
 Expected: multiple rows returned (one general/primary day per state with several races bundled, exactly as before this plan).
 
-- [ ] **Step 3: Run the full backend test suite once**
+- [ ] **Step 4: Run the full backend test suite once**
 
 Run: `cd backend && pytest -q --no-migrations`
-Expected: PASS, no regressions introduced by any of Tasks 1-7.
+Expected: PASS, no regressions introduced by any of Tasks 1-8.
 
-- [ ] **Step 4: Close out issue #187**
+- [ ] **Step 5: Close out issue #187 with the corrected scope**
 
-Post a summary comment on [#187](https://github.com/CivicMirror/CivicMirror-API/issues/187) referencing the commits from Tasks 1-7 and the verification queries from Steps 1-2 above, then close the issue:
-
-```bash
-gh issue close 187 --comment "Fixed across all 6 states — see commits on main. Verification query (0 remaining special-election collisions) and regression check (general/primary days unaffected) run 2026-08-12."
-```
+Post a summary comment on [#187](https://github.com/CivicMirror/CivicMirror-API/issues/187) referencing the commits from Tasks 1-8, the GA/VA false-positive finding, the NC scope correction (19 rows not 6), and the verification queries above, then close the issue.
 
 ---
 
 ## Self-Review Notes
 
-- **Spec coverage:** Task 1 covers the foundational `identity.py`/`ingest.py` change from issue #187's "Suggested fix" §1-2. Tasks 2-7 cover each of the 6 states from the issue's tracking checklist, including data repair for all 44 rows (§5). Task 8 covers final cross-state verification not explicitly itemized in the issue but implied by "confirm zero remaining collisions."
+- **Spec coverage:** Task 1 covers the foundational `identity.py`/`ingest.py` change from issue #187's "Suggested fix" §1-2. Tasks 2-7 cover each of the 6 states from the issue's tracking checklist. Task 8 (added post-Task-7-review) fixes a repair/sync canonical-key convergence gap and corrects the repair scope to exclude GA/VA (no genuine collisions) and correct NC's count (19 rows, not 6). Task 9 covers final cross-state verification and the actual production repair runs, scoped to MA/SC/TX/NC only.
 - **Placeholder scan:** every code step above has concrete code; the two genuinely-open verification points (Task 4 Step 1's exact `Election.objects.get(...)` filter, Task 6 Step 1's `map_election` import path) are flagged as "confirm against the actual mapper output/import before finalizing" rather than left as unresolved TODOs — both are one `grep` away from a definite answer and don't block writing the rest of the test.
-- **Type consistency:** `contest_group: str = ""` in `election_canonical_key` (Task 1) is used identically as `identity["contest_group"]` in every adapter task (2-7) and as the `--group-by` output value in the repair command (Task 2) — same normalization (`.strip().lower()` / `_squash(...).lower()`) applied at every call site so keys match.
+- **Type consistency:** `contest_group: str = ""` in `election_canonical_key` (Task 1) is used identically as `identity["contest_group"]` in every adapter task (2-7). The repair command's grouping key (Task 2's original `--group-by`, extended by Task 8's `--group-by-metadata`/`--group-by-compound`) is verified — not assumed — to produce byte-identical `contest_group` strings to each state's live adapter, via Task 8's per-state convergence tests.
+- **Revision note:** this plan was executed with subagent-driven-development; Task 8 was inserted mid-execution after Task 7's task reviewer surfaced the convergence gap, and further investigation (prompted by that finding) surfaced the GA/VA false-positive scope correction. Both are documented here and in the SDD ledger for audit purposes.
