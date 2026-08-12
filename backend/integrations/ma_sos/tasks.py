@@ -153,6 +153,10 @@ def sync_ma_elections(self):
                 "election_date": mapped["election_date"],
                 "jurisdiction_level": mapped["jurisdiction_level"],
             }
+            if mapped["election_type"] == Election.ElectionType.SPECIAL:
+                office = row.get("office", "")
+                district = row.get("district", "")
+                identity["contest_group"] = f"{office}:{district}".strip().lower()
             # Everything else (name, status, source_metadata, …) becomes ingest fields.
             fields = {k: v for k, v in mapped.items() if k not in identity}
             # Extract electionstats_id from fields before ingest — source_metadata may
