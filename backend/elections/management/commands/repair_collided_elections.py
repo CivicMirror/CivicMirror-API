@@ -6,7 +6,7 @@ Usage:
     python manage.py repair_collided_elections --state MA --group-by jurisdiction
     python manage.py repair_collided_elections --state MA --group-by jurisdiction --yes
 """
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.db.models import Count
 
@@ -36,7 +36,7 @@ class Command(BaseCommand):
         apply_changes = options["yes"]
 
         collided = (
-            Election.objects.filter(state=state, election_type="special")
+            Election.objects.filter(state=state, election_type=Election.ElectionType.SPECIAL)
             .annotate(n_groups=Count(f"races__{group_by}", distinct=True))
             .filter(n_groups__gt=1)
             .order_by("election_date")
@@ -65,6 +65,8 @@ class Command(BaseCommand):
             f"splitting into {len(groups)} groups by {group_by}"
         )
 
+        original_links = list(election.source_links_rel.all()) if apply_changes else []
+
         with transaction.atomic():
             for group_value, group_races in groups.items():
                 new_key = election_canonical_key(
@@ -80,6 +82,8 @@ class Command(BaseCommand):
                 if not apply_changes:
                     continue
 
+                group_sources = sorted({r.source for r in group_races if r.source})
+
                 new_election, created = Election.objects.get_or_create(
                     canonical_key=new_key,
                     defaults={
@@ -91,12 +95,27 @@ class Command(BaseCommand):
                         "status": election.status,
                         "last_synced_at": election.last_synced_at,
                         "source_metadata": {"repaired_from_election_id": election.pk},
-                        "contributing_sources": list(election.contributing_sources or []),
+                        "contributing_sources": group_sources,
                     },
                 )
                 for race in group_races:
                     race.election = new_election
                     race.save(update_fields=["election"])
+
+                # Reparent provenance: duplicate each original source link onto every
+                # split child whose group actually contains a race built from that
+                # source. A link whose source matches no group's races has nothing to
+                # attach to and is not carried forward. See finding #1, issue #187.
+                for link in original_links:
+                    if link.source in group_sources:
+                        ElectionSourceLink.objects.update_or_create(
+                            election=new_election, source=link.source,
+                            defaults={
+                                "source_id": link.source_id,
+                                "results_url": link.results_url,
+                                "last_synced_at": link.last_synced_at,
+                            },
+                        )
 
             if apply_changes:
                 ElectionSourceLink.objects.filter(election=election).delete()
