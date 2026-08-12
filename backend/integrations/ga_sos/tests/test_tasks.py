@@ -52,6 +52,32 @@ def test_sync_ga_elections_discovers_elections_and_queues_race_sync():
     assert result == {"created": 1, "updated": 0, "skipped": 0, "queued": 1}
 
 
+def test_sync_ga_elections_special_populates_contest_group():
+    """Regression test for issue #187: GA batches unrelated same-day
+    specials under distinct publicElectionIds — contest_group must use
+    that id so they don't collapse into one Election."""
+    election_row = {
+        "publicElectionId": "01092018SpecialGeneral-HD111",
+        "name": [{"text": "January 9, 2018 - Special Election"}],
+        "electionDate": "2018-01-09",
+    }
+    mock_election = MagicMock()
+    mock_election.pk = 1
+    mock_election.source_metadata = {}
+
+    with patch("integrations.ga_sos.tasks.GaSosClient") as mock_client_cls, \
+         patch("integrations.ga_sos.tasks.SyncLog") as mock_log_cls, \
+         patch("integrations.ga_sos.tasks.sync_ga_races"), \
+         patch("aggregation.ingest.ingest_election", return_value=(mock_election, True)) as mock_ingest:
+        _mock_sync_log(mock_log_cls)
+        mock_client_cls.return_value.list_elections.return_value = [election_row]
+
+        sync_ga_elections()
+
+    kwargs = mock_ingest.call_args.kwargs
+    assert kwargs["identity"]["contest_group"] == "01092018specialgeneral-hd111"
+
+
 def test_sync_ga_elections_skips_rows_without_public_id():
     row = {
         "publicElectionId": "",

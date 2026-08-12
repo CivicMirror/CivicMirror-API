@@ -51,6 +51,8 @@ def sync_ga_elections(self):
                 "election_date": mapped["election_date"],
                 "jurisdiction_level": mapped["jurisdiction_level"],
             }
+            if mapped["election_type"] == Election.ElectionType.SPECIAL:
+                identity["contest_group"] = public_id.lower()
             fields = {k: v for k, v in mapped.items() if k not in identity}
             source_metadata = fields.get("source_metadata") or {}
 
