@@ -366,6 +366,23 @@ def test_race_whose_key_does_not_embed_its_election_key_is_skipped(ca_election, 
 
 
 @pytest.mark.django_db
+def test_race_with_no_stored_key_still_gets_one_assigned(ca_election, tmp_path):
+    """results_adapter bootstraps races straight from results files, so they
+    carry no canonical_key at all — 21,770 rows in production. There is no
+    variant to lose there, so they must still be keyed (the command's original
+    behavior), not swept up by the unrecoverable-variant skip."""
+    race = _make_race(
+        ca_election, office_title="Governor", ocd="", source="results_adapter",
+        canonical_key=None,
+    )
+
+    call_command("merge_duplicate_races", audit_file=str(tmp_path / "a.jsonl"))
+
+    race.refresh_from_db()
+    assert race.canonical_key == f"{ca_election.canonical_key}|governor|NO_OCD|candidate"
+
+
+@pytest.mark.django_db
 def test_second_run_over_variant_races_is_a_noop(ca_election, tmp_path):
     _ny_delegate_race(ca_election, contest_code="0301", party="dem")
     _ny_delegate_race(ca_election, contest_code="0302", party="dem")

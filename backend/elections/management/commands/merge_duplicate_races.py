@@ -89,12 +89,19 @@ def _stored_contest_variant(race, election_key):
     strip that known prefix first, then split the remainder at most three times.
     Anything after the third separator is the variant, pipes and all.
 
-    Returns None when the stored key doesn't start with the election key: the
-    variant is then unrecoverable, and "no variant" cannot be told apart from
-    "a variant we failed to read". The caller skips those races rather than
-    recomputing them into a merge.
+    Returns "" for a race with no stored key at all: results_adapter bootstraps
+    races straight from results files without one, so there is no variant to
+    lose and assigning a variantless key is exactly right (and is what this
+    command has always done for them).
+
+    Returns None when a *non-empty* stored key doesn't start with the election
+    key: the variant is then unrecoverable, and "no variant" cannot be told
+    apart from "a variant we failed to read". The caller skips those races
+    rather than recomputing them into a merge.
     """
     stored = race.canonical_key or ""
+    if not stored:
+        return ""
     prefix = f"{election_key}|"
     if not election_key or not stored.startswith(prefix):
         return None
