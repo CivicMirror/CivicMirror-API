@@ -1442,6 +1442,8 @@ unchanged."
 
 ### Task 8: Fix `repair_collided_elections` grouping-key convergence for MA/SC/TX; exclude GA/VA from repair
 
+> **Partially superseded by Task 10.** The convergence work below stands. Two conclusions do not: (a) the GA/VA *hard exclusion* was correct about not splitting them but left them unable to converge at all (blocker C1) — Task 10 replaces it with an in-place rekey path; (b) NC's repair invocation is withdrawn entirely (blocker C3) — Task 7 is reverted. Read Task 10 before acting on anything in this task or Task 9.
+
 **Discovered during Task 7's review, not in the original plan.** The repair command (Task 2) groups races by a generic Race model field (`jurisdiction` or `office_title`) to decide how to split a collided `Election`. But each adapter's live `contest_group` (Tasks 2-7) is computed from a different, adapter-specific value. Verified directly against the merged code and production data:
 
 | State | Repair grouped by (as merged) | Live `contest_group` | Converge? |
@@ -1488,9 +1490,11 @@ Expected: PASS, including all pre-existing repair-command tests (MA's Task 2 tes
 
 ### Task 9: Full-system verification and production repair — MA, SC, TX, NC only
 
+> **Superseded by Task 10 Step 5.** The state list below is wrong in both directions: GA and VA must now be run (in-place rekey, blocker C1), and NC must not be run at all (blocker C3, Task 7 reverted). Use Task 10's runbook. The verification queries in Steps 2-4 remain useful, with the state list adjusted.
+
 **Files:** none (verification and production commands only)
 
-- [ ] **Step 1: Dry-run then apply the repair command for MA, SC, TX, NC — NOT GA or VA**
+- [ ] **Step 1: Dry-run then apply the repair command for MA, SC, TX, NC — NOT GA or VA** *(superseded — see Task 10 Step 5)*
 
 ```bash
 docker exec civicmirror-api python manage.py repair_collided_elections --state MA --group-by-compound office_title,jurisdiction
@@ -1548,9 +1552,81 @@ Post a summary comment on [#187](https://github.com/CivicMirror/CivicMirror-API/
 
 ---
 
+### Task 10: Resolve the whole-branch review's 3 Critical blockers (C1, C2, C3)
+
+**Added after the whole-branch review**, which found three issues visible only across the branch as a whole. Tasks 1-8 all passed individually; these are integration-level. Discussion and rationale: [issue #187 comment](https://github.com/CivicMirror/CivicMirror-API/issues/187#issuecomment-5275346387).
+
+| Blocker | Resolution |
+|---|---|
+| **C1** — deploying as-is duplicates all 134 stored special elections, and GA/VA's 77 rows have no path to converge at all | `repair_collided_elections` becomes a *rekeyer*: one grouping value across an Election's races → **rekey in place**; more than one → split (as before). GA/VA's hard `CommandError` exclusion is deleted — the single-group branch is what protects them, structurally. |
+| **C2** — repaired elections still mint duplicate *races*, because `Race.canonical_key` embeds the election key | Race keys are **prefix-swapped**, not recomputed. |
+| **C3** — NC's `election_type_from_date()` is a catch-all, not a special-election signal | **Task 7 reverted.** NC leaves this branch entirely; follow-up issue filed. |
+
+**Why prefix-swap and not the `merge_duplicate_races` recompute the review pointed at:** that command's `_new_key()` omits `contest_variant`, and `Race` has no column persisting one. Recomputing would collapse party-split races in exactly the affected states (`ma_sos` passes a variant for MA specials; NC and MD do too). Swapping only the leading election-key segment carries office/OCD/race_type/variant over byte-for-byte from whatever the adapter last computed — which is exactly what the adapter computes again next sync. (The `merge_duplicate_races` variant gap is a real latent bug, tracked separately; it is not this branch's to fix.)
+
+**Why NC cannot be fixed here:** `election_type` is *inside* the base canonical key. Classifying NC's municipal/runoff dates correctly (`Election.ElectionType.MUNICIPAL` / `PRIMARY_RUNOFF`, both existing and unused by `nc_sbe`) changes the base key of every stored NC non-Nov/Mar/May row, so NC needs its own rekey migration regardless of design. `nc_sbe` also has no per-date signal at Stage 1 — `client.list_election_date_strs()` returns bare S3 date strings with no election title — so the follow-up starts with a data audit of whether contest names in the filing CSV / results TSV can positively identify genuine specials.
+
+**Files:**
+- Modify: `backend/elections/management/commands/repair_collided_elections.py`
+- Modify: `backend/elections/tests/test_repair_collided_elections.py`
+- Modify: `backend/integrations/ma_sos/tasks.py`, `backend/integrations/ma_sos/tests/test_tasks.py`
+- Revert: `backend/integrations/nc_sbe/tasks.py`, `backend/integrations/nc_sbe/tests/test_tasks.py` (commit `e99d58d`)
+
+- [x] **Step 1: Revert Task 7 (NC)** — `git revert --no-commit e99d58d`. NC returns to one Election per date at Stage 1, exactly as in production today.
+
+- [x] **Step 2: Rekey-or-split, with the convergence invariant enforced**
+
+Per special Election in the target state:
+- no races → report, skip (nothing can derive a group; the row is inert)
+- any race with an empty grouping value → refuse *that election*, collect, continue (each election is its own transaction, so one bad row no longer aborts a batch mid-run — this also closes Important #4)
+- one distinct group → rekey in place
+- more than one → split, as before
+
+At the end the command re-scans the state and fails if any special Election **with races** still lacks a `|` suffix, then exits non-zero listing every unresolved item. Post-condition: *every stored special Election's key equals what the live adapter will compute.*
+
+- [x] **Step 3: Prefix-swap child race keys in both paths**
+
+```python
+race.canonical_key = new_election_key + stored[len(old_election_key):]
+```
+Races whose stored key doesn't start with the old election key are left untouched and reported (never guessed at); a race whose target key is already held by another row is left untouched and flagged `MatchConfidence.FLAGGED`, mirroring `merge_duplicate_races`' conflict handling.
+
+- [x] **Step 4: Tests**
+
+Added: GA in-place rekey (no split); GA and VA convergence proofs running the real `sync_ga_elections`/`sync_va_elections` against a rekeyed row and asserting **no duplicate row appears**; in-place idempotency; race-key prefix swap preserving two distinct `contest_variant` suffixes across a split; unrecognized-prefix race left alone + non-zero exit; race-less election reported but non-fatal. Existing fixtures were rewritten to use realistic `<election_key>|…` race keys so the swap is genuinely exercised. MA degenerate-group guard tests (both halves empty → omit `contest_group`; one half empty → still emit).
+
+- [x] **Step 5: Production runbook (replaces Task 9 Step 1)**
+
+```bash
+# 1. Pause the sync schedulers for MA/SC/TX/GA/VA
+# 2. Deploy this branch
+# 3. Dry-run, inspect, then apply — per state:
+docker exec civicmirror-api python manage.py repair_collided_elections --state MA --group-by-compound office_title,jurisdiction
+docker exec civicmirror-api python manage.py repair_collided_elections --state SC --group-by-metadata vrems_election_id
+docker exec civicmirror-api python manage.py repair_collided_elections --state TX --group-by-metadata tx_election_id
+docker exec civicmirror-api python manage.py repair_collided_elections --state GA --group-by-metadata ga_public_election_id
+docker exec civicmirror-api python manage.py repair_collided_elections --state VA --group-by-metadata enr_slug
+# …then re-run each with --yes
+# 4. Resume schedulers
+```
+
+NC is **not** in this list. Before running GA/VA, confirm their races actually carry the grouping key (races ingested before the mapper wrote it would be refused, loudly, rather than mis-grouped):
+
+```sql
+SELECT e.state, COUNT(*) FILTER (WHERE COALESCE(r.source_metadata->>'ga_public_election_id', r.source_metadata->>'enr_slug', '') = '') AS missing_key,
+       COUNT(*) AS total_races
+FROM elections_election e JOIN elections_race r ON r.election_id = e.id
+WHERE e.election_type = 'special' AND e.state IN ('GA','VA')
+GROUP BY e.state;
+```
+Expected: `missing_key = 0`. Any non-zero count must be resolved before the GA/VA runs.
+
+---
+
 ## Self-Review Notes
 
 - **Spec coverage:** Task 1 covers the foundational `identity.py`/`ingest.py` change from issue #187's "Suggested fix" §1-2. Tasks 2-7 cover each of the 6 states from the issue's tracking checklist. Task 8 (added post-Task-7-review) fixes a repair/sync canonical-key convergence gap and corrects the repair scope to exclude GA/VA (no genuine collisions) and correct NC's count (19 rows, not 6). Task 9 covers final cross-state verification and the actual production repair runs, scoped to MA/SC/TX/NC only.
 - **Placeholder scan:** every code step above has concrete code; the two genuinely-open verification points (Task 4 Step 1's exact `Election.objects.get(...)` filter, Task 6 Step 1's `map_election` import path) are flagged as "confirm against the actual mapper output/import before finalizing" rather than left as unresolved TODOs — both are one `grep` away from a definite answer and don't block writing the rest of the test.
 - **Type consistency:** `contest_group: str = ""` in `election_canonical_key` (Task 1) is used identically as `identity["contest_group"]` in every adapter task (2-7). The repair command's grouping key (Task 2's original `--group-by`, extended by Task 8's `--group-by-metadata`/`--group-by-compound`) is verified — not assumed — to produce byte-identical `contest_group` strings to each state's live adapter, via Task 8's per-state convergence tests.
-- **Revision note:** this plan was executed with subagent-driven-development; Task 8 was inserted mid-execution after Task 7's task reviewer surfaced the convergence gap, and further investigation (prompted by that finding) surfaced the GA/VA false-positive scope correction. Both are documented here and in the SDD ledger for audit purposes.
+- **Revision note:** this plan was executed with subagent-driven-development; Task 8 was inserted mid-execution after Task 7's task reviewer surfaced the convergence gap, and further investigation (prompted by that finding) surfaced the GA/VA false-positive scope correction. Task 10 was added after the whole-branch review found three integration-level Critical blockers that no single task's review could see; it supersedes Task 8's GA/VA exclusion and Task 9's state list, and reverts Task 7 (NC) out of the branch. All are documented here and in the SDD ledger for audit purposes.
+- **Final scope:** MA (1 genuine collision, split) + SC (4, split) + TX (2, split) + GA (27, rekey in place) + VA (4, rekey in place). NC deferred to its own issue. Every stored special election in those five states is rekeyed whether or not it was collided — that is the C1 convergence requirement, not scope creep.

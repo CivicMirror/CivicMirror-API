@@ -154,9 +154,16 @@ def sync_ma_elections(self):
                 "jurisdiction_level": mapped["jurisdiction_level"],
             }
             if mapped["election_type"] == Election.ElectionType.SPECIAL:
-                office = row.get("office", "")
-                district = row.get("district", "")
-                identity["contest_group"] = f"{office}:{district}".strip().lower()
+                office = (row.get("office") or "").strip()
+                district = (row.get("district") or "").strip()
+                # Both empty would yield the degenerate group ":" — a key every
+                # office-less, district-less special would share, i.e. the very
+                # collision this exists to prevent. Fall back to the bare key
+                # instead; that also keeps the adapter and repair_collided_elections
+                # agreeing on the empty case (the repair command refuses it rather
+                # than building a non-converging key). See issue #187.
+                if office or district:
+                    identity["contest_group"] = f"{office}:{district}".lower()
             # Everything else (name, status, source_metadata, …) becomes ingest fields.
             fields = {k: v for k, v in mapped.items() if k not in identity}
             # Extract electionstats_id from fields before ingest — source_metadata may
