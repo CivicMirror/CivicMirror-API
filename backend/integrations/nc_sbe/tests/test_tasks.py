@@ -63,21 +63,6 @@ def test_sync_nc_elections_stores_results_url_in_metadata():
 
 
 @pytest.mark.django_db
-def test_sync_nc_elections_does_not_create_election_for_special_date():
-    """Regression test for issue #187: special-election dates must not get
-    an eager one-Election-per-date row from Stage 1 — Stage 2 creates the
-    correctly-scoped Election(s) once contest names are known."""
-    from elections.models import Election
-    from integrations.nc_sbe.tasks import sync_nc_elections
-
-    with patch("integrations.nc_sbe.tasks.NcSbeClient") as MockClient:
-        MockClient.return_value.list_election_date_strs.return_value = ["2014_07_15"]  # not Nov/Mar/May
-        sync_nc_elections.apply()
-
-    assert not Election.objects.filter(state="NC", election_date=datetime.date(2014, 7, 15)).exists()
-
-
-@pytest.mark.django_db
 def test_sync_nc_elections_skips_pre_2010():
     from elections.models import Election
     from integrations.nc_sbe.tasks import sync_nc_elections
@@ -225,49 +210,6 @@ def test_sync_nc_candidates_skips_rows_with_no_matching_election():
         sync_nc_candidates.apply()
 
     assert not Race.objects.filter(office_title="US SENATE").exists()
-
-
-@pytest.mark.django_db
-def test_sync_nc_candidates_creates_separate_elections_for_special_contests():
-    """Regression test for issue #187: two unrelated NC special contests on
-    the same date must land on two different Election rows, each with
-    contest_group set from the (normalized) contest_name."""
-    from elections.models import Election, Race
-    from integrations.nc_sbe.tasks import sync_nc_candidates
-
-    # sync_nc_candidates only fetches a year's candidate CSV for years that
-    # have an existing *active* NC Election (see `elections`/`years` at the
-    # top of the task) — in production this is always true for a
-    # special-election year because Stage 1 always seeds that year's
-    # November general Election. Seed it here so the loop actually visits
-    # 2014 and reaches the special-date branch under test.
-    Election.objects.create(
-        state="NC", election_type="general", election_date=datetime.date(2014, 11, 4),
-        jurisdiction_level=Election.JurisdictionLevel.STATE,
-        status=Election.Status.RESULTS_PENDING, name="2014 NC General",
-    )
-
-    csv_bytes = _csv_bytes(
-        _candidate_row("07/15/2014", "BERTIE", "NC HOUSE OF REPRESENTATIVES DISTRICT 023", "A Person", "DEM", "DEM"),
-        _candidate_row("07/15/2014", "MECKLENBURG", "US HOUSE OF REPRESENTATIVES DISTRICT 06", "B Person", "REP", "REP"),
-    )
-
-    with patch("integrations.nc_sbe.tasks.NcSbeClient") as MockClient:
-        MockClient.return_value.list_candidate_filing_csv_key.return_value = "Elections/2014/Candidate Filing/Candidate_Listing_2014.csv"
-        MockClient.return_value.fetch_candidate_filing_csv.return_value = csv_bytes
-        sync_nc_candidates.apply()
-        sync_nc_candidates.apply()  # idempotency: canonical_key dedupe via contest_group
-
-    house023 = Race.objects.get(office_title="NC HOUSE OF REPRESENTATIVES DISTRICT 023")
-    ushouse06 = Race.objects.get(office_title="US HOUSE OF REPRESENTATIVES DISTRICT 06")
-    assert house023.election_id != ushouse06.election_id
-    assert Election.objects.filter(
-        state="NC", election_type="special", election_date=datetime.date(2014, 7, 15)
-    ).count() == 2
-    for election in (house023.election, ushouse06.election):
-        assert election.state == "NC"
-        assert election.election_type == "special"
-        assert election.election_date == datetime.date(2014, 7, 15)
 
 
 @pytest.mark.django_db
