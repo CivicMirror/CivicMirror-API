@@ -409,6 +409,9 @@ class Command(BaseCommand):
         )
 
         original_links = list(election.source_links_rel.all()) if apply_changes else []
+        # True once a group's target key turns out to BE this row's current key —
+        # the row is then one of the split's outputs, not something to delete.
+        keeps_source_row = False
 
         with transaction.atomic():
             for group_value, group_races in groups.items():
@@ -416,11 +419,13 @@ class Command(BaseCommand):
                     election.state, election.election_type, election.election_date,
                     election.jurisdiction_level, contest_group=group_value,
                 )
+                is_source_row = new_key == old_key
                 sample = group_races[0]
                 titles = ", ".join(sorted({r.office_title for r in group_races}))
                 self.stdout.write(
                     f"  group={group_value!r} -> canonical_key={new_key} "
                     f"({len(group_races)} race(s): {titles})"
+                    + (" — already this row's own key; stays put" if is_source_row else "")
                 )
                 self._warn_on_placeholder(mode, group_value)
                 if not apply_changes:
@@ -431,20 +436,33 @@ class Command(BaseCommand):
 
                 group_sources = sorted({r.source for r in group_races if r.source})
 
-                new_election, _created = Election.objects.get_or_create(
-                    canonical_key=new_key,
-                    defaults={
-                        "state": election.state,
-                        "election_type": election.election_type,
-                        "election_date": election.election_date,
-                        "jurisdiction_level": election.jurisdiction_level,
-                        "name": f"{election.name} ({sample.jurisdiction or sample.office_title})",
-                        "status": election.status,
-                        "last_synced_at": election.last_synced_at,
-                        "source_metadata": {"repaired_from_election_id": election.pk},
-                        "contributing_sources": group_sources,
-                    },
-                )
+                if is_source_row:
+                    # This group already lives on the row being split, under the
+                    # right key (a previous run rekeyed it in place, then a race
+                    # from another contest landed on it). Its races are already
+                    # correctly parented and keyed, so get_or_create would hand
+                    # back this same row and every rekey step would no-op — and
+                    # the terminal delete below would then CASCADE those races
+                    # away. Keep the row instead: the other groups move out, this
+                    # one stays where it is.
+                    keeps_source_row = True
+                    stats["groups_kept_on_source_row"] += 1
+                    new_election = election
+                else:
+                    new_election, _created = Election.objects.get_or_create(
+                        canonical_key=new_key,
+                        defaults={
+                            "state": election.state,
+                            "election_type": election.election_type,
+                            "election_date": election.election_date,
+                            "jurisdiction_level": election.jurisdiction_level,
+                            "name": f"{election.name} ({sample.jurisdiction or sample.office_title})",
+                            "status": election.status,
+                            "last_synced_at": election.last_synced_at,
+                            "source_metadata": {"repaired_from_election_id": election.pk},
+                            "contributing_sources": group_sources,
+                        },
+                    )
                 self._rekey_races(
                     group_races, old_key, new_key, apply_changes=True, stats=stats,
                     new_election=new_election,
@@ -465,13 +483,18 @@ class Command(BaseCommand):
                             },
                         )
 
-            if apply_changes:
+            if apply_changes and not keeps_source_row:
                 ElectionSourceLink.objects.filter(election=election).delete()
                 election.delete()
 
         if apply_changes:
             stats["split"] += 1
-            self.stdout.write(self.style.SUCCESS(f"  done — original Election {election.pk} removed"))
+            self.stdout.write(self.style.SUCCESS(
+                f"  done — Election {election.pk} kept as its own group's row; "
+                "the other group(s) moved out"
+                if keeps_source_row else
+                f"  done — original Election {election.pk} removed"
+            ))
         else:
             stats["would_split"] += 1
             self.stdout.write(self.style.WARNING("  (dry run — pass --yes to apply)"))

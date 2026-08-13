@@ -1106,3 +1106,61 @@ def test_inherit_sole_group_is_rejected_in_compound_mode():
             group_by_compound="office_title,jurisdiction",
             inherit_sole_group=True, yes=True,
         )
+
+
+@pytest.mark.django_db
+def test_split_keeps_the_source_row_when_one_group_is_already_its_key():
+    """Cloud-review bug_001: a split re-run over an election a previous run
+    already rekeyed in place, after a race from another contest landed on it.
+    One group's target key IS this row's current key — get_or_create hands back
+    the same row, every rekey step no-ops, and the terminal delete used to
+    CASCADE those races away (Race.election is on_delete=CASCADE)."""
+    already_rekeyed = Election.objects.create(
+        state="MA", election_type="special",
+        election_date=datetime.date(2025, 5, 13),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        status=Election.Status.RESULTS_PENDING,
+        canonical_key="MA:special:2025-05-13:state|6th essex",
+        name="2025 MA State Representative 6th Essex",
+    )
+    ElectionSourceLink.objects.create(
+        election=already_rekeyed, source="ma_sos", source_id="ma_sos:171339",
+    )
+    essex = Race.objects.create(
+        election=already_rekeyed, race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative", jurisdiction="6th Essex",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_CERTIFIED,
+        source=Race.Source.MA_SOS,
+        canonical_key=(
+            "MA:special:2025-05-13:state|6th essex|state representative|NO_OCD|candidate"
+        ),
+    )
+    # Landed after that rekey — a scheduler that wasn't fully paused, or a fixup.
+    stray = Race.objects.create(
+        election=already_rekeyed, race_type=Race.RaceType.CANDIDATE,
+        office_title="State Representative", jurisdiction="3rd Bristol",
+        geography_scope="district", certification_status=Race.CertificationStatus.RESULTS_CERTIFIED,
+        source=Race.Source.MA_SOS,
+        canonical_key=(
+            "MA:special:2025-05-13:state|6th essex|state representative|NO_OCD|candidate|bristol"
+        ),
+    )
+
+    call_command("repair_collided_elections", state="MA", group_by="jurisdiction", yes=True)
+
+    essex.refresh_from_db()
+    stray.refresh_from_db()
+
+    # The already-correct row survives, with its races and provenance intact...
+    assert Election.objects.filter(pk=already_rekeyed.pk).exists()
+    assert essex.election_id == already_rekeyed.pk
+    assert essex.canonical_key == (
+        "MA:special:2025-05-13:state|6th essex|state representative|NO_OCD|candidate"
+    )
+    assert ElectionSourceLink.objects.filter(election=already_rekeyed, source="ma_sos").exists()
+    # ...and only the stray moves out, onto its own correctly-keyed row.
+    bristol = Election.objects.get(canonical_key="MA:special:2025-05-13:state|3rd bristol")
+    assert stray.election_id == bristol.pk
+    assert stray.canonical_key.startswith("MA:special:2025-05-13:state|3rd bristol|")
+    assert Election.objects.count() == 2
+    assert Race.objects.count() == 2
