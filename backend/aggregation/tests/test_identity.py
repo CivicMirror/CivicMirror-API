@@ -235,3 +235,24 @@ def test_election_canonical_key_blank_contest_group_after_normalization_is_omitt
     d = date(2025, 5, 13)
     key = election_canonical_key("MA", "special", d, "state", "   ")
     assert key == "MA:special:2025-05-13:state"
+
+
+def test_contest_group_from_election_key_reads_back_the_suffix():
+    """A source that attaches to an Election it didn't discover (sc_enr) has to
+    recover contest_group from the row's own key — see issue #187."""
+    from aggregation.identity import contest_group_from_election_key
+
+    assert contest_group_from_election_key("SC:special:2026-06-23:state|22744") == "22744"
+    assert contest_group_from_election_key(
+        "MA:special:2025-05-13:state|state representative:6th essex"
+    ) == "state representative:6th essex"
+
+
+def test_contest_group_from_election_key_is_empty_for_unsuffixed_and_missing_keys():
+    """Pre-contest_group rows (and a NULL canonical_key) must yield "", which
+    makes election_canonical_key a no-op rather than changing the key."""
+    from aggregation.identity import contest_group_from_election_key
+
+    assert contest_group_from_election_key("SC:special:2026-06-23:state") == ""
+    assert contest_group_from_election_key("") == ""
+    assert contest_group_from_election_key(None) == ""

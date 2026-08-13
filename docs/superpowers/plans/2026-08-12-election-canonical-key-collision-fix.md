@@ -1621,6 +1621,21 @@ GROUP BY e.state;
 ```
 Expected: `missing_key = 0`. Any non-zero count must be resolved before the GA/VA runs.
 
+- [x] **Step 6: Second-source re-mint — `sc_enr` fixed, `civic_api` documented**
+
+The convergence invariant is "every stored special Election's key equals what **the state's own adapter** computes." Any *other* source that calls `ingest_election` for these states computes the **base** key and would mint a bare-key row beside every rekeyed one on its next sync. Audited every `ingest_election` caller:
+
+- **`sc_enr`** — real exposure, now fixed. It doesn't discover elections; it attaches a `results_url` to an Election `attempt_election_link()` already resolved, rebuilding the identity from that row's fields. It now reads the group back out of the row's own key via the new `aggregation.identity.contest_group_from_election_key()`, so it updates the suffixed row instead of duplicating it. (`attempt_election_link` already degrades to AMBIGUOUS on a date with multiple Elections, so the split itself was safe — this is the other half.)
+- **`election_calendar`** — seeds only general/primary specs; no `special` types, no exposure.
+- **`civic_api`** — `infer_election_type()` *can* return `special`, and civic covers every state, so a future civic special in one of these five would land as a separate bare-key row rather than merging into the adapter's. **Zero instances today** — verified against production: every special Election in MA/SC/TX/GA/VA has exactly one `ElectionSourceLink`, and it is the state adapter (GA 66, SC 26, VA 11, MA 3, TX 3; no link-less rows; the only non-adapter race source is one VA `results_adapter` race, which attaches to an existing race and never ingests an Election). Not a blocker, and not fixable at the Election level anyway — civic's per-contest information lives on its races, not on the election payload. Re-check this query if civic coverage for special elections ever expands.
+
+```sql
+SELECT e.state, l.source, COUNT(DISTINCT e.id)
+FROM elections_election e JOIN elections_electionsourcelink l ON l.election_id = e.id
+WHERE e.election_type='special' AND e.state IN ('MA','SC','TX','GA','VA')
+GROUP BY 1, 2 ORDER BY 1;
+```
+
 ---
 
 ## Self-Review Notes

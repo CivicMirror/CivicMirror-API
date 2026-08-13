@@ -140,6 +140,20 @@ def election_canonical_key(
     return key
 
 
+def contest_group_from_election_key(canonical_key: str) -> str:
+    """Recover the contest_group suffix from a stored Election canonical_key.
+
+    For a source that attaches to an Election it already holds (sc_enr writing
+    a results_url onto a row it just linked) rather than discovering one, the
+    contest_group isn't in its own feed — it's already in the row's key. Reading
+    it back keeps that source's ingest_election call pointed at the same row
+    instead of minting a bare-key duplicate beside it. Returns "" for keys with
+    no suffix, so pre-contest_group rows are unaffected. See issue #187.
+    """
+    _base, separator, group = (canonical_key or "").partition("|")
+    return group if separator else ""
+
+
 def _normalize_variant(contest_variant: str) -> str:
     """Lowercase and collapse whitespace; preserve the field's own delimiters
     (e.g. ':') so callers can build structured variant keys like

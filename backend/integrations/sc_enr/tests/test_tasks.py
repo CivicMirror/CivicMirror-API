@@ -150,6 +150,7 @@ def test_poll_sc_enr_propagates_results_url_when_linked(mock_synclog, mock_clien
         mock_election = MagicMock()
         mock_election.pk = 9
         mock_election.results_url = ""
+        mock_election.canonical_key = "SC:special:2026-06-23:state"
         mock_link.return_value = (mock_election, "auto")
         mock_ingest_election.return_value = (mock_election, False)
 
@@ -161,6 +162,58 @@ def test_poll_sc_enr_propagates_results_url_when_linked(mock_synclog, mock_clien
     call_kwargs = mock_ingest_election.call_args.kwargs
     assert call_kwargs["source"] == "sc_enr"
     assert call_kwargs["fields"]["results_url"] == "https://www.enr-scvotes.org/SC/130000/"
+
+
+@patch("integrations.sc_enr.tasks.ENRClient")
+@patch("integrations.sc_enr.tasks.SyncLog")
+def test_poll_sc_enr_reuses_contest_group_of_the_election_it_linked(mock_synclog, mock_client_cls):
+    """Issue #187: sc_enr doesn't discover elections, it attaches a results_url
+    to one attempt_election_link already resolved. Rebuilding the identity
+    without the row's own contest_group would compute the BASE key and mint a
+    duplicate Election beside the suffixed one."""
+    mock_client = MagicMock()
+    mock_client_cls.return_value = mock_client
+    mock_client.get_elections.return_value = [_make_feed_entry()]
+    mock_client.resolve_url.return_value = "https://www.enr-scvotes.org/SC/130000/web.777/"
+
+    with patch("integrations.sc_enr.tasks.map_enr_election") as mock_map, \
+         patch("integrations.sc_enr.tasks.ENRElection") as mock_enr, \
+         patch("integrations.sc_enr.tasks.attempt_election_link") as mock_link, \
+         patch("aggregation.ingest.ingest_election") as mock_ingest_election:
+
+        mock_map.return_value = _make_mapped()
+
+        mock_enr.Scope.STATE = "state"
+        mock_enr.Scope.COUNTY = "county"
+        mock_enr.LinkConfidence.MANUAL = "manual"
+        mock_enr.LinkConfidence.AMBIGUOUS = "ambiguous"
+        mock_enr.LinkConfidence.AUTO = "auto"
+
+        new_obj = MagicMock()
+        new_obj.eid = 130000
+        new_obj.enr_resolved_url = ""
+        new_obj.enr_base_url = "https://www.enr-scvotes.org/SC/130000/"
+        new_obj.scope = "state"
+        new_obj.election = None
+        new_obj.election_id = None
+        new_obj.link_confidence = "ambiguous"
+        mock_enr.objects.filter.return_value.first.return_value = None
+        mock_enr.objects.create.return_value = new_obj
+        mock_enr.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        mock_election = MagicMock()
+        mock_election.pk = 9
+        mock_election.state = "SC"
+        mock_election.election_type = "special"
+        mock_election.jurisdiction_level = "state"
+        mock_election.canonical_key = "SC:special:2026-06-23:state|22744"
+        mock_link.return_value = (mock_election, "auto")
+        mock_ingest_election.return_value = (mock_election, False)
+
+        poll_sc_enr_elections()
+
+    identity = mock_ingest_election.call_args.kwargs["identity"]
+    assert identity["contest_group"] == "22744"
 
 
 # ------------------------------------------------------------------
