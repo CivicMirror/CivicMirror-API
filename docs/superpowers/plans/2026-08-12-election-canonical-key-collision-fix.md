@@ -1605,21 +1605,32 @@ docker exec civicmirror-api python manage.py repair_collided_elections --state M
 docker exec civicmirror-api python manage.py repair_collided_elections --state SC --group-by-metadata vrems_election_id
 docker exec civicmirror-api python manage.py repair_collided_elections --state TX --group-by-metadata tx_election_id
 docker exec civicmirror-api python manage.py repair_collided_elections --state GA --group-by-metadata ga_public_election_id
-docker exec civicmirror-api python manage.py repair_collided_elections --state VA --group-by-metadata enr_slug
+docker exec civicmirror-api python manage.py repair_collided_elections --state VA --group-by-metadata enr_slug --inherit-sole-group
 # …then re-run each with --yes
 # 4. Resume schedulers
 ```
 
-NC is **not** in this list. Before running GA/VA, confirm their races actually carry the grouping key (races ingested before the mapper wrote it would be refused, loudly, rather than mis-grouped):
+NC is **not** in this list. VA needs `--inherit-sole-group` on both its dry run and its `--yes` run; the other four states need no extra flag.
+
+**Grouping-key coverage, checked against production 2026-08-13** (races under special elections missing the key each invocation groups by):
+
+| State | Grouping key | Races missing it | Total races |
+|---|---|---|---|
+| GA | `ga_public_election_id` | 0 | 394 |
+| SC | `vrems_election_id` | 0 | 14 |
+| TX | `tx_election_id` | 0 | 5 |
+| MA | `office_title` / `jurisdiction` | 0 | 6 |
+| VA | `enr_slug` | **1** | 16 |
+
+VA's one gap is Election 1840 (`VA:special:2026-04-14:state`): a `results_adapter` race for "County Form of Government" sitting alongside its `va_elect` twin, carrying no `enr_slug`. Its only sibling with a value has `2026-April-14-Special`, so there is exactly one candidate group and no ambiguity about where it belongs — which is what `--inherit-sole-group` is for. Without the flag the command refuses that election and names the flag in the refusal; with it, a keyless race is still refused whenever the siblings span two or more groups. Re-run the coverage query before the production pass in case new rows have landed:
 
 ```sql
-SELECT e.state, COUNT(*) FILTER (WHERE COALESCE(r.source_metadata->>'ga_public_election_id', r.source_metadata->>'enr_slug', '') = '') AS missing_key,
+SELECT e.state, COUNT(*) FILTER (WHERE COALESCE(r.source_metadata->>'enr_slug','') = '') AS missing_key,
        COUNT(*) AS total_races
 FROM elections_election e JOIN elections_race r ON r.election_id = e.id
-WHERE e.election_type = 'special' AND e.state IN ('GA','VA')
+WHERE e.election_type = 'special' AND e.state = 'VA'
 GROUP BY e.state;
 ```
-Expected: `missing_key = 0`. Any non-zero count must be resolved before the GA/VA runs.
 
 - [x] **Step 6: Second-source re-mint — `sc_enr` fixed, `civic_api` documented**
 

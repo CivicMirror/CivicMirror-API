@@ -980,3 +980,115 @@ def test_repair_compound_dry_run_does_not_warn_for_normal_districted_group(capsy
 
     output = capsys.readouterr().out
     assert "WARNING" not in output
+
+
+# ---------------------------------------------------------------------------
+# --inherit-sole-group: a race with no grouping value can still be placed when
+# every sibling that has one agrees on a single group — VA's real case, where a
+# results_adapter race sits alongside its va_elect twin without an enr_slug.
+# Never allowed when the siblings span more than one group.
+# ---------------------------------------------------------------------------
+
+def _make_va_election_with_one_keyless_race():
+    election = Election.objects.create(
+        state="VA", election_type="special",
+        election_date=datetime.date(2026, 4, 14),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        status=Election.Status.RESULTS_PENDING,
+        canonical_key="VA:special:2026-04-14:state",
+        name="2026 April 14 Special",
+    )
+    with_slug = Race.objects.create(
+        election=election, race_type=Race.RaceType.CANDIDATE,
+        office_title="County Form of Government", jurisdiction="Virginia",
+        geography_scope="local", certification_status=Race.CertificationStatus.RESULTS_PENDING,
+        source=Race.Source.VA_ELECT,
+        canonical_key="VA:special:2026-04-14:state|county form of government|NO_OCD|candidate",
+        source_metadata={"enr_slug": "2026-April-14-Special"},
+    )
+    keyless = Race.objects.create(
+        election=election, race_type=Race.RaceType.MEASURE,
+        office_title="County Form of Government", jurisdiction="VA",
+        geography_scope="local", certification_status=Race.CertificationStatus.RESULTS_PENDING,
+        source=Race.Source.RESULTS_ADAPTER,
+        canonical_key="VA:special:2026-04-14:state|county form of government|NO_OCD|measure",
+        source_metadata={},
+    )
+    return election, with_slug, keyless
+
+
+@pytest.mark.django_db
+def test_keyless_race_refusal_names_the_inherit_flag_and_mutates_nothing():
+    election, with_slug, keyless = _make_va_election_with_one_keyless_race()
+
+    with pytest.raises(CommandError):
+        call_command(
+            "repair_collided_elections", state="VA",
+            group_by_metadata="enr_slug", yes=True,
+        )
+
+    election.refresh_from_db()
+    with_slug.refresh_from_db()
+    keyless.refresh_from_db()
+    assert election.canonical_key == "VA:special:2026-04-14:state"
+    assert Election.objects.count() == 1
+    assert with_slug.election_id == election.pk and keyless.election_id == election.pk
+
+
+@pytest.mark.django_db
+def test_inherit_sole_group_places_keyless_race_in_its_siblings_group():
+    election, with_slug, keyless = _make_va_election_with_one_keyless_race()
+
+    call_command(
+        "repair_collided_elections", state="VA",
+        group_by_metadata="enr_slug", inherit_sole_group=True, yes=True,
+    )
+
+    election.refresh_from_db()
+    with_slug.refresh_from_db()
+    keyless.refresh_from_db()
+
+    expected_key = "VA:special:2026-04-14:state|2026-april-14-special"
+    assert Election.objects.count() == 1, "one contest — must rekey in place, not split"
+    assert election.canonical_key == expected_key
+    assert with_slug.election_id == election.pk and keyless.election_id == election.pk
+    assert with_slug.canonical_key.startswith(f"{expected_key}|")
+    assert keyless.canonical_key.startswith(f"{expected_key}|")
+
+
+@pytest.mark.django_db
+def test_inherit_sole_group_still_refuses_when_siblings_span_two_groups():
+    """The flag only resolves the unambiguous case. With two sibling groups
+    there is no way to tell which contest the keyless race belongs to."""
+    collided = Election.objects.create(
+        state="SC", election_type="special",
+        election_date=datetime.date(2026, 6, 23),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        status=Election.Status.RESULTS_PENDING,
+        canonical_key="SC:special:2026-06-23:state",
+        name="Collided",
+    )
+    for office, meta in (
+        ("City Council", {"vrems_election_id": "22744"}),
+        ("School Board District 1", {"vrems_election_id": "22746"}),
+        ("Town Referendum", {}),
+    ):
+        Race.objects.create(
+            election=collided, race_type=Race.RaceType.CANDIDATE,
+            office_title=office, jurisdiction="Somewhere",
+            geography_scope="local", certification_status=Race.CertificationStatus.RESULTS_PENDING,
+            source=Race.Source.SC_VREMS,
+            canonical_key=f"SC:special:2026-06-23:state|{office.lower()}|NO_OCD|candidate",
+            source_metadata=meta,
+        )
+
+    with pytest.raises(CommandError):
+        call_command(
+            "repair_collided_elections", state="SC",
+            group_by_metadata="vrems_election_id", inherit_sole_group=True, yes=True,
+        )
+
+    collided.refresh_from_db()
+    assert collided.canonical_key == "SC:special:2026-06-23:state"
+    assert Election.objects.count() == 1
+    assert Race.objects.count() == 3

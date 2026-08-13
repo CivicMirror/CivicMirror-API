@@ -93,6 +93,14 @@ continues through the other elections and each election's mutation is its own
 transaction), then the command exits non-zero. Fix the underlying data and
 re-run — the command is idempotent.
 
+``--inherit-sole-group`` is the one sanctioned way past that refusal, and only
+in the case where nothing is ambiguous: when every sibling race that *has* a
+grouping value agrees on a single one, a keyless race can only belong to that
+same contest, so it inherits it. VA needs this — a `results_adapter` race
+ingested alongside its `va_elect` twin carries no `enr_slug`. When the siblings
+span two or more groups the refusal stands regardless of the flag, because
+there is then no way to tell which contest the keyless race belongs to.
+
 DEPLOYMENT ORDER (critical, mirrors merge_duplicate_races)
 ----------------------------------------------------------
 1. Pause the sync schedulers for the affected states.
@@ -156,6 +164,12 @@ class Command(BaseCommand):
                  "(office_title,jurisdiction for MA)",
         )
         parser.add_argument(
+            "--inherit-sole-group", action="store_true",
+            help="When a race has no grouping value but every sibling that does agrees on a "
+                 "single group, place it in that group instead of refusing the election. "
+                 "Still refuses when the siblings span more than one group.",
+        )
+        parser.add_argument(
             "--yes", action="store_true",
             help="Actually mutate the database. Without this flag, only prints what would happen.",
         )
@@ -163,6 +177,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         state = options["state"].upper()
         apply_changes = options["yes"]
+        inherit_sole_group = options["inherit_sole_group"]
         key_fn, label, mode, is_empty_fn = self._resolve_grouping(options)
 
         stats: dict[str, int] = defaultdict(int)
@@ -186,26 +201,63 @@ class Command(BaseCommand):
                 ))
                 continue
 
-            empty_races = [r for r in races if is_empty_fn(r)]
+            values = {r.pk: ("" if is_empty_fn(r) else key_fn(r)) for r in races}
+            empty_races = [r for r in races if not values[r.pk]]
+            distinct = sorted({v for v in values.values() if v})
+
             if empty_races:
                 race_ids = ", ".join(str(r.pk) for r in empty_races)
-                stats["refused"] += 1
-                refusals.append(
-                    f"Election {election.pk} ({election.canonical_key}): {label} produced an "
-                    f"empty/uninformative grouping value for race id(s) [{race_ids}]"
-                )
-                self.stdout.write(self.style.ERROR(
-                    f"Election {election.pk} ({election.canonical_key}): REFUSED — {label} "
-                    f"produced an empty/uninformative grouping value for race id(s) [{race_ids}]. "
-                    "An empty contest_group yields the unchanged base key, so these races would "
-                    "be rekeyed straight back onto the row being replaced. Fix the missing/empty "
-                    "source data (or the --group-by-* field/key selection) and re-run."
-                ))
-                continue
+                sole_group = distinct[0] if len(distinct) == 1 else None
+
+                if sole_group is not None and inherit_sole_group:
+                    # Every sibling that HAS a grouping value agrees on one, so
+                    # there is no ambiguity about where the keyless race belongs:
+                    # this election describes a single contest either way. Only
+                    # safe under that condition — with two or more sibling groups
+                    # a keyless race genuinely cannot be placed.
+                    for race in empty_races:
+                        values[race.pk] = sole_group
+                    stats["races_inherited_group"] += len(empty_races)
+                    self.stdout.write(self.style.WARNING(
+                        f"Election {election.pk} ({election.canonical_key}): race id(s) "
+                        f"[{race_ids}] have no {label} value; inheriting the sole sibling "
+                        f"group {sole_group!r} (--inherit-sole-group)."
+                    ))
+                else:
+                    stats["refused"] += 1
+                    if sole_group is not None:
+                        reason = (
+                            f"every other race agrees on the single group {sole_group!r}, so "
+                            "--inherit-sole-group would place them there; re-run with that flag "
+                            "if that is right for this data"
+                        )
+                    elif distinct:
+                        reason = (
+                            f"sibling races span {len(distinct)} different groups, so these races "
+                            "cannot be placed — fix the missing/empty source data and re-run"
+                        )
+                    else:
+                        reason = (
+                            "no race in this election has a grouping value at all — fix the "
+                            "missing/empty source data (or the --group-by-* field/key selection) "
+                            "and re-run"
+                        )
+                    refusals.append(
+                        f"Election {election.pk} ({election.canonical_key}): {label} produced an "
+                        f"empty/uninformative grouping value for race id(s) [{race_ids}]"
+                    )
+                    self.stdout.write(self.style.ERROR(
+                        f"Election {election.pk} ({election.canonical_key}): REFUSED — {label} "
+                        f"produced an empty/uninformative grouping value for race id(s) "
+                        f"[{race_ids}]. An empty contest_group yields the unchanged base key, so "
+                        f"these races would be rekeyed straight back onto the row being replaced. "
+                        f"Here {reason}."
+                    ))
+                    continue
 
             groups: dict[str, list[Race]] = {}
             for race in races:
-                groups.setdefault(key_fn(race), []).append(race)
+                groups.setdefault(values[race.pk], []).append(race)
 
             if len(groups) == 1:
                 self._rekey_in_place(
