@@ -1021,7 +1021,7 @@ def _make_va_election_with_one_keyless_race():
 def test_keyless_race_refusal_names_the_inherit_flag_and_mutates_nothing():
     election, with_slug, keyless = _make_va_election_with_one_keyless_race()
 
-    with pytest.raises(CommandError):
+    with pytest.raises(CommandError, match="inherit-sole-group"):
         call_command(
             "repair_collided_elections", state="VA",
             group_by_metadata="enr_slug", yes=True,
@@ -1092,3 +1092,17 @@ def test_inherit_sole_group_still_refuses_when_siblings_span_two_groups():
     assert collided.canonical_key == "SC:special:2026-06-23:state"
     assert Election.objects.count() == 1
     assert Race.objects.count() == 3
+
+
+@pytest.mark.django_db
+def test_inherit_sole_group_is_rejected_in_compound_mode():
+    """Compound treats either-half-empty as keyless, but the adapter may still
+    emit a group from the half it has (ma_sos emits "governor's council:" for
+    an office with no district) — inheriting there would build a key no sync
+    ever computes."""
+    with pytest.raises(CommandError, match="cannot be combined"):
+        call_command(
+            "repair_collided_elections", state="MA",
+            group_by_compound="office_title,jurisdiction",
+            inherit_sole_group=True, yes=True,
+        )

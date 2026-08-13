@@ -99,7 +99,11 @@ grouping value agrees on a single one, a keyless race can only belong to that
 same contest, so it inherits it. VA needs this — a `results_adapter` race
 ingested alongside its `va_elect` twin carries no `enr_slug`. When the siblings
 span two or more groups the refusal stands regardless of the flag, because
-there is then no way to tell which contest the keyless race belongs to.
+there is then no way to tell which contest the keyless race belongs to. The
+flag is rejected outright in ``--group-by-compound`` mode: compound treats
+either-half-empty as keyless, but the adapter may still emit a group from the
+half it has (``ma_sos`` emits ``"governor's council:"`` for an office with no
+district), so inheriting would build a key the adapter never computes.
 
 DEPLOYMENT ORDER (critical, mirrors merge_duplicate_races)
 ----------------------------------------------------------
@@ -167,7 +171,8 @@ class Command(BaseCommand):
             "--inherit-sole-group", action="store_true",
             help="When a race has no grouping value but every sibling that does agrees on a "
                  "single group, place it in that group instead of refusing the election. "
-                 "Still refuses when the siblings span more than one group.",
+                 "Still refuses when the siblings span more than one group. Not valid with "
+                 "--group-by-compound.",
         )
         parser.add_argument(
             "--yes", action="store_true",
@@ -179,6 +184,20 @@ class Command(BaseCommand):
         apply_changes = options["yes"]
         inherit_sole_group = options["inherit_sole_group"]
         key_fn, label, mode, is_empty_fn = self._resolve_grouping(options)
+
+        if inherit_sole_group and mode == "compound":
+            # Compound mode's is_empty_fn treats either-half-empty as keyless,
+            # but an adapter may well emit a group from the half it does have
+            # (ma_sos emits "governor's council:" for an office with no
+            # district). Inheriting a sibling's group for such a race would
+            # build a key the adapter never computes — the exact
+            # non-convergence this command exists to prevent.
+            raise CommandError(
+                "--inherit-sole-group cannot be combined with --group-by-compound: a race "
+                "with one empty half may still have its own adapter-computed contest_group, "
+                "so inheriting a sibling's group would produce a key the next sync won't "
+                "match. Fix the empty field instead."
+            )
 
         stats: dict[str, int] = defaultdict(int)
         refusals: list[str] = []
@@ -244,7 +263,7 @@ class Command(BaseCommand):
                         )
                     refusals.append(
                         f"Election {election.pk} ({election.canonical_key}): {label} produced an "
-                        f"empty/uninformative grouping value for race id(s) [{race_ids}]"
+                        f"empty/uninformative grouping value for race id(s) [{race_ids}] — {reason}"
                     )
                     self.stdout.write(self.style.ERROR(
                         f"Election {election.pk} ({election.canonical_key}): REFUSED — {label} "
