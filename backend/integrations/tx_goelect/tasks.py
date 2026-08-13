@@ -98,6 +98,8 @@ def sync_tx_elections(self):
                         "election_date": fields["election_date"],
                         "jurisdiction_level": fields["jurisdiction_level"],
                     }
+                    if fields["election_type"] == Election.ElectionType.SPECIAL:
+                        identity["contest_group"] = str(election_id).lower()
 
                     election_obj, was_created = ingest.ingest_election(
                         source=_SOURCE,
@@ -154,6 +156,8 @@ def sync_tx_elections(self):
                 "election_date": fields["election_date"],
                 "jurisdiction_level": fields["jurisdiction_level"],
             }
+            if fields["election_type"] == Election.ElectionType.SPECIAL:
+                identity["contest_group"] = str(probe_id).lower()
 
             election_obj, was_created = ingest.ingest_election(
                 source=_SOURCE,

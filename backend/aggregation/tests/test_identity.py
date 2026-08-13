@@ -195,3 +195,64 @@ def test_race_canonical_key_blank_variant_after_normalization_is_omitted():
     ek = "CA:primary:2026-06-02:state"
     key = race_canonical_key(ek, "Governor", "", "candidate", "   ")
     assert key == f"{ek}|governor|NO_OCD|candidate"
+
+
+def test_election_canonical_key_omitted_contest_group_matches_pre_existing_key():
+    """Default behavior (no contest_group) must be byte-identical to the
+    pre-extension key, so existing sources are unaffected."""
+    d = date(2025, 5, 13)
+    assert (
+        election_canonical_key("MA", "special", d, "state")
+        == election_canonical_key("MA", "special", d, "state", "")
+        == "MA:special:2025-05-13:state"
+    )
+
+
+def test_election_canonical_key_contest_group_appended_when_present():
+    d = date(2025, 5, 13)
+    key = election_canonical_key("MA", "special", d, "state", "state representative:6th essex")
+    assert key == "MA:special:2025-05-13:state|state representative:6th essex"
+
+
+def test_election_canonical_key_contest_group_disambiguates_same_day_specials():
+    """The bug this fix exists for: MA's 6th Essex special general and 3rd
+    Bristol special primary both fell on 2025-05-13 and collapsed into one
+    Election (production id 2158) without this fix. See issue #187."""
+    d = date(2025, 5, 13)
+    essex = election_canonical_key("MA", "special", d, "state", "state representative:6th essex")
+    bristol = election_canonical_key("MA", "special", d, "state", "state representative:3rd bristol")
+    assert essex != bristol
+
+
+def test_election_canonical_key_contest_group_is_case_and_whitespace_normalized():
+    d = date(2025, 5, 13)
+    a = election_canonical_key("MA", "special", d, "state", "State Representative:6th Essex")
+    b = election_canonical_key("MA", "special", d, "state", "  state representative:6th essex  ")
+    assert a == b
+
+
+def test_election_canonical_key_blank_contest_group_after_normalization_is_omitted():
+    d = date(2025, 5, 13)
+    key = election_canonical_key("MA", "special", d, "state", "   ")
+    assert key == "MA:special:2025-05-13:state"
+
+
+def test_contest_group_from_election_key_reads_back_the_suffix():
+    """A source that attaches to an Election it didn't discover (sc_enr) has to
+    recover contest_group from the row's own key — see issue #187."""
+    from aggregation.identity import contest_group_from_election_key
+
+    assert contest_group_from_election_key("SC:special:2026-06-23:state|22744") == "22744"
+    assert contest_group_from_election_key(
+        "MA:special:2025-05-13:state|state representative:6th essex"
+    ) == "state representative:6th essex"
+
+
+def test_contest_group_from_election_key_is_empty_for_unsuffixed_and_missing_keys():
+    """Pre-contest_group rows (and a NULL canonical_key) must yield "", which
+    makes election_canonical_key a no-op rather than changing the key."""
+    from aggregation.identity import contest_group_from_election_key
+
+    assert contest_group_from_election_key("SC:special:2026-06-23:state") == ""
+    assert contest_group_from_election_key("") == ""
+    assert contest_group_from_election_key(None) == ""

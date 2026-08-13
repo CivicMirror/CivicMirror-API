@@ -5,7 +5,9 @@ from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.utils import timezone
 
+from elections.models import Election
 from integrations.sc_enr.mappers import attempt_election_link, map_enr_election, parse_enr_date
 from integrations.sc_enr.models import ENRElection
 
@@ -162,4 +164,34 @@ def test_attempt_election_link_no_date_returns_ambiguous(state_enr):
         mock_election_cls.objects.filter.return_value.count.return_value = 0
         link, confidence = attempt_election_link(state_enr)
     assert link is None
+    assert confidence == ENRElection.LinkConfidence.AMBIGUOUS
+
+
+@pytest.mark.django_db
+def test_attempt_election_link_ambiguous_when_date_has_multiple_elections():
+    """After the sc_vrems contest_group fix, a same-day split into two
+    Elections must make attempt_election_link report ambiguous rather than
+    silently picking one — confirms issue #187's fix doesn't introduce a
+    wrong auto-link (verification, not new behavior: this branch already
+    existed at mappers.py:94-101)."""
+    d = date(2026, 6, 23)
+    Election.objects.create(
+        state="SC", election_type="special", election_date=d,
+        jurisdiction_level=Election.JurisdictionLevel.LOCAL,
+        canonical_key="SC:special:2026-06-23:local|22744", name="Johnsonville",
+    )
+    Election.objects.create(
+        state="SC", election_type="special", election_date=d,
+        jurisdiction_level=Election.JurisdictionLevel.LOCAL,
+        canonical_key="SC:special:2026-06-23:local|22746", name="Lexington",
+    )
+    enr = ENRElection.objects.create(
+        eid=99999, election_date=d, scope=ENRElection.Scope.STATE, county=None,
+        election_name="test", enr_base_url="https://example.com/SC/99999/",
+        last_seen_at=timezone.now(),
+    )
+
+    election_obj, confidence = attempt_election_link(enr)
+
+    assert election_obj is None
     assert confidence == ENRElection.LinkConfidence.AMBIGUOUS

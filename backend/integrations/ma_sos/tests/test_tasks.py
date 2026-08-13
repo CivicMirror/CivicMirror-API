@@ -181,6 +181,166 @@ def test_sync_ma_elections_recovers_date_from_view_page_for_special_election(
 @patch("integrations.ma_sos.tasks.sync_ma_ballot_question")
 @patch("integrations.ma_sos.tasks.MaSosClient")
 @patch("integrations.ma_sos.tasks.timezone")
+def test_sync_ma_elections_special_populates_contest_group(
+    mock_tz, mock_client_cls, mock_bq_task, mock_races_task, mock_synclog_cls,
+):
+    """Regression test for issue #187: two unrelated same-day MA specials
+    (6th Essex general vs. 3rd Bristol primary) must get distinct
+    contest_group values so ingest_election doesn't merge them."""
+    from integrations.ma_sos.tasks import sync_ma_elections
+
+    mock_log = MagicMock()
+    mock_synclog_cls.objects.create.return_value = mock_log
+    mock_synclog_cls.Status.STARTED = "started"
+    mock_synclog_cls.Status.COMPLETED = "completed"
+    mock_synclog_cls.Status.COMPLETED_WITH_WARNINGS = "warnings"
+    mock_synclog_cls.Status.FAILED = "failed"
+
+    mock_client = MagicMock()
+    mock_client_cls.return_value = mock_client
+    mock_client.get_ocpf_schedule.return_value = {"generalElectionDate": "", "primaryElectionDate": ""}
+
+    def fake_get_election_ids(year, stage):
+        if year == 2025 and stage == "General":
+            return [{
+                "election_id": 171339, "office": "State Representative",
+                "district": "6th Essex", "stage": "General", "year": 2025,
+            }]
+        if year == 2025 and stage == "Republican":
+            return [{
+                "election_id": 171341, "office": "State Representative",
+                "district": "3rd Bristol", "stage": "Republican", "year": 2025,
+            }]
+        return []
+
+    mock_client.get_election_ids.side_effect = fake_get_election_ids
+    mock_client.get_ballot_question_ids.return_value = []
+    mock_client.get_election_detail.side_effect = lambda eid: {
+        171339: {"election_id": 171339, "date": "2025-05-13", "is_special": True, "year": 2025},
+        171341: {"election_id": 171341, "date": "2025-05-13", "is_special": True, "year": 2025},
+    }[eid]
+
+    mock_saved_election = MagicMock()
+    mock_saved_election.pk = 1
+    mock_saved_election.source_metadata = {"electionstats_id": 171339}
+
+    mock_tz.now.return_value = MagicMock()
+    mock_tz.localdate.return_value = date(2025, 12, 1)
+
+    with patch("integrations.ma_sos.tasks.date") as mock_date, \
+         patch("aggregation.ingest.ingest_election", return_value=(mock_saved_election, True)) as mock_ingest:
+        mock_date.today.return_value = date(2025, 12, 1)
+        sync_ma_elections.run()
+
+    calls = mock_ingest.call_args_list
+    groups = {c.kwargs["identity"].get("contest_group", "") for c in calls}
+    assert "" not in groups, "every special-election identity must set a non-empty contest_group"
+    assert len(groups) == 2, "6th Essex and 3rd Bristol must get distinct contest_group values"
+
+
+@patch("integrations.ma_sos.tasks.SyncLog")
+@patch("integrations.ma_sos.tasks.sync_ma_races")
+@patch("integrations.ma_sos.tasks.sync_ma_ballot_question")
+@patch("integrations.ma_sos.tasks.MaSosClient")
+@patch("integrations.ma_sos.tasks.timezone")
+def test_sync_ma_elections_special_omits_degenerate_contest_group(
+    mock_tz, mock_client_cls, mock_bq_task, mock_races_task, mock_synclog_cls,
+):
+    """Issue #187 (whole-branch review, Important #5): a discovery row with
+    neither office nor district would build the group ":" — a single
+    degenerate value every such special would share, recreating the very
+    collision contest_group exists to prevent. Omit it instead, which also
+    keeps the adapter and repair_collided_elections agreeing on the empty
+    case (the repair command refuses an empty grouping value)."""
+    from integrations.ma_sos.tasks import sync_ma_elections
+
+    mock_log = MagicMock()
+    mock_synclog_cls.objects.create.return_value = mock_log
+    mock_synclog_cls.Status.STARTED = "started"
+    mock_synclog_cls.Status.COMPLETED = "completed"
+    mock_synclog_cls.Status.COMPLETED_WITH_WARNINGS = "warnings"
+    mock_synclog_cls.Status.FAILED = "failed"
+
+    mock_client = MagicMock()
+    mock_client_cls.return_value = mock_client
+    mock_client.get_ocpf_schedule.return_value = {"generalElectionDate": "", "primaryElectionDate": ""}
+    mock_client.get_election_ids.side_effect = lambda year, stage: (
+        [{"election_id": 171339, "office": "  ", "district": "", "stage": "General", "year": 2025}]
+        if year == 2025 and stage == "General" else []
+    )
+    mock_client.get_ballot_question_ids.return_value = []
+    mock_client.get_election_detail.return_value = {
+        "election_id": 171339, "date": "2025-05-13", "is_special": True, "year": 2025,
+    }
+
+    mock_saved_election = MagicMock()
+    mock_saved_election.pk = 1
+    mock_saved_election.source_metadata = {"electionstats_id": 171339}
+
+    mock_tz.now.return_value = MagicMock()
+    mock_tz.localdate.return_value = date(2025, 12, 1)
+
+    with patch("integrations.ma_sos.tasks.date") as mock_date, \
+         patch("aggregation.ingest.ingest_election", return_value=(mock_saved_election, True)) as mock_ingest:
+        mock_date.today.return_value = date(2025, 12, 1)
+        sync_ma_elections.run()
+
+    identity = mock_ingest.call_args.kwargs["identity"]
+    assert "contest_group" not in identity
+
+
+@patch("integrations.ma_sos.tasks.SyncLog")
+@patch("integrations.ma_sos.tasks.sync_ma_races")
+@patch("integrations.ma_sos.tasks.sync_ma_ballot_question")
+@patch("integrations.ma_sos.tasks.MaSosClient")
+@patch("integrations.ma_sos.tasks.timezone")
+def test_sync_ma_elections_special_contest_group_survives_one_empty_half(
+    mock_tz, mock_client_cls, mock_bq_task, mock_races_task, mock_synclog_cls,
+):
+    """Only *both* halves empty is degenerate. An office with no district
+    still identifies a contest, so the group is still emitted."""
+    from integrations.ma_sos.tasks import sync_ma_elections
+
+    mock_log = MagicMock()
+    mock_synclog_cls.objects.create.return_value = mock_log
+    mock_synclog_cls.Status.STARTED = "started"
+    mock_synclog_cls.Status.COMPLETED = "completed"
+    mock_synclog_cls.Status.COMPLETED_WITH_WARNINGS = "warnings"
+    mock_synclog_cls.Status.FAILED = "failed"
+
+    mock_client = MagicMock()
+    mock_client_cls.return_value = mock_client
+    mock_client.get_ocpf_schedule.return_value = {"generalElectionDate": "", "primaryElectionDate": ""}
+    mock_client.get_election_ids.side_effect = lambda year, stage: (
+        [{"election_id": 171339, "office": "Governor's Council", "district": "",
+          "stage": "General", "year": 2025}]
+        if year == 2025 and stage == "General" else []
+    )
+    mock_client.get_ballot_question_ids.return_value = []
+    mock_client.get_election_detail.return_value = {
+        "election_id": 171339, "date": "2025-05-13", "is_special": True, "year": 2025,
+    }
+
+    mock_saved_election = MagicMock()
+    mock_saved_election.pk = 1
+    mock_saved_election.source_metadata = {"electionstats_id": 171339}
+
+    mock_tz.now.return_value = MagicMock()
+    mock_tz.localdate.return_value = date(2025, 12, 1)
+
+    with patch("integrations.ma_sos.tasks.date") as mock_date, \
+         patch("aggregation.ingest.ingest_election", return_value=(mock_saved_election, True)) as mock_ingest:
+        mock_date.today.return_value = date(2025, 12, 1)
+        sync_ma_elections.run()
+
+    assert mock_ingest.call_args.kwargs["identity"]["contest_group"] == "governor's council:"
+
+
+@patch("integrations.ma_sos.tasks.SyncLog")
+@patch("integrations.ma_sos.tasks.sync_ma_races")
+@patch("integrations.ma_sos.tasks.sync_ma_ballot_question")
+@patch("integrations.ma_sos.tasks.MaSosClient")
+@patch("integrations.ma_sos.tasks.timezone")
 def test_sync_ma_elections_still_skips_when_view_page_fallback_also_fails(
     mock_tz, mock_client_cls, mock_bq_task, mock_races_task, mock_synclog_cls,
 ):

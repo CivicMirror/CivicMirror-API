@@ -148,6 +148,7 @@ def poll_sc_enr_elections(self):
                     if enr_obj.enr_resolved_url:
                         try:
                             from aggregation import ingest
+                            from aggregation.identity import contest_group_from_election_key
                             ingest.ingest_election(
                                 source="sc_enr",
                                 source_id=f"sc_enr_{enr_obj.eid}",
@@ -156,6 +157,15 @@ def poll_sc_enr_elections(self):
                                     "election_type":      election_obj.election_type,
                                     "election_date":      election_obj.election_date,
                                     "jurisdiction_level": election_obj.jurisdiction_level,
+                                    # This election was resolved by attempt_election_link,
+                                    # not discovered from sc_enr's own feed — sc_enr has no
+                                    # contest_group of its own, so read the one already in
+                                    # the row's key. Without it the identity rebuilds the
+                                    # BASE key and ingest mints a duplicate beside the
+                                    # contest_group-suffixed row. See issue #187.
+                                    "contest_group": contest_group_from_election_key(
+                                        election_obj.canonical_key or ""
+                                    ),
                                 },
                                 fields={"results_url": enr_obj.enr_base_url},
                             )

@@ -92,7 +92,8 @@ def ingest_election(*, source, source_id, identity, fields):
         logger.warning("aggregation.election.needs_review source=%s source_id=%s", source, source_id)
         return election, created
 
-    key = election_canonical_key(state, election_type, election_date, jurisdiction_level)
+    contest_group = identity.get("contest_group", "")
+    key = election_canonical_key(state, election_type, election_date, jurisdiction_level, contest_group)
     election = Election.objects.select_for_update().filter(canonical_key=key).first()
     created = election is None
     if election is None:

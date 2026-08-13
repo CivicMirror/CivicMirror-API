@@ -121,9 +121,37 @@ def normalize_party(party: str) -> str:
 
 
 def election_canonical_key(
-    state: str, election_type: str, election_date: date, jurisdiction_level: str
+    state: str, election_type: str, election_date: date, jurisdiction_level: str,
+    contest_group: str = "",
 ) -> str:
-    return f"{state}:{election_type}:{election_date.isoformat()}:{jurisdiction_level}"
+    """
+    contest_group is an optional, source-supplied disambiguator for elections
+    that the (state, election_type, election_date, jurisdiction_level) tuple
+    alone cannot tell apart — e.g. two unrelated special elections in
+    different districts that happen to share a date (see issue #187).
+    Omitted (the default), this is a no-op and produces the exact same key
+    as before, so existing sources are unaffected. Mirrors
+    race_canonical_key's contest_variant parameter.
+    """
+    key = f"{state}:{election_type}:{election_date.isoformat()}:{jurisdiction_level}"
+    normalized_group = _squash(contest_group or "").lower()
+    if normalized_group:
+        key = f"{key}|{normalized_group}"
+    return key
+
+
+def contest_group_from_election_key(canonical_key: str) -> str:
+    """Recover the contest_group suffix from a stored Election canonical_key.
+
+    For a source that attaches to an Election it already holds (sc_enr writing
+    a results_url onto a row it just linked) rather than discovering one, the
+    contest_group isn't in its own feed — it's already in the row's key. Reading
+    it back keeps that source's ingest_election call pointed at the same row
+    instead of minting a bare-key duplicate beside it. Returns "" for keys with
+    no suffix, so pre-contest_group rows are unaffected. See issue #187.
+    """
+    _base, separator, group = (canonical_key or "").partition("|")
+    return group if separator else ""
 
 
 def _normalize_variant(contest_variant: str) -> str:

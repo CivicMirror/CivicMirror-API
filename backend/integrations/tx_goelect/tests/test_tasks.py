@@ -50,6 +50,49 @@ def _run_sync_tx_elections_with_one_online_election(
     return result, mock_subtask
 
 
+def test_sync_tx_elections_special_populates_contest_group():
+    """Regression test for issue #187: TX's CD18 special and an unrelated
+    SD9 special landing on the same date must not collapse into one
+    Election — contest_group must use TX's own per-row election_id."""
+    constants = {
+        "electionInfo": {
+            "2025": {
+                "S": {
+                    "11090": {"O": "Y", "N": "SPECIAL ELECTION CONGRESSIONAL DISTRICT 18"},
+                    "11088": {"O": "Y", "N": "SPECIAL ELECTION STATE SENATE DISTRICT 9"},
+                }
+            }
+        }
+    }
+    home = {"ElecDate": "11042025", "CountiesReporting": {"CR": 1, "CT": 1}}
+    ingest_calls = []
+
+    def fake_ingest_election(**kwargs):
+        ingest_calls.append(kwargs)
+        m = MagicMock()
+        m.pk = len(ingest_calls)
+        return m, True
+
+    with patch("integrations.tx_goelect.tasks.TxGoElectClient") as MockClient, \
+         patch("integrations.tx_goelect.tasks.SyncLog") as MockLog, \
+         patch("integrations.tx_goelect.tasks.cache") as mock_cache, \
+         patch("integrations.tx_goelect.tasks.sync_tx_races"), \
+         patch("aggregation.ingest.ingest_election", side_effect=fake_ingest_election):
+
+        client = MockClient.return_value
+        client.get_election_constants.return_value = constants
+        client.get_election_data.return_value = {"version": 1, "home": home, "lookups": {}}
+        client.probe_election.return_value = False
+        mock_cache.get.side_effect = lambda key, default=None: 99999 if "watermark" in key else default
+        MockLog.objects.create.return_value = _mock_log()
+
+        sync_tx_elections.run()
+
+    groups = {c["identity"].get("contest_group", "") for c in ingest_calls}
+    assert "" not in groups
+    assert len(groups) == 2
+
+
 # ---------------------------------------------------------------------------
 # sync_tx_elections — electionConstants polling
 # ---------------------------------------------------------------------------
@@ -213,6 +256,45 @@ def test_probe_ingests_hit_then_continues():
     mock_subtask.apply_async.assert_called_once()
     # Probe continued past 58316 (50 more misses)
     assert client.probe_election.call_count == 51  # 1 hit + 50 misses
+
+
+def test_probe_hit_populates_contest_group():
+    """Regression test for issue #187 at the second call site: the
+    sequential-ID probe loop hardcodes type_code="S" (special) for every
+    hit, so contest_group must be populated there too, keyed on the
+    probed election's own probe_id — otherwise two unrelated specials
+    discovered only via probing (never appearing in electionConstants)
+    on the same date would still collide."""
+    constants = {"electionInfo": {}}
+
+    mock_election = MagicMock()
+    mock_election.pk = 10
+
+    def probe_side_effect(eid):
+        return eid == 58316  # only ID 58316 is live
+
+    with patch("integrations.tx_goelect.tasks.TxGoElectClient") as MockClient, \
+         patch("integrations.tx_goelect.tasks.SyncLog") as MockLog, \
+         patch("integrations.tx_goelect.tasks.cache") as mock_cache, \
+         patch("integrations.tx_goelect.tasks.sync_tx_races"), \
+         patch("aggregation.ingest.ingest_election", return_value=(mock_election, True)) as mock_ie:
+
+        client = MockClient.return_value
+        client.get_election_constants.return_value = constants
+        client.probe_election.side_effect = probe_side_effect
+        client.get_election_data.return_value = {
+            "version": 1,
+            "home": {"ElecDate": "07142026", "CountiesReporting": {"CR": 0, "CT": 1}},
+            "lookups": {},
+        }
+        mock_cache.get.side_effect = lambda key, default=None: 58315 if "watermark" in key else default
+        MockLog.objects.create.return_value = _mock_log()
+
+        sync_tx_elections()
+
+    mock_ie.assert_called_once()
+    identity = mock_ie.call_args[1]["identity"]
+    assert identity["contest_group"] == "58316"
 
 
 def test_probe_skips_non_ge_hits():

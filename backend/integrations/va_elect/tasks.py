@@ -73,14 +73,16 @@ def sync_va_elections(self):
                 continue
 
             source_id = mapped.pop("source_id")
+            enr_slug_value = (mapped.get("source_metadata") or {}).get("enr_slug", "")
             identity = {
                 "state":              mapped["state"],
                 "election_type":      mapped["election_type"],
                 "election_date":      mapped["election_date"],
                 "jurisdiction_level": mapped["jurisdiction_level"],
             }
+            if mapped["election_type"] == Election.ElectionType.SPECIAL:
+                identity["contest_group"] = enr_slug_value.lower()
             fields = {k: v for k, v in mapped.items() if k not in identity}
-            enr_slug_value = (fields.get("source_metadata") or {}).get("enr_slug", "")
 
             election_obj, was_created = ingest.ingest_election(
                 source="va_elect",
