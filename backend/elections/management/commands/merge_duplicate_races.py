@@ -29,6 +29,20 @@ MEASURE OVER-MERGE
 This command trusts ``race_canonical_key`` (which preserves local geographic
 qualifiers for measure races). Still inspect the dry-run audit for any collision
 group whose members are distinct local measures before applying.
+
+CONTEST_VARIANT (issue #189)
+----------------------------
+``race_canonical_key`` takes an optional 5th component (issue #121) that keeps
+races sharing (election, office, ocd, race_type) distinct — party-split
+primaries, and umbrella feeds repeating one office across many districts.
+``Race`` has no column persisting it, so the stored key is its only home, and a
+recompute that omits it collapses every such race into one. This command
+therefore reads the variant back out of each stored key rather than rebuilding
+it from model fields (see ``_stored_contest_variant``).
+
+A race whose stored key doesn't embed its election's key is skipped and
+reported, never recomputed: its variant cannot be recovered, and "no variant"
+is indistinguishable from "a variant we failed to read".
 """
 
 import json
@@ -60,12 +74,47 @@ def _election_key(election):
     return election.canonical_key or f"e{election.pk}"
 
 
+def _stored_contest_variant(race, election_key):
+    """Recover a race's contest_variant from its stored canonical_key.
+
+    ``race_canonical_key`` takes an optional 5th component (issue #121) that
+    keeps races sharing (election, office, ocd, race_type) distinct — party-split
+    primaries, and umbrella feeds repeating one office across districts. ``Race``
+    has no column persisting it, so the stored key is the only place it lives and
+    a recompute that omits it silently collapses every such race into one
+    (issue #189).
+
+    The key is ``<election_key>|<office>|<ocd>|<race_type>[|<variant>]``, and the
+    election key may itself contain a '|' since #187 added contest_group — so
+    strip that known prefix first, then split the remainder at most three times.
+    Anything after the third separator is the variant, pipes and all.
+
+    Returns None when the stored key doesn't start with the election key: the
+    variant is then unrecoverable, and "no variant" cannot be told apart from
+    "a variant we failed to read". The caller skips those races rather than
+    recomputing them into a merge.
+    """
+    stored = race.canonical_key or ""
+    prefix = f"{election_key}|"
+    if not election_key or not stored.startswith(prefix):
+        return None
+    parts = stored[len(prefix):].split("|", 3)
+    return parts[3] if len(parts) == 4 else ""
+
+
 def _new_key(race):
+    """Recompute a race's canonical_key. Returns None if it cannot be computed
+    safely — see _stored_contest_variant."""
+    election_key = _election_key(race.election)
+    variant = _stored_contest_variant(race, election_key)
+    if variant is None:
+        return None
     return race_canonical_key(
-        _election_key(race.election),
+        election_key,
         race.office_title,
         race.ocd_division_id or "",
         race.race_type,
+        variant,
     )
 
 
@@ -506,6 +555,25 @@ class Command(BaseCommand):
                             race.pk, exc,
                         )
                         continue
+                    if nk is None:
+                        # Stored key doesn't embed its election's key, so any
+                        # contest_variant it carries can't be read back out.
+                        # Recomputing without it risks merging distinct races
+                        # (issue #189), so leave the row alone and report it.
+                        stats["skipped_unrecoverable_key"] += 1
+                        logger.warning(
+                            "merge_duplicate_races: race %s key %r does not embed election key "
+                            "%r; skipping (contest_variant unrecoverable)",
+                            race.pk, race.canonical_key, _election_key(race.election),
+                        )
+                        audit({
+                            "skipped_race_id": race.pk,
+                            "stored_key": race.canonical_key,
+                            "election_key": _election_key(race.election),
+                            "reason": "stored key does not embed election key; "
+                                      "contest_variant unrecoverable",
+                        })
+                        continue
                     groups[nk].append((race.pk, race.canonical_key))
 
                 for new_key, members in groups.items():
@@ -535,12 +603,14 @@ class Command(BaseCommand):
             "  candidates deduped       : {candidates_deduped}\n"
             "  official results moved   : {results_moved}\n"
             "  potential dup results    : {potential_duplicate_results}\n"
-            "  conflicts (flagged)      : {conflicts}".format(
+            "  conflicts (flagged)      : {conflicts}\n"
+            "  skipped (unreadable key) : {skipped_unrecoverable_key}".format(
                 **{k: stats[k] for k in (
                     "groups_merged", "races_deleted", "solo_updated",
                     "candidates_moved", "candidates_merged",
                     "options_moved", "options_merged", "candidates_deduped",
                     "results_moved", "potential_duplicate_results", "conflicts",
+                    "skipped_unrecoverable_key",
                 )}
             )
         )

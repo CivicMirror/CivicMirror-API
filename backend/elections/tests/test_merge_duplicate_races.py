@@ -264,3 +264,114 @@ def test_dedupe_candidates_mode_cleans_already_merged_race(ca_election, tmp_path
     assert cand.pk == civic_cand.pk          # civic survivor (identity rank 0)
     assert set(cand.contributing_sources) == {"civic_api", "ca_sos"}
     assert OfficialResult.objects.get(race=race).candidate_id == civic_cand.pk
+
+
+# ---------------------------------------------------------------------------
+# contest_variant (issue #189)
+#
+# race_canonical_key gained an optional 5th component in #121 so that races
+# sharing (election, office, ocd, race_type) stay distinct — party-split
+# primaries, and umbrella feeds repeating one office across districts. Race has
+# no column persisting it, so a recompute that omits it silently collapses
+# every such race into one. This command recovers it from the stored key.
+# ---------------------------------------------------------------------------
+
+def _ny_delegate_race(election, *, contest_code, party):
+    """Two NY judicial-delegate contests differing ONLY by contest_variant —
+    same office title, same (absent) OCD, same race_type. ny_boe builds the
+    variant as f"ny:{contest_code}:{party}" (integrations/ny_boe/mappers.py)."""
+    variant = f"ny:{contest_code}:{party}"
+    return _make_race(
+        election, office_title="Judicial Delegate", ocd="", source="ny_boe",
+        canonical_key=f"{election.canonical_key}|judicial delegate|NO_OCD|candidate|{variant}",
+    )
+
+
+@pytest.mark.django_db
+def test_party_split_races_are_not_merged(ca_election, tmp_path):
+    """The #189 regression. Two races distinguished only by contest_variant
+    must survive as two races with their keys untouched — dropping the variant
+    on recompute makes them collide and merges one into the other."""
+    first = _ny_delegate_race(ca_election, contest_code="0301", party="dem")
+    second = _ny_delegate_race(ca_election, contest_code="0302", party="dem")
+    first_key, second_key = first.canonical_key, second.canonical_key
+
+    call_command("merge_duplicate_races", audit_file=str(tmp_path / "a.jsonl"))
+
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert Race.objects.count() == 2
+    assert first.canonical_key == first_key
+    assert second.canonical_key == second_key
+
+
+@pytest.mark.django_db
+def test_recomputed_key_keeps_the_variant_when_office_title_normalization_changes(
+    ca_election, tmp_path,
+):
+    """The command's actual job — recomputing a stale key — must still happen
+    for a variant-carrying race, with the variant carried through rather than
+    dropped. Stored key has an un-normalized office segment; the recompute
+    fixes that segment and keeps the trailing variant."""
+    ek = ca_election.canonical_key
+    variant = "ny:0301:dem"
+    race = _make_race(
+        ca_election, office_title="Judicial Delegate - Statewide", ocd="",
+        source="ny_boe",
+        # Stale: office segment predates the geo-suffix stripping in identity.py.
+        canonical_key=f"{ek}|judicial delegate - statewide|NO_OCD|candidate|{variant}",
+    )
+
+    call_command("merge_duplicate_races", audit_file=str(tmp_path / "a.jsonl"))
+
+    race.refresh_from_db()
+    assert race.canonical_key == f"{ek}|judicial delegate|NO_OCD|candidate|{variant}"
+
+
+@pytest.mark.django_db
+def test_variantless_duplicates_still_merge(ca_election, tmp_path):
+    """Guard against over-correcting: races with no variant that genuinely
+    collapse to one key must still merge, exactly as before."""
+    civic = _civic_governor(ca_election)
+    ca_sos = _ca_sos_governor(ca_election)
+
+    call_command("merge_duplicate_races", audit_file=str(tmp_path / "a.jsonl"))
+
+    assert Race.objects.count() == 1
+    survivor = Race.objects.get()
+    assert survivor.pk in {civic.pk, ca_sos.pk}
+
+
+@pytest.mark.django_db
+def test_race_whose_key_does_not_embed_its_election_key_is_skipped(ca_election, tmp_path):
+    """A stored key that doesn't start with the election key can't have its
+    variant recovered, and 'no variant' is indistinguishable from 'variant we
+    failed to read'. Skip and report rather than recompute it into a merge."""
+    orphan = _make_race(
+        ca_election, office_title="Governor", ocd="", source="ny_boe",
+        canonical_key="ny_boe:legacy-source-scoped-key",
+    )
+    twin = _make_race(
+        ca_election, office_title="Governor", ocd="", source="ca_sos",
+        canonical_key=f"{ca_election.canonical_key}|governor|NO_OCD|candidate",
+    )
+
+    call_command("merge_duplicate_races", audit_file=str(tmp_path / "a.jsonl"))
+
+    orphan.refresh_from_db()
+    twin.refresh_from_db()
+    assert Race.objects.count() == 2
+    assert orphan.canonical_key == "ny_boe:legacy-source-scoped-key"
+    assert twin.canonical_key == f"{ca_election.canonical_key}|governor|NO_OCD|candidate"
+
+
+@pytest.mark.django_db
+def test_second_run_over_variant_races_is_a_noop(ca_election, tmp_path):
+    _ny_delegate_race(ca_election, contest_code="0301", party="dem")
+    _ny_delegate_race(ca_election, contest_code="0302", party="dem")
+
+    call_command("merge_duplicate_races", audit_file=str(tmp_path / "a.jsonl"))
+    keys_after_first = sorted(Race.objects.values_list("canonical_key", flat=True))
+    call_command("merge_duplicate_races", audit_file=str(tmp_path / "b.jsonl"))
+
+    assert sorted(Race.objects.values_list("canonical_key", flat=True)) == keys_after_first
