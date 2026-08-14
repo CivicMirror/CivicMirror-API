@@ -319,3 +319,94 @@ def test_add_review_note_requires_nonempty_note(source_record, provisional_perso
 
     with pytest.raises(ValidationError, match="note"):
         add_review_note(review, actor=reviewer, note="   ")
+
+
+@pytest.mark.django_db
+def test_transition_review_case_appends_notes_instead_of_overwriting(
+    source_record, provisional_person, django_user_model
+):
+    reviewer = django_user_model.objects.create_user(username="append-notes-reviewer")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="append-notes",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+
+    add_review_note(review, actor=reviewer, note="Earlier note from ongoing review.")
+    review.refresh_from_db()
+
+    transition_review_case(
+        review,
+        reviewer=reviewer,
+        status=IdentityReviewCase.Status.APPROVED,
+        action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
+        notes="Final decision: confirmed distinct person.",
+    )
+
+    review.refresh_from_db()
+    assert "Earlier note from ongoing review." in review.notes
+    assert "Final decision: confirmed distinct person." in review.notes
+
+
+@pytest.mark.django_db
+def test_link_civic_data_rejects_identifier_already_linked_to_other_person(
+    source_record,
+    provisional_person,
+    source_artifact,
+    django_user_model,
+):
+    other_person = Person.objects.create(canonical_name="Someone Else", source_artifact=source_artifact)
+    reviewer = django_user_model.objects.create_user(username="civic-data-reviewer-3")
+    existing_identifier = PersonIdentifier.objects.create(
+        person=other_person,
+        scheme="civic-data",
+        identifier="cd-taken",
+        verification_method=PersonIdentifier.VerificationMethod.HUMAN_REVIEW,
+        verified_by=reviewer,
+        verified_at=timezone.now(),
+    )
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="link-civic-data-conflict",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    suggestion = IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        rank=1,
+        external_scheme="civic-data",
+        external_identifier="cd-taken",
+    )
+
+    with pytest.raises(ValidationError, match="target_suggestion"):
+        transition_review_case(
+            review,
+            reviewer=reviewer,
+            status=IdentityReviewCase.Status.APPROVED,
+            action=IdentityReviewCase.ResolutionAction.LINK_CIVIC_DATA,
+            target_suggestion=suggestion,
+        )
+
+    existing_identifier.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert existing_identifier.person_id == other_person.id
+    assert provisional_person.identity_state == Person.IdentityState.PROVISIONAL
+
+
+@pytest.mark.django_db
+def test_add_review_note_metadata_does_not_leak_note_text(source_record, provisional_person, django_user_model):
+    reviewer = django_user_model.objects.create_user(username="note-metadata-reviewer")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="note-metadata-leak",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+
+    secret_note = "Confidential: matches SSN on file, do not disclose."
+    add_review_note(review, actor=reviewer, note=secret_note)
+
+    event = review.audit_events.get(event_type=IdentityReviewAuditEvent.EventType.NOTE_ADDED)
+    assert secret_note not in str(event.metadata)
+    assert "note" not in event.metadata
