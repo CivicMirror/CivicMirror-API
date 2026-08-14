@@ -34,6 +34,8 @@ class ReviewCaseActionForm(ActionForm):
 
 @admin.register(IdentityReviewCase)
 class IdentityReviewCaseAdmin(admin.ModelAdmin):
+    _REOPENABLE_STATUSES = {IdentityReviewCase.Status.OPEN, IdentityReviewCase.Status.DEFERRED}
+
     list_display = ("priority", "case_type", "status", "created_at", "reviewed_at", "reviewed_by", "has_private_evidence")
     list_filter = ("status", "case_type", "has_private_evidence")
     search_fields = ("public_id", "deduplication_key", "provisional_person__canonical_name")
@@ -44,7 +46,22 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
         "reviewed_by",
         "superseded_by",
     )
-    readonly_fields = ("id", "public_id", "deduplication_key", "created_at", "updated_at", "evidence_comparison")
+    readonly_fields = (
+        "id",
+        "public_id",
+        "deduplication_key",
+        "created_at",
+        "updated_at",
+        "evidence_comparison",
+        "status",
+        "resolution_action",
+        "reviewed_by",
+        "reviewed_at",
+        "superseded_by",
+        "notes",
+        "case_type",
+        "has_private_evidence",
+    )
     inlines = (IdentityReviewSuggestionInline,)
     action_form = ReviewCaseActionForm
     actions = (
@@ -97,8 +114,9 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
 
     @admin.action(description="Confirm selected cases as distinct people")
     def confirm_new(self, request, queryset):
+        total = queryset.count()
         updated = 0
-        for review_case in queryset.filter(status=IdentityReviewCase.Status.OPEN):
+        for review_case in queryset.filter(status__in=self._REOPENABLE_STATUSES):
             transition_review_case(
                 review_case,
                 reviewer=request.user,
@@ -106,7 +124,15 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
                 action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
             )
             updated += 1
-        self.message_user(request, f"Confirmed {updated} review case(s).", messages.SUCCESS)
+        skipped = total - updated
+        if skipped:
+            self.message_user(
+                request,
+                f"Confirmed {updated} review case(s); {skipped} skipped (not open or deferred).",
+                messages.WARNING,
+            )
+        else:
+            self.message_user(request, f"Confirmed {updated} review case(s).", messages.SUCCESS)
 
     @admin.action(description="Defer selected review cases")
     def defer_cases(self, request, queryset):
@@ -123,8 +149,9 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
 
     @admin.action(description="Reject selected review cases (disputes the provisional person)")
     def reject_cases(self, request, queryset):
+        total = queryset.count()
         updated = 0
-        for review_case in queryset.filter(status=IdentityReviewCase.Status.OPEN):
+        for review_case in queryset.filter(status__in=self._REOPENABLE_STATUSES):
             transition_review_case(
                 review_case,
                 reviewer=request.user,
@@ -132,15 +159,24 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
                 action=IdentityReviewCase.ResolutionAction.REJECT,
             )
             updated += 1
-        self.message_user(request, f"Rejected {updated} review case(s).", messages.SUCCESS)
+        skipped = total - updated
+        if skipped:
+            self.message_user(
+                request,
+                f"Rejected {updated} review case(s); {skipped} skipped (not open or deferred).",
+                messages.WARNING,
+            )
+        else:
+            self.message_user(request, f"Rejected {updated} review case(s).", messages.SUCCESS)
 
     @admin.action(description="Link selected cases to target person (enter target person public ID above)")
     def link_existing_cases(self, request, queryset):
         target_person = self._resolve_target_person(request)
         if target_person is None:
             return
+        total = queryset.count()
         updated, failed, errors = self._apply_bulk_action(
-            queryset.filter(status=IdentityReviewCase.Status.OPEN),
+            queryset.filter(status__in=self._REOPENABLE_STATUSES),
             lambda review_case: transition_review_case(
                 review_case,
                 reviewer=request.user,
@@ -149,12 +185,14 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
                 target_person=target_person,
             ),
         )
+        skipped = total - updated - failed
         self._report_bulk_result(
             request,
             success_verb=f"Linked {updated} review case(s) to {target_person.canonical_name}",
             failure_verb="could not be linked",
             failed=failed,
             errors=errors,
+            skipped=skipped,
         )
 
     @admin.action(description="Merge selected cases into target person (enter target person public ID above)")
@@ -162,8 +200,9 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
         target_person = self._resolve_target_person(request)
         if target_person is None:
             return
+        total = queryset.count()
         updated, failed, errors = self._apply_bulk_action(
-            queryset.filter(status=IdentityReviewCase.Status.OPEN),
+            queryset.filter(status__in=self._REOPENABLE_STATUSES),
             lambda review_case: transition_review_case(
                 review_case,
                 reviewer=request.user,
@@ -172,12 +211,14 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
                 target_person=target_person,
             ),
         )
+        skipped = total - updated - failed
         self._report_bulk_result(
             request,
             success_verb=f"Merged {updated} review case(s) into {target_person.canonical_name}",
             failure_verb="could not be merged",
             failed=failed,
             errors=errors,
+            skipped=skipped,
         )
 
     @admin.action(description="Supersede selected cases with target case (enter target case public ID above)")
@@ -240,14 +281,17 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
                 updated += 1
         return updated, failed, errors
 
-    def _report_bulk_result(self, request, *, success_verb, failure_verb, failed, errors):
+    def _report_bulk_result(self, request, *, success_verb, failure_verb, failed, errors, skipped=0):
+        skipped_note = f"; {skipped} skipped (not open or deferred)" if skipped else ""
         if failed:
             detail = " | ".join(errors)
             self.message_user(
                 request,
-                f"{success_verb}; {failed} review case(s) {failure_verb}: {detail}",
+                f"{success_verb}{skipped_note}; {failed} review case(s) {failure_verb}: {detail}",
                 messages.WARNING,
             )
+        elif skipped:
+            self.message_user(request, f"{success_verb}{skipped_note}.", messages.WARNING)
         else:
             self.message_user(request, f"{success_verb}.", messages.SUCCESS)
 
