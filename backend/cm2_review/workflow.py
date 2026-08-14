@@ -14,6 +14,11 @@ _TERMINAL_STATUSES = {
 }
 
 
+def _append_note(existing: str, note: str) -> str:
+    """Append `note` to `existing`, preserving prior notes rather than overwriting them."""
+    return f"{existing}\n{note}".strip() if existing else note
+
+
 def _audit(
     review_case: IdentityReviewCase,
     event_type: str,
@@ -113,7 +118,7 @@ def transition_review_case(
     elif action == IdentityReviewCase.ResolutionAction.LINK_CIVIC_DATA:
         if provisional is None:
             raise ValidationError({"provisional_person": "This action requires a provisional person."})
-        PersonIdentifier.objects.update_or_create(
+        identifier, identifier_created = PersonIdentifier.objects.get_or_create(
             scheme=target_suggestion.external_scheme,
             identifier=target_suggestion.external_identifier,
             defaults={
@@ -123,6 +128,10 @@ def transition_review_case(
                 "verified_at": timezone.now(),
             },
         )
+        if not identifier_created and identifier.person_id != provisional.id:
+            raise ValidationError(
+                {"target_suggestion": "This external identifier is already linked to a different person."}
+            )
         provisional.identity_state = Person.IdentityState.RESOLVED
         provisional.merged_into = None
         provisional.save(update_fields=["identity_state", "merged_into", "updated_at"])
@@ -132,7 +141,7 @@ def transition_review_case(
     review_case.reviewed_by = reviewer
     review_case.reviewed_at = timezone.now()
     if notes:
-        review_case.notes = notes
+        review_case.notes = _append_note(review_case.notes, notes)
     review_case.save(
         update_fields=[
             "status",
@@ -199,13 +208,13 @@ def add_review_note(review_case: IdentityReviewCase, *, actor, note: str) -> Ide
     review_case = IdentityReviewCase.objects.select_for_update().get(pk=review_case.pk)
     if review_case.status in _TERMINAL_STATUSES or review_case.status == IdentityReviewCase.Status.SUPERSEDED:
         raise ValidationError({"status": "Notes cannot be added to a terminal or superseded case."})
-    review_case.notes = f"{review_case.notes}\n{note}".strip() if review_case.notes else note
+    review_case.notes = _append_note(review_case.notes, note)
     review_case.save(update_fields=["notes", "updated_at"])
 
     _audit(
         review_case,
         IdentityReviewAuditEvent.EventType.NOTE_ADDED,
         actor,
-        metadata={"note": note},
+        metadata={"note_length": len(note)},
     )
     return review_case
