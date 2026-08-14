@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from cm2_elections.models import Person, PersonIdentifier
 from cm2_review.models import IdentityReviewAuditEvent, IdentityReviewCase, IdentityReviewSuggestion
 from cm2_review.serializers import IdentityReviewCaseSerializer
-from cm2_review.workflow import transition_review_case
+from cm2_review.workflow import supersede_review_case, transition_review_case
 
 
 @pytest.mark.django_db
@@ -196,3 +196,40 @@ def test_link_civic_data_requires_target_suggestion_belonging_to_case(
             action=IdentityReviewCase.ResolutionAction.LINK_CIVIC_DATA,
             target_suggestion=foreign_suggestion,
         )
+
+
+@pytest.mark.django_db
+def test_supersede_review_case_marks_superseded_and_audits(source_record, provisional_person, django_user_model):
+    actor = django_user_model.objects.create_user(username="supersede-actor")
+    old_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="supersede-old",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    new_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="supersede-new",
+        provisional_person=provisional_person,
+    )
+
+    supersede_review_case(old_case, superseded_by=new_case, actor=actor)
+
+    old_case.refresh_from_db()
+    assert old_case.status == IdentityReviewCase.Status.SUPERSEDED
+    assert old_case.superseded_by == new_case
+    assert old_case.audit_events.filter(event_type=IdentityReviewAuditEvent.EventType.SUPERSEDED).exists()
+
+
+@pytest.mark.django_db
+def test_supersede_review_case_rejects_self_supersede(source_record, provisional_person, django_user_model):
+    actor = django_user_model.objects.create_user(username="supersede-actor-2")
+    case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="supersede-self",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+
+    with pytest.raises(ValidationError, match="superseded_by"):
+        supersede_review_case(case, superseded_by=case, actor=actor)

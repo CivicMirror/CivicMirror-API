@@ -156,3 +156,33 @@ def transition_review_case(
         metadata={"from_status": previous_status, "to_status": status, "action": action},
     )
     return review_case
+
+
+@transaction.atomic
+def supersede_review_case(
+    review_case: IdentityReviewCase,
+    *,
+    superseded_by: IdentityReviewCase,
+    actor,
+) -> IdentityReviewCase:
+    """Mark a review case as replaced by a newer case for the same subject."""
+    if actor is None or not getattr(actor, "is_authenticated", False):
+        raise ValidationError("An authenticated actor is required.")
+    if superseded_by.pk == review_case.pk:
+        raise ValidationError({"superseded_by": "A case cannot supersede itself."})
+    if review_case.status in _TERMINAL_STATUSES or review_case.status == IdentityReviewCase.Status.SUPERSEDED:
+        raise ValidationError({"status": "Only open or deferred cases can be superseded."})
+
+    review_case = IdentityReviewCase.objects.select_for_update().get(pk=review_case.pk)
+    previous_status = review_case.status
+    review_case.status = IdentityReviewCase.Status.SUPERSEDED
+    review_case.superseded_by = superseded_by
+    review_case.save(update_fields=["status", "superseded_by", "updated_at"])
+
+    _audit(
+        review_case,
+        IdentityReviewAuditEvent.EventType.SUPERSEDED,
+        actor,
+        metadata={"from_status": previous_status, "superseded_by": str(superseded_by.public_id)},
+    )
+    return review_case
