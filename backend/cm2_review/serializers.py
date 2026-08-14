@@ -13,7 +13,7 @@ class IdentityReviewSuggestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = IdentityReviewSuggestion
         fields = [
-            "public_id",
+            "id",
             "rank",
             "score",
             "suggested_person_public_id",
