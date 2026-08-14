@@ -170,10 +170,10 @@ def supersede_review_case(
         raise ValidationError("An authenticated actor is required.")
     if superseded_by.pk == review_case.pk:
         raise ValidationError({"superseded_by": "A case cannot supersede itself."})
-    if review_case.status in _TERMINAL_STATUSES or review_case.status == IdentityReviewCase.Status.SUPERSEDED:
-        raise ValidationError({"status": "Only open or deferred cases can be superseded."})
 
     review_case = IdentityReviewCase.objects.select_for_update().get(pk=review_case.pk)
+    if review_case.status in _TERMINAL_STATUSES or review_case.status == IdentityReviewCase.Status.SUPERSEDED:
+        raise ValidationError({"status": "Only open or deferred cases can be superseded."})
     previous_status = review_case.status
     review_case.status = IdentityReviewCase.Status.SUPERSEDED
     review_case.superseded_by = superseded_by
