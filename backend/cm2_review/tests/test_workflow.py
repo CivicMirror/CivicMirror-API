@@ -1,10 +1,11 @@
 import pytest
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 from cm2_elections.models import Person, PersonIdentifier
 from cm2_review.models import IdentityReviewAuditEvent, IdentityReviewCase, IdentityReviewSuggestion
 from cm2_review.serializers import IdentityReviewCaseSerializer
-from cm2_review.workflow import supersede_review_case, transition_review_case
+from cm2_review.workflow import add_review_note, supersede_review_case, transition_review_case
 
 
 @pytest.mark.django_db
@@ -233,3 +234,52 @@ def test_supersede_review_case_rejects_self_supersede(source_record, provisional
 
     with pytest.raises(ValidationError, match="superseded_by"):
         supersede_review_case(case, superseded_by=case, actor=actor)
+
+
+@pytest.mark.django_db
+def test_add_review_note_appends_note_and_emits_audit_event(source_record, provisional_person, django_user_model):
+    reviewer = django_user_model.objects.create_user(username="note-reviewer")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="add-note",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+
+    add_review_note(review, actor=reviewer, note="Needs a second source before resolving.")
+
+    review.refresh_from_db()
+    assert "Needs a second source" in review.notes
+    assert review.audit_events.filter(event_type=IdentityReviewAuditEvent.EventType.NOTE_ADDED).count() == 1
+
+
+@pytest.mark.django_db
+def test_add_review_note_rejects_terminal_case(source_record, provisional_person, django_user_model):
+    reviewer = django_user_model.objects.create_user(username="note-reviewer-2")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="add-note-terminal",
+        source_record=source_record,
+        provisional_person=provisional_person,
+        status=IdentityReviewCase.Status.REJECTED,
+        resolution_action=IdentityReviewCase.ResolutionAction.REJECT,
+        reviewed_by=reviewer,
+        reviewed_at=timezone.now(),
+    )
+
+    with pytest.raises(ValidationError, match="status"):
+        add_review_note(review, actor=reviewer, note="too late")
+
+
+@pytest.mark.django_db
+def test_add_review_note_requires_nonempty_note(source_record, provisional_person, django_user_model):
+    reviewer = django_user_model.objects.create_user(username="note-reviewer-3")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="add-note-empty",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+
+    with pytest.raises(ValidationError, match="note"):
+        add_review_note(review, actor=reviewer, note="   ")
