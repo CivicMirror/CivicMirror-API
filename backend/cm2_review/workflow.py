@@ -4,9 +4,9 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from cm2_elections.models import Person
+from cm2_elections.models import Person, PersonIdentifier
 
-from .models import IdentityReviewAuditEvent, IdentityReviewCase
+from .models import IdentityReviewAuditEvent, IdentityReviewCase, IdentityReviewSuggestion
 
 _TERMINAL_STATUSES = {
     IdentityReviewCase.Status.APPROVED,
@@ -50,6 +50,7 @@ def transition_review_case(
     status: str,
     action: str,
     target_person: Person | None = None,
+    target_suggestion: "IdentityReviewSuggestion | None" = None,
     notes: str = "",
 ) -> IdentityReviewCase:
     """Apply an explicit human review decision and record an audit event."""
@@ -78,6 +79,14 @@ def transition_review_case(
     if target_person is not None and review_case.provisional_person_id == target_person.id:
         raise ValidationError({"target_person": "A person cannot target itself."})
 
+    if action == IdentityReviewCase.ResolutionAction.LINK_CIVIC_DATA:
+        if target_suggestion is None:
+            raise ValidationError({"target_suggestion": "This action requires a target suggestion."})
+        if target_suggestion.review_case_id != review_case.id:
+            raise ValidationError({"target_suggestion": "The suggestion does not belong to this review case."})
+        if not target_suggestion.external_scheme or not target_suggestion.external_identifier:
+            raise ValidationError({"target_suggestion": "The suggestion has no external identifier to link."})
+
     review_case = IdentityReviewCase.objects.select_for_update().get(pk=review_case.pk)
     previous_status = review_case.status
     provisional = review_case.provisional_person
@@ -101,6 +110,22 @@ def transition_review_case(
         if provisional is not None:
             provisional.identity_state = Person.IdentityState.DISPUTED
             provisional.save(update_fields=["identity_state", "updated_at"])
+    elif action == IdentityReviewCase.ResolutionAction.LINK_CIVIC_DATA:
+        if provisional is None:
+            raise ValidationError({"provisional_person": "This action requires a provisional person."})
+        PersonIdentifier.objects.update_or_create(
+            scheme=target_suggestion.external_scheme,
+            identifier=target_suggestion.external_identifier,
+            defaults={
+                "person": provisional,
+                "verification_method": PersonIdentifier.VerificationMethod.HUMAN_REVIEW,
+                "verified_by": reviewer,
+                "verified_at": timezone.now(),
+            },
+        )
+        provisional.identity_state = Person.IdentityState.RESOLVED
+        provisional.merged_into = None
+        provisional.save(update_fields=["identity_state", "merged_into", "updated_at"])
 
     review_case.status = status
     review_case.resolution_action = action
