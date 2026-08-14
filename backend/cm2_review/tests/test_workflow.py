@@ -108,6 +108,30 @@ def test_serializer_handles_case_with_audit_events(source_record, provisional_pe
 
 
 @pytest.mark.django_db
+def test_serializer_handles_case_with_suggestions(source_record, provisional_person):
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="serializer-suggestions",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        rank=1,
+        external_scheme="civic-data",
+        external_identifier="cd-serializer-test",
+    )
+
+    output = IdentityReviewCaseSerializer(review).data
+
+    assert len(output["suggestions"]) >= 1
+    suggestion_output = output["suggestions"][0]
+    assert suggestion_output["rank"] == 1
+    assert suggestion_output["external_scheme"] == "civic-data"
+    assert suggestion_output["external_identifier"] == "cd-serializer-test"
+
+
+@pytest.mark.django_db
 def test_reject_action_marks_provisional_person_disputed(source_record, provisional_person, django_user_model):
     reviewer = django_user_model.objects.create_user(username="reject-reviewer")
     review = IdentityReviewCase.objects.create(
