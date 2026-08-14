@@ -232,3 +232,119 @@ def test_add_note_to_cases_action_appends_note_and_audits(
 
     review.refresh_from_db()
     assert "Flagging for a second look." in review.notes
+
+
+def test_mutable_workflow_fields_are_readonly_on_admin_change_form(model_admin):
+    """Status/resolution/audit-adjacent fields must only be mutable via workflow.py, never the raw change form."""
+    readonly = model_admin.readonly_fields
+    for field_name in (
+        "status",
+        "resolution_action",
+        "reviewed_by",
+        "reviewed_at",
+        "superseded_by",
+        "notes",
+        "case_type",
+        "has_private_evidence",
+    ):
+        assert field_name in readonly, f"{field_name} must be readonly so admin saves cannot bypass transition_review_case"
+
+
+@pytest.mark.django_db
+def test_confirm_new_action_reaches_deferred_cases(
+    source_record,
+    provisional_person,
+    django_user_model,
+    model_admin,
+):
+    reviewer = django_user_model.objects.create_user(username="admin-confirm-deferred-reviewer")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-confirm-deferred",
+        source_record=source_record,
+        provisional_person=provisional_person,
+        status=IdentityReviewCase.Status.DEFERRED,
+        resolution_action=IdentityReviewCase.ResolutionAction.DEFER,
+        reviewed_by=reviewer,
+        reviewed_at=timezone.now(),
+    )
+    rf = RequestFactory()
+    request = _admin_request(rf, reviewer)
+
+    model_admin.confirm_new(request, IdentityReviewCase.objects.filter(pk=review.pk))
+
+    review.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert review.resolution_action == IdentityReviewCase.ResolutionAction.CONFIRM_NEW
+    assert provisional_person.identity_state == Person.IdentityState.RESOLVED
+
+
+@pytest.mark.django_db
+def test_confirm_new_action_reports_skipped_cases(
+    source_record,
+    provisional_person,
+    django_user_model,
+    model_admin,
+):
+    reviewer = django_user_model.objects.create_user(username="admin-confirm-skip-reviewer")
+    open_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-confirm-skip-open",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    approved_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-confirm-skip-approved",
+        provisional_person=provisional_person,
+        status=IdentityReviewCase.Status.APPROVED,
+        resolution_action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
+        reviewed_by=reviewer,
+        reviewed_at=timezone.now(),
+    )
+    rf = RequestFactory()
+    request = _admin_request(rf, reviewer)
+
+    model_admin.confirm_new(request, IdentityReviewCase.objects.filter(pk__in=[open_case.pk, approved_case.pk]))
+
+    open_case.refresh_from_db()
+    approved_case.refresh_from_db()
+    assert open_case.status == IdentityReviewCase.Status.APPROVED
+    assert approved_case.status == IdentityReviewCase.Status.APPROVED
+    assert approved_case.resolution_action == IdentityReviewCase.ResolutionAction.CONFIRM_NEW
+
+    stored_messages = list(request._messages)
+    assert len(stored_messages) == 1
+    assert "1 skipped (not open or deferred)" in str(stored_messages[0])
+
+
+@pytest.mark.django_db
+def test_link_existing_cases_action_reaches_deferred_cases(
+    source_record,
+    provisional_person,
+    source_artifact,
+    django_user_model,
+    model_admin,
+):
+    existing = Person.objects.create(canonical_name="Dedreana Freeman", source_artifact=source_artifact)
+    reviewer = django_user_model.objects.create_user(username="admin-link-deferred-reviewer")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-link-deferred",
+        source_record=source_record,
+        provisional_person=provisional_person,
+        status=IdentityReviewCase.Status.DEFERRED,
+        resolution_action=IdentityReviewCase.ResolutionAction.DEFER,
+        reviewed_by=reviewer,
+        reviewed_at=timezone.now(),
+    )
+    rf = RequestFactory()
+    request = _admin_request(rf, reviewer, {"target_person_public_id": existing.public_id})
+
+    model_admin.link_existing_cases(request, IdentityReviewCase.objects.filter(pk=review.pk))
+
+    review.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert provisional_person.merged_into == existing
