@@ -272,6 +272,42 @@ def test_add_review_note_rejects_terminal_case(source_record, provisional_person
 
 
 @pytest.mark.django_db
+def test_add_review_note_rechecks_status_against_locked_row(source_record, provisional_person, django_user_model):
+    """A stale in-memory status must not bypass the terminal/superseded guard.
+
+    The caller's `review_case` object is passed in with status still OPEN, but the row
+    has since transitioned to REJECTED underneath it (simulating a concurrent transition
+    that happened between when the caller read the object and when this call runs). The
+    guard must be evaluated against the row fetched under select_for_update(), not the
+    caller's stale copy, so this must still raise.
+    """
+    reviewer = django_user_model.objects.create_user(username="note-reviewer-4")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="add-note-stale-status",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    assert review.status == IdentityReviewCase.Status.OPEN
+
+    # Simulate a concurrent transition to a terminal status without refreshing `review`.
+    IdentityReviewCase.objects.filter(pk=review.pk).update(
+        status=IdentityReviewCase.Status.REJECTED,
+        resolution_action=IdentityReviewCase.ResolutionAction.REJECT,
+        reviewed_by=reviewer,
+        reviewed_at=timezone.now(),
+    )
+    assert review.status == IdentityReviewCase.Status.OPEN  # caller's copy is still stale
+
+    with pytest.raises(ValidationError, match="status"):
+        add_review_note(review, actor=reviewer, note="should not be appended")
+
+    review.refresh_from_db()
+    assert review.notes == ""
+    assert not review.audit_events.filter(event_type=IdentityReviewAuditEvent.EventType.NOTE_ADDED).exists()
+
+
+@pytest.mark.django_db
 def test_add_review_note_requires_nonempty_note(source_record, provisional_person, django_user_model):
     reviewer = django_user_model.objects.create_user(username="note-reviewer-3")
     review = IdentityReviewCase.objects.create(

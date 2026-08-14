@@ -195,10 +195,10 @@ def add_review_note(review_case: IdentityReviewCase, *, actor, note: str) -> Ide
         raise ValidationError("An authenticated actor is required.")
     if not note.strip():
         raise ValidationError({"note": "A note is required."})
-    if review_case.status in _TERMINAL_STATUSES or review_case.status == IdentityReviewCase.Status.SUPERSEDED:
-        raise ValidationError({"status": "Notes cannot be added to a terminal or superseded case."})
 
     review_case = IdentityReviewCase.objects.select_for_update().get(pk=review_case.pk)
+    if review_case.status in _TERMINAL_STATUSES or review_case.status == IdentityReviewCase.Status.SUPERSEDED:
+        raise ValidationError({"status": "Notes cannot be added to a terminal or superseded case."})
     review_case.notes = f"{review_case.notes}\n{note}".strip() if review_case.notes else note
     review_case.save(update_fields=["notes", "updated_at"])
 
