@@ -1,7 +1,9 @@
 import pytest
+from django.contrib import messages
 from django.contrib.admin.sites import AdminSite
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory
+from django.utils import timezone
 
 from cm2_elections.models import Person
 from cm2_review.admin import IdentityReviewCaseAdmin
@@ -134,6 +136,54 @@ def test_supersede_cases_action_marks_case_superseded(
     old_case.refresh_from_db()
     assert old_case.status == IdentityReviewCase.Status.SUPERSEDED
     assert old_case.superseded_by == new_case
+
+
+@pytest.mark.django_db
+def test_supersede_cases_action_reports_partial_failure_without_raising(
+    source_record,
+    provisional_person,
+    django_user_model,
+    model_admin,
+):
+    """One already-terminal case in the selection must not abort the whole batch."""
+    open_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-supersede-partial-open",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    actor = django_user_model.objects.create_user(username="admin-supersede-partial-actor")
+    already_approved_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-supersede-partial-approved",
+        provisional_person=provisional_person,
+        status=IdentityReviewCase.Status.APPROVED,
+        resolution_action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
+        reviewed_by=actor,
+        reviewed_at=timezone.now(),
+    )
+    new_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-supersede-partial-target",
+        provisional_person=provisional_person,
+    )
+    rf = RequestFactory()
+    request = _admin_request(rf, actor, {"target_case_public_id": new_case.public_id})
+
+    model_admin.supersede_cases(
+        request,
+        IdentityReviewCase.objects.filter(pk__in=[open_case.pk, already_approved_case.pk]),
+    )
+
+    open_case.refresh_from_db()
+    already_approved_case.refresh_from_db()
+    assert open_case.status == IdentityReviewCase.Status.SUPERSEDED
+    assert already_approved_case.status == IdentityReviewCase.Status.APPROVED
+
+    stored_messages = list(request._messages)
+    assert len(stored_messages) == 1
+    assert stored_messages[0].level == messages.WARNING
+    assert "could not be superseded" in str(stored_messages[0])
 
 
 @pytest.mark.django_db

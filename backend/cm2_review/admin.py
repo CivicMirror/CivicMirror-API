@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ActionForm
+from django.core.exceptions import ValidationError
 from django.utils.html import format_html, format_html_join
 
 from cm2_elections.models import Person
@@ -138,34 +139,46 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
         target_person = self._resolve_target_person(request)
         if target_person is None:
             return
-        updated = 0
-        for review_case in queryset.filter(status=IdentityReviewCase.Status.OPEN):
-            transition_review_case(
+        updated, failed, errors = self._apply_bulk_action(
+            queryset.filter(status=IdentityReviewCase.Status.OPEN),
+            lambda review_case: transition_review_case(
                 review_case,
                 reviewer=request.user,
                 status=IdentityReviewCase.Status.APPROVED,
                 action=IdentityReviewCase.ResolutionAction.LINK_EXISTING,
                 target_person=target_person,
-            )
-            updated += 1
-        self.message_user(request, f"Linked {updated} review case(s) to {target_person.canonical_name}.", messages.SUCCESS)
+            ),
+        )
+        self._report_bulk_result(
+            request,
+            success_verb=f"Linked {updated} review case(s) to {target_person.canonical_name}",
+            failure_verb="could not be linked",
+            failed=failed,
+            errors=errors,
+        )
 
     @admin.action(description="Merge selected cases into target person (enter target person public ID above)")
     def merge_people_cases(self, request, queryset):
         target_person = self._resolve_target_person(request)
         if target_person is None:
             return
-        updated = 0
-        for review_case in queryset.filter(status=IdentityReviewCase.Status.OPEN):
-            transition_review_case(
+        updated, failed, errors = self._apply_bulk_action(
+            queryset.filter(status=IdentityReviewCase.Status.OPEN),
+            lambda review_case: transition_review_case(
                 review_case,
                 reviewer=request.user,
                 status=IdentityReviewCase.Status.APPROVED,
                 action=IdentityReviewCase.ResolutionAction.MERGE_PEOPLE,
                 target_person=target_person,
-            )
-            updated += 1
-        self.message_user(request, f"Merged {updated} review case(s) into {target_person.canonical_name}.", messages.SUCCESS)
+            ),
+        )
+        self._report_bulk_result(
+            request,
+            success_verb=f"Merged {updated} review case(s) into {target_person.canonical_name}",
+            failure_verb="could not be merged",
+            failed=failed,
+            errors=errors,
+        )
 
     @admin.action(description="Supersede selected cases with target case (enter target case public ID above)")
     def supersede_cases(self, request, queryset):
@@ -177,11 +190,17 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
         if target_case is None:
             self.message_user(request, f"No review case found with public ID {target_public_id}.", messages.ERROR)
             return
-        updated = 0
-        for review_case in queryset:
-            supersede_review_case(review_case, superseded_by=target_case, actor=request.user)
-            updated += 1
-        self.message_user(request, f"Superseded {updated} review case(s).", messages.SUCCESS)
+        updated, failed, errors = self._apply_bulk_action(
+            queryset,
+            lambda review_case: supersede_review_case(review_case, superseded_by=target_case, actor=request.user),
+        )
+        self._report_bulk_result(
+            request,
+            success_verb=f"Superseded {updated} review case(s)",
+            failure_verb="could not be superseded",
+            failed=failed,
+            errors=errors,
+        )
 
     @admin.action(description="Add note to selected open/deferred cases (enter note text above)")
     def add_note_to_cases(self, request, queryset):
@@ -194,11 +213,43 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
             IdentityReviewCase.Status.REJECTED,
             IdentityReviewCase.Status.SUPERSEDED,
         ]
+        updated, failed, errors = self._apply_bulk_action(
+            queryset.exclude(status__in=excluded_statuses),
+            lambda review_case: add_review_note(review_case, actor=request.user, note=note),
+        )
+        self._report_bulk_result(
+            request,
+            success_verb=f"Added a note to {updated} review case(s)",
+            failure_verb="could not receive the note",
+            failed=failed,
+            errors=errors,
+        )
+
+    def _apply_bulk_action(self, queryset, apply_fn):
+        """Run apply_fn per item, isolating ValidationErrors so one bad case doesn't abort the batch."""
         updated = 0
-        for review_case in queryset.exclude(status__in=excluded_statuses):
-            add_review_note(review_case, actor=request.user, note=note)
-            updated += 1
-        self.message_user(request, f"Added a note to {updated} review case(s).", messages.SUCCESS)
+        failed = 0
+        errors = []
+        for review_case in queryset:
+            try:
+                apply_fn(review_case)
+            except ValidationError as exc:
+                failed += 1
+                errors.append(f"{review_case.public_id}: {'; '.join(exc.messages)}")
+            else:
+                updated += 1
+        return updated, failed, errors
+
+    def _report_bulk_result(self, request, *, success_verb, failure_verb, failed, errors):
+        if failed:
+            detail = " | ".join(errors)
+            self.message_user(
+                request,
+                f"{success_verb}; {failed} review case(s) {failure_verb}: {detail}",
+                messages.WARNING,
+            )
+        else:
+            self.message_user(request, f"{success_verb}.", messages.SUCCESS)
 
     def _resolve_target_person(self, request):
         target_public_id = request.POST.get("target_person_public_id", "").strip()
