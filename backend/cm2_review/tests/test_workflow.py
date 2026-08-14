@@ -1,8 +1,8 @@
 import pytest
 from django.core.exceptions import ValidationError
 
-from cm2_elections.models import Person
-from cm2_review.models import IdentityReviewAuditEvent, IdentityReviewCase
+from cm2_elections.models import Person, PersonIdentifier
+from cm2_review.models import IdentityReviewAuditEvent, IdentityReviewCase, IdentityReviewSuggestion
 from cm2_review.serializers import IdentityReviewCaseSerializer
 from cm2_review.workflow import transition_review_case
 
@@ -128,4 +128,71 @@ def test_reject_status_requires_reject_action(source_record, provisional_person,
             reviewer=reviewer,
             status=IdentityReviewCase.Status.REJECTED,
             action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
+        )
+
+
+@pytest.mark.django_db
+def test_link_civic_data_creates_verified_person_identifier(source_record, provisional_person, django_user_model):
+    reviewer = django_user_model.objects.create_user(username="civic-data-reviewer")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="link-civic-data",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    suggestion = IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        rank=1,
+        external_scheme="civic-data",
+        external_identifier="cd-12345",
+    )
+
+    transition_review_case(
+        review,
+        reviewer=reviewer,
+        status=IdentityReviewCase.Status.APPROVED,
+        action=IdentityReviewCase.ResolutionAction.LINK_CIVIC_DATA,
+        target_suggestion=suggestion,
+    )
+
+    provisional_person.refresh_from_db()
+    identifier = PersonIdentifier.objects.get(scheme="civic-data", identifier="cd-12345")
+    assert identifier.person == provisional_person
+    assert identifier.verification_method == PersonIdentifier.VerificationMethod.HUMAN_REVIEW
+    assert identifier.verified_by == reviewer
+    assert provisional_person.identity_state == Person.IdentityState.RESOLVED
+
+
+@pytest.mark.django_db
+def test_link_civic_data_requires_target_suggestion_belonging_to_case(
+    source_record,
+    provisional_person,
+    django_user_model,
+):
+    reviewer = django_user_model.objects.create_user(username="civic-data-reviewer-2")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="link-civic-data-2",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    other_review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="link-civic-data-other",
+        provisional_person=provisional_person,
+    )
+    foreign_suggestion = IdentityReviewSuggestion.objects.create(
+        review_case=other_review,
+        rank=1,
+        external_scheme="civic-data",
+        external_identifier="cd-99999",
+    )
+
+    with pytest.raises(ValidationError, match="target_suggestion"):
+        transition_review_case(
+            review,
+            reviewer=reviewer,
+            status=IdentityReviewCase.Status.APPROVED,
+            action=IdentityReviewCase.ResolutionAction.LINK_CIVIC_DATA,
+            target_suggestion=foreign_suggestion,
         )
