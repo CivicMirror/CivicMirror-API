@@ -90,3 +90,28 @@ def test_find_person_match_candidates_returns_empty_below_score_floor(source_art
     )
 
     assert candidates == []
+
+
+@pytest.mark.django_db
+def test_find_person_match_candidates_includes_blank_family_name(source_artifact):
+    existing = Person.objects.create(
+        canonical_name="DeDreana Freeman",
+        family_name="",
+        identity_state=Person.IdentityState.PROVISIONAL,
+        source_artifact=source_artifact,
+    )
+    new_person = Person.objects.create(
+        canonical_name="Dedreana Freeman",
+        family_name="Freeman",
+        given_name="Dedreana",
+        identity_state=Person.IdentityState.PROVISIONAL,
+        source_artifact=source_artifact,
+    )
+
+    candidates = find_person_match_candidates(
+        canonical_name=new_person.canonical_name,
+        family_name=new_person.family_name,
+        exclude_person_id=new_person.id,
+    )
+
+    assert existing in [candidate.person for candidate in candidates]

@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from difflib import SequenceMatcher
 
+from django.db.models import Q
+
 from cm2_elections.models import Person
 
 from .models import IdentityReviewCase, IdentityReviewSuggestion
@@ -44,7 +46,9 @@ def find_person_match_candidates(
     )
     normalized_family = normalize_name_for_matching(family_name)
     if normalized_family:
-        candidates_qs = candidates_qs.filter(family_name__istartswith=normalized_family[0])
+        candidates_qs = candidates_qs.filter(
+            Q(family_name__istartswith=normalized_family[0]) | Q(family_name="")
+        )
 
     matcher = SequenceMatcher(a=normalized_target)
     scored: list[PersonMatchCandidate] = []
