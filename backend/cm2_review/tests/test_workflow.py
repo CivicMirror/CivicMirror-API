@@ -5,7 +5,7 @@ from django.utils import timezone
 from cm2_elections.models import Person, PersonIdentifier
 from cm2_review.models import IdentityReviewAuditEvent, IdentityReviewCase, IdentityReviewSuggestion
 from cm2_review.serializers import IdentityReviewCaseSerializer
-from cm2_review.workflow import add_review_note, supersede_review_case, transition_review_case
+from cm2_review.workflow import add_review_note, create_review_case, supersede_review_case, transition_review_case
 
 
 @pytest.mark.django_db
@@ -86,6 +86,25 @@ def test_public_review_serializer_redacts_private_evidence(source_record, provis
     assert "protected_address" not in output
     assert output["has_private_evidence"] is True
     assert output["supporting_evidence"] == {"redacted": True}
+
+
+@pytest.mark.django_db
+def test_serializer_handles_case_with_audit_events(source_record, provisional_person):
+    review, created = create_review_case(
+        deduplication_key="serializer-audit-events",
+        defaults={
+            "case_type": IdentityReviewCase.CaseType.PERSON_IDENTITY,
+            "source_record": source_record,
+            "provisional_person": provisional_person,
+        },
+    )
+    assert created is True
+    assert review.audit_events.exists()
+
+    output = IdentityReviewCaseSerializer(review).data
+
+    assert len(output["audit_events"]) >= 1
+    assert output["audit_events"][0]["event_type"] == IdentityReviewAuditEvent.EventType.CREATED
 
 
 @pytest.mark.django_db
