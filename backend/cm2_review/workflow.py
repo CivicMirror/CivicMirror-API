@@ -186,3 +186,26 @@ def supersede_review_case(
         metadata={"from_status": previous_status, "superseded_by": str(superseded_by.public_id)},
     )
     return review_case
+
+
+@transaction.atomic
+def add_review_note(review_case: IdentityReviewCase, *, actor, note: str) -> IdentityReviewCase:
+    """Append a reviewer note to an open or deferred case without changing its resolution."""
+    if actor is None or not getattr(actor, "is_authenticated", False):
+        raise ValidationError("An authenticated actor is required.")
+    if not note.strip():
+        raise ValidationError({"note": "A note is required."})
+    if review_case.status in _TERMINAL_STATUSES or review_case.status == IdentityReviewCase.Status.SUPERSEDED:
+        raise ValidationError({"status": "Notes cannot be added to a terminal or superseded case."})
+
+    review_case = IdentityReviewCase.objects.select_for_update().get(pk=review_case.pk)
+    review_case.notes = f"{review_case.notes}\n{note}".strip() if review_case.notes else note
+    review_case.save(update_fields=["notes", "updated_at"])
+
+    _audit(
+        review_case,
+        IdentityReviewAuditEvent.EventType.NOTE_ADDED,
+        actor,
+        metadata={"note": note},
+    )
+    return review_case
