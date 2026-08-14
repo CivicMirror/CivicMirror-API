@@ -1,0 +1,220 @@
+from django import forms
+from django.contrib import admin, messages
+from django.contrib.admin.helpers import ActionForm
+from django.utils.html import format_html, format_html_join
+
+from cm2_elections.models import Person
+from cm2_review.workflow import add_review_note, supersede_review_case, transition_review_case
+
+from .models import IdentityReviewCase, IdentityReviewSuggestion
+
+
+class IdentityReviewSuggestionInline(admin.TabularInline):
+    model = IdentityReviewSuggestion
+    extra = 0
+    raw_id_fields = ("suggested_person",)
+
+
+class ReviewCaseActionForm(ActionForm):
+    target_person_public_id = forms.CharField(
+        required=False,
+        help_text="Public ID of the target person for link/merge actions.",
+    )
+    target_case_public_id = forms.CharField(
+        required=False,
+        help_text="Public ID of the superseding case for the supersede action.",
+    )
+    note = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+        help_text="Note text for the add-note action.",
+    )
+
+
+@admin.register(IdentityReviewCase)
+class IdentityReviewCaseAdmin(admin.ModelAdmin):
+    list_display = ("priority", "case_type", "status", "created_at", "reviewed_at", "reviewed_by", "has_private_evidence")
+    list_filter = ("status", "case_type", "has_private_evidence")
+    search_fields = ("public_id", "deduplication_key", "provisional_person__canonical_name")
+    raw_id_fields = (
+        "source_record",
+        "provisional_person",
+        "result_choice",
+        "reviewed_by",
+        "superseded_by",
+    )
+    readonly_fields = ("id", "public_id", "deduplication_key", "created_at", "updated_at", "evidence_comparison")
+    inlines = (IdentityReviewSuggestionInline,)
+    action_form = ReviewCaseActionForm
+    actions = (
+        "confirm_new",
+        "defer_cases",
+        "reject_cases",
+        "link_existing_cases",
+        "merge_people_cases",
+        "supersede_cases",
+        "add_note_to_cases",
+    )
+    fieldsets = (
+        (None, {"fields": ("public_id", "case_type", "status", "has_private_evidence")}),
+        ("Evidence comparison", {"fields": ("evidence_comparison",)}),
+        (
+            "Resolution",
+            {"fields": ("resolution_action", "reviewed_by", "reviewed_at", "notes", "superseded_by")},
+        ),
+        ("Metadata", {"fields": ("id", "deduplication_key", "created_at", "updated_at")}),
+    )
+
+    @admin.display(ordering="case_type", description="Priority")
+    def priority(self, obj):
+        return {
+            IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE: "high",
+            IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH: "high",
+            IdentityReviewCase.CaseType.PERSON_IDENTITY: "normal",
+        }.get(obj.case_type, "normal")
+
+    @admin.display(description="Evidence comparison")
+    def evidence_comparison(self, obj):
+        rows = []
+        if obj.provisional_person is not None:
+            rows.append(("Provisional person", obj.provisional_person.canonical_name))
+        source = obj.source_record
+        if source is not None:
+            rows.append(("Source reported name", source.reported_name))
+            rows.append(("Source ballot name", source.ballot_name or "—"))
+            rows.append(("Protected address", source.protected_address or "—"))
+            rows.append(("Protected phone", source.protected_phone or "—"))
+            rows.append(("Protected email", source.protected_email or "—"))
+        rows.append(("Supporting evidence", obj.supporting_evidence or {}))
+        rows.append(("Conflicting evidence", obj.conflicting_evidence or {}))
+        row_html = format_html_join(
+            "\n",
+            "<tr><th style='text-align:left;padding-right:1em;vertical-align:top'>{}</th><td>{}</td></tr>",
+            ((label, value) for label, value in rows),
+        )
+        return format_html("<table>{}</table>", row_html)
+
+    @admin.action(description="Confirm selected cases as distinct people")
+    def confirm_new(self, request, queryset):
+        updated = 0
+        for review_case in queryset.filter(status=IdentityReviewCase.Status.OPEN):
+            transition_review_case(
+                review_case,
+                reviewer=request.user,
+                status=IdentityReviewCase.Status.APPROVED,
+                action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
+            )
+            updated += 1
+        self.message_user(request, f"Confirmed {updated} review case(s).", messages.SUCCESS)
+
+    @admin.action(description="Defer selected review cases")
+    def defer_cases(self, request, queryset):
+        updated = 0
+        for review_case in queryset.filter(status=IdentityReviewCase.Status.OPEN):
+            transition_review_case(
+                review_case,
+                reviewer=request.user,
+                status=IdentityReviewCase.Status.DEFERRED,
+                action=IdentityReviewCase.ResolutionAction.DEFER,
+            )
+            updated += 1
+        self.message_user(request, f"Deferred {updated} review case(s).", messages.SUCCESS)
+
+    @admin.action(description="Reject selected review cases (disputes the provisional person)")
+    def reject_cases(self, request, queryset):
+        updated = 0
+        for review_case in queryset.filter(status=IdentityReviewCase.Status.OPEN):
+            transition_review_case(
+                review_case,
+                reviewer=request.user,
+                status=IdentityReviewCase.Status.REJECTED,
+                action=IdentityReviewCase.ResolutionAction.REJECT,
+            )
+            updated += 1
+        self.message_user(request, f"Rejected {updated} review case(s).", messages.SUCCESS)
+
+    @admin.action(description="Link selected cases to target person (enter target person public ID above)")
+    def link_existing_cases(self, request, queryset):
+        target_person = self._resolve_target_person(request)
+        if target_person is None:
+            return
+        updated = 0
+        for review_case in queryset.filter(status=IdentityReviewCase.Status.OPEN):
+            transition_review_case(
+                review_case,
+                reviewer=request.user,
+                status=IdentityReviewCase.Status.APPROVED,
+                action=IdentityReviewCase.ResolutionAction.LINK_EXISTING,
+                target_person=target_person,
+            )
+            updated += 1
+        self.message_user(request, f"Linked {updated} review case(s) to {target_person.canonical_name}.", messages.SUCCESS)
+
+    @admin.action(description="Merge selected cases into target person (enter target person public ID above)")
+    def merge_people_cases(self, request, queryset):
+        target_person = self._resolve_target_person(request)
+        if target_person is None:
+            return
+        updated = 0
+        for review_case in queryset.filter(status=IdentityReviewCase.Status.OPEN):
+            transition_review_case(
+                review_case,
+                reviewer=request.user,
+                status=IdentityReviewCase.Status.APPROVED,
+                action=IdentityReviewCase.ResolutionAction.MERGE_PEOPLE,
+                target_person=target_person,
+            )
+            updated += 1
+        self.message_user(request, f"Merged {updated} review case(s) into {target_person.canonical_name}.", messages.SUCCESS)
+
+    @admin.action(description="Supersede selected cases with target case (enter target case public ID above)")
+    def supersede_cases(self, request, queryset):
+        target_public_id = request.POST.get("target_case_public_id", "").strip()
+        if not target_public_id:
+            self.message_user(request, "Provide a target case public ID to supersede with.", messages.ERROR)
+            return
+        target_case = IdentityReviewCase.objects.filter(public_id=target_public_id).first()
+        if target_case is None:
+            self.message_user(request, f"No review case found with public ID {target_public_id}.", messages.ERROR)
+            return
+        updated = 0
+        for review_case in queryset:
+            supersede_review_case(review_case, superseded_by=target_case, actor=request.user)
+            updated += 1
+        self.message_user(request, f"Superseded {updated} review case(s).", messages.SUCCESS)
+
+    @admin.action(description="Add note to selected open/deferred cases (enter note text above)")
+    def add_note_to_cases(self, request, queryset):
+        note = request.POST.get("note", "").strip()
+        if not note:
+            self.message_user(request, "Provide note text to add a note.", messages.ERROR)
+            return
+        excluded_statuses = [
+            IdentityReviewCase.Status.APPROVED,
+            IdentityReviewCase.Status.REJECTED,
+            IdentityReviewCase.Status.SUPERSEDED,
+        ]
+        updated = 0
+        for review_case in queryset.exclude(status__in=excluded_statuses):
+            add_review_note(review_case, actor=request.user, note=note)
+            updated += 1
+        self.message_user(request, f"Added a note to {updated} review case(s).", messages.SUCCESS)
+
+    def _resolve_target_person(self, request):
+        target_public_id = request.POST.get("target_person_public_id", "").strip()
+        if not target_public_id:
+            self.message_user(request, "Provide a target person public ID for this action.", messages.ERROR)
+            return None
+        target_person = Person.objects.filter(public_id=target_public_id).first()
+        if target_person is None:
+            self.message_user(request, f"No person found with public ID {target_public_id}.", messages.ERROR)
+            return None
+        return target_person
+
+
+@admin.register(IdentityReviewSuggestion)
+class IdentityReviewSuggestionAdmin(admin.ModelAdmin):
+    list_display = ("review_case", "rank", "suggested_person", "external_scheme", "uses_private_evidence")
+    list_filter = ("external_scheme", "uses_private_evidence")
+    search_fields = ("review_case__public_id", "suggested_person__canonical_name", "external_identifier")
+    raw_id_fields = ("review_case", "suggested_person")
