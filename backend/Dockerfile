@@ -7,6 +7,29 @@ WORKDIR /build
 COPY requirements/base.txt requirements/prod.txt ./
 RUN pip install --no-cache-dir --prefix=/install -r prod.txt
 
+# ── Development/test target ───────────────────────────────────────────────────
+FROM python:3.13-slim AS development
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+COPY requirements/base.txt requirements/dev.txt ./requirements/
+RUN pip install --no-cache-dir \
+    -r requirements/base.txt \
+    -r requirements/dev.txt
+
+RUN adduser --disabled-password --gecos '' appuser
+
+COPY --chown=appuser:appuser . .
+
+USER appuser
+
+EXPOSE 8000
+
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
 FROM python:3.13-slim AS runtime
 
