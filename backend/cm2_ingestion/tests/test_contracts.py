@@ -12,8 +12,8 @@ from cm2_ingestion.contracts import (
     OfficeRecord,
     PersonSourceEvidence,
     PostElectionBatch,
-    PreElectionBatch,
     PrecinctResultObservation,
+    PreElectionBatch,
     validate_post_election_batch,
     validate_pre_election_batch,
 )
