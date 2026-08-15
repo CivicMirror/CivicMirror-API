@@ -6,10 +6,7 @@ from django.utils import timezone
 from cm2_core.models import SourceArtifact
 from cm2_elections.models import (
     Candidacy,
-    Contest,
     Election,
-    Jurisdiction,
-    Office,
     Person,
     PersonSourceRecord,
 )
@@ -17,10 +14,10 @@ from cm2_review.matching import find_person_match_candidates, generate_suggestio
 from cm2_review.models import IdentityReviewCase
 from cm2_review.workflow import create_review_case
 
+from . import entities
 from .contracts import (
     CandidateFilingRecord,
     ContractValidationError,
-    JurisdictionRecord,
     PersonSourceEvidence,
     PreElectionBatch,
     validate_pre_election_batch,
@@ -89,53 +86,6 @@ def record_pre_election_source_failure(
         },
     )
     return sync_log
-
-
-def _upsert_public(model, public_id: str, values: dict):
-    instance, created = model.objects.get_or_create(public_id=public_id, defaults=values)
-    if created:
-        return instance, True, False
-
-    changed_fields = []
-    for field_name, value in values.items():
-        if getattr(instance, field_name) != value:
-            setattr(instance, field_name, value)
-            changed_fields.append(field_name)
-    if changed_fields:
-        instance.save(update_fields=[*changed_fields, "updated_at"])
-    return instance, False, bool(changed_fields)
-
-
-def _upsert_natural(model, lookup: dict, values: dict):
-    instance, created = model.objects.get_or_create(**lookup, defaults=values)
-    if created:
-        return instance, True, False
-
-    changed_fields = []
-    for field_name, value in values.items():
-        if getattr(instance, field_name) != value:
-            setattr(instance, field_name, value)
-            changed_fields.append(field_name)
-    if changed_fields:
-        instance.save(update_fields=[*changed_fields, "updated_at"])
-    return instance, False, bool(changed_fields)
-
-
-def _track(
-    *,
-    category: str,
-    instance,
-    created: bool,
-    updated: bool,
-    counts: dict[str, int],
-    details: dict,
-) -> None:
-    if created:
-        counts[f"{category}_created"] += 1
-        details["created"][category].append(instance.public_id)
-    elif updated:
-        counts[f"{category}_updated"] += 1
-        details["updated"][category].append(instance.public_id)
 
 
 def _follow_person_redirect(person: Person) -> Person:
@@ -260,51 +210,6 @@ def _persist_source_records(
     return source_records, created_count
 
 
-def _persist_jurisdictions(
-    *,
-    artifact: SourceArtifact,
-    records: tuple[JurisdictionRecord, ...],
-    counts: dict[str, int],
-    details: dict,
-) -> dict[str, Jurisdiction]:
-    record_by_id = {record.public_id: record for record in records}
-    persisted: dict[str, Jurisdiction] = {}
-
-    def persist(record: JurisdictionRecord) -> Jurisdiction:
-        if record.public_id in persisted:
-            return persisted[record.public_id]
-        parent = persist(record_by_id[record.parent_public_id]) if record.parent_public_id else None
-        jurisdiction, created, updated = _upsert_public(
-            Jurisdiction,
-            record.public_id,
-            {
-                "name": record.name,
-                "classification": record.classification,
-                "state": record.state,
-                "parent": parent,
-                "active_start": record.active_start,
-                "active_end": record.active_end,
-                "record_status": record.record_status,
-                "source_artifact": artifact,
-                "source_key": record.source_key,
-            },
-        )
-        persisted[record.public_id] = jurisdiction
-        _track(
-            category="jurisdictions",
-            instance=jurisdiction,
-            created=created,
-            updated=updated,
-            counts=counts,
-            details=details,
-        )
-        return jurisdiction
-
-    for jurisdiction_record in records:
-        persist(jurisdiction_record)
-    return persisted
-
-
 def _empty_details() -> dict:
     categories = ("jurisdictions", "offices", "elections", "contests", "people", "candidacies")
     return {
@@ -328,38 +233,20 @@ def _persist_batch(*, artifact: SourceArtifact, batch: PreElectionBatch, sync_lo
                 "subject_public_id": notice.subject_public_id,
             }
         )
-    jurisdictions = _persist_jurisdictions(
+    jurisdictions = entities.persist_jurisdictions(
         artifact=artifact,
         records=batch.jurisdictions,
         counts=counts,
         details=details,
     )
 
-    offices: dict[str, Office] = {}
-    for record in batch.offices:
-        office, created, updated = _upsert_public(
-            Office,
-            record.public_id,
-            {
-                "jurisdiction": jurisdictions[record.jurisdiction_public_id],
-                "canonical_name": record.canonical_name,
-                "role": record.role,
-                "default_term_months": record.default_term_months,
-                "positions": record.positions,
-                "record_status": record.record_status,
-                "source_artifact": artifact,
-                "source_key": record.source_key,
-            },
-        )
-        offices[record.public_id] = office
-        _track(
-            category="offices",
-            instance=office,
-            created=created,
-            updated=updated,
-            counts=counts,
-            details=details,
-        )
+    offices = entities.persist_offices(
+        artifact=artifact,
+        records=batch.offices,
+        jurisdictions=jurisdictions,
+        counts=counts,
+        details=details,
+    )
 
     elections: dict[str, Election] = {}
     for record in batch.elections:
@@ -367,7 +254,7 @@ def _persist_batch(*, artifact: SourceArtifact, batch: PreElectionBatch, sync_lo
             default_artifact=artifact,
             source_artifact_public_id=record.source_artifact_public_id,
         )
-        election, created, updated = _upsert_public(
+        election, created, updated = entities.upsert_public(
             Election,
             record.public_id,
             {
@@ -380,7 +267,7 @@ def _persist_batch(*, artifact: SourceArtifact, batch: PreElectionBatch, sync_lo
             },
         )
         elections[record.public_id] = election
-        _track(
+        entities.track(
             category="elections",
             instance=election,
             created=created,
@@ -389,33 +276,14 @@ def _persist_batch(*, artifact: SourceArtifact, batch: PreElectionBatch, sync_lo
             details=details,
         )
 
-    contests: dict[str, Contest] = {}
-    for record in batch.contests:
-        contest, created, updated = _upsert_public(
-            Contest,
-            record.public_id,
-            {
-                "election": elections[record.election_public_id],
-                "office": offices[record.office_public_id],
-                "party_contest": record.party_contest,
-                "vote_for": record.vote_for,
-                "is_partisan": record.is_partisan,
-                "is_unexpired": record.is_unexpired,
-                "lifecycle_status": record.lifecycle_status,
-                "result_status": record.result_status,
-                "source_artifact": artifact,
-                "source_key": record.source_key,
-            },
-        )
-        contests[record.public_id] = contest
-        _track(
-            category="contests",
-            instance=contest,
-            created=created,
-            updated=updated,
-            counts=counts,
-            details=details,
-        )
+    contests = entities.persist_contests(
+        artifact=artifact,
+        records=batch.contests,
+        elections=elections,
+        offices=offices,
+        counts=counts,
+        details=details,
+    )
 
     for candidate in batch.candidates:
         person, person_created = _resolve_or_create_person(artifact=artifact, candidate=candidate)
@@ -430,7 +298,7 @@ def _persist_batch(*, artifact: SourceArtifact, batch: PreElectionBatch, sync_lo
         )
         counts["source_records_created"] += source_record_count
 
-        candidacy, created, updated = _upsert_natural(
+        candidacy, created, updated = entities.upsert_natural(
             Candidacy,
             {"person": person, "contest": contests[candidate.contest_public_id]},
             {
@@ -443,7 +311,7 @@ def _persist_batch(*, artifact: SourceArtifact, batch: PreElectionBatch, sync_lo
             },
         )
         candidacy.source_records.add(*source_records)
-        _track(
+        entities.track(
             category="candidacies",
             instance=candidacy,
             created=created,
