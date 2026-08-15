@@ -1,6 +1,6 @@
 import pytest
 
-from cm2_nc.mapping.identity import stable_public_id
+from cm2_nc.mapping.identity import contest_public_id, stable_public_id
 from cm2_nc.mapping.jurisdictions import map_jurisdiction
 from cm2_nc.mapping.measures import is_measure_contest
 from cm2_nc.mapping.offices import map_office
@@ -182,3 +182,32 @@ def test_multiple_offices_share_one_identical_jurisdiction_record():
 
     assert school_district_two == school_district_three
     assert city_council == city_mayor
+
+
+def test_contest_public_id_matches_manual_construction():
+    key_a = contest_public_id(
+        election_public_id="nc/election/2026-03-03/primary/aaaa",
+        office_public_id="nc/office/us-senator/bbbb",
+        party_contest="REP",
+        is_unexpired=False,
+    )
+    key_b = contest_public_id(
+        election_public_id="nc/election/2026-03-03/primary/aaaa",
+        office_public_id="nc/office/us-senator/bbbb",
+        party_contest="REP",
+        is_unexpired=False,
+    )
+    key_different_party = contest_public_id(
+        election_public_id="nc/election/2026-03-03/primary/aaaa",
+        office_public_id="nc/office/us-senator/bbbb",
+        party_contest="DEM",
+        is_unexpired=False,
+    )
+    assert key_a == key_b
+    assert key_a != key_different_party
+
+
+def test_map_office_without_term_years_leaves_default_term_null():
+    jurisdiction = map_jurisdiction("US SENATE (REP)".replace(" (REP)", ""), "")[-1]
+    office = map_office("US SENATE", jurisdiction, vote_for=1)
+    assert office.default_term_months is None
