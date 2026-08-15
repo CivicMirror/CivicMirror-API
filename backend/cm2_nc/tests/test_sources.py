@@ -1,3 +1,5 @@
+import io
+import zipfile
 from datetime import date
 from pathlib import Path
 
@@ -6,6 +8,7 @@ import pytest
 from cm2_ingestion.contracts import ContractValidationError
 from cm2_nc.constants import CANDIDATE_LIST_URL, UPCOMING_ELECTIONS_URL
 from cm2_nc.sources.candidate_filings import NcCandidateRowsSource, parse_candidate_rows
+from cm2_nc.sources.results import NcResultsZipSource, parse_results_rows, results_zip_url
 from cm2_nc.sources.upcoming_elections import NcUpcomingElectionsSource, parse_upcoming_elections
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -114,16 +117,6 @@ def test_source_acquisition_uses_official_url_timeout_and_status_check(source_cl
     assert source.acquire() == payload
     assert session.calls == [(url, 60)]
     assert session.response.status_checked is True
-
-
-import io
-import zipfile
-from datetime import date
-from pathlib import Path
-
-from cm2_nc.sources.results import NcResultsZipSource, parse_results_rows, results_zip_url
-
-FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _zip_bytes(text: str) -> bytes:
