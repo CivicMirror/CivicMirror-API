@@ -14,6 +14,7 @@ def observation(
     votes,
     *,
     contest="nc/2026-03-03/primary/durham-mayor",
+    choice_party="",
 ):
     return PrecinctResultObservation(
         source_observation_key=observation_key,
@@ -22,6 +23,7 @@ def observation(
         source_label=label,
         normalized_label=label.lower(),
         choice_type=choice_type,
+        choice_party=choice_party,
         vote_total=votes,
     )
 
@@ -75,3 +77,12 @@ def test_negative_observation_total_is_rejected():
 
 def test_empty_observation_batch_returns_empty_tuple():
     assert aggregate_precinct_observations(()) == ()
+
+
+def test_aggregation_preserves_choice_party():
+    aggregated = aggregate_precinct_observations(
+        (
+            observation("precinct-a/candidate", "candidate", "Elizabeth A. Temple", "candidate", 33, choice_party="REP"),
+        )
+    )
+    assert aggregated[0].choice_party == "REP"

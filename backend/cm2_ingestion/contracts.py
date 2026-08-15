@@ -123,6 +123,7 @@ class PrecinctResultObservation:
     normalized_label: str
     choice_type: str
     vote_total: int
+    choice_party: str = ""
     precinct: str = ""
     voting_method: str = ""
 
@@ -138,6 +139,7 @@ class AggregatedResultChoice:
     percentage: Decimal
     observation_count: int
     observation_keys: tuple[str, ...]
+    choice_party: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,3 +235,60 @@ def validate_pre_election_batch(batch: PreElectionBatch) -> None:
             if evidence.source_row_key in source_row_keys:
                 raise ContractValidationError("duplicate source row key")
             source_row_keys.add(evidence.source_row_key)
+
+
+@dataclass(frozen=True, slots=True)
+class PostElectionBatch:
+    state: str
+    new_jurisdictions: tuple[JurisdictionRecord, ...] = ()
+    new_offices: tuple[OfficeRecord, ...] = ()
+    new_contests: tuple[ContestRecord, ...] = ()
+    observations: tuple[PrecinctResultObservation, ...] = ()
+    notices: tuple[IngestionNotice, ...] = ()
+
+
+def validate_post_election_batch(batch: PostElectionBatch) -> None:
+    if len(batch.state) != 2 or batch.state != batch.state.upper():
+        raise ContractValidationError("batch state must be an uppercase two-letter code")
+
+    jurisdiction_ids = _unique_keys(batch.new_jurisdictions, "public_id", "jurisdiction")
+    office_ids = _unique_keys(batch.new_offices, "public_id", "office")
+    contest_ids = _unique_keys(batch.new_contests, "public_id", "contest")
+    _validate_jurisdiction_hierarchy(batch.new_jurisdictions, jurisdiction_ids)
+
+    for jurisdiction in batch.new_jurisdictions:
+        if jurisdiction.state != batch.state:
+            raise ContractValidationError("jurisdiction state does not match batch state")
+
+    for office in batch.new_offices:
+        if office.jurisdiction_public_id not in jurisdiction_ids:
+            raise ContractValidationError("office references unknown jurisdiction")
+        if office.positions <= 0:
+            raise ContractValidationError("office positions must be positive")
+
+    for contest in batch.new_contests:
+        if contest.office_public_id not in office_ids:
+            raise ContractValidationError("contest references unknown office")
+        if contest.vote_for <= 0:
+            raise ContractValidationError("contest vote_for must be positive")
+
+    observation_keys: set[str] = set()
+    for observation in batch.observations:
+        if not observation.contest_public_id:
+            raise ContractValidationError("result observation must reference a contest")
+        if not observation.source_choice_key:
+            raise ContractValidationError("result observation must have a choice key")
+        if observation.source_observation_key in observation_keys:
+            raise ContractValidationError("duplicate result observation key")
+        observation_keys.add(observation.source_observation_key)
+
+    notice_keys: set[tuple[str, str, str]] = set()
+    for notice in batch.notices:
+        if not _NOTICE_CODE_RE.fullmatch(notice.code):
+            raise ContractValidationError("ingestion notice code is invalid")
+        if not notice.subject_type or not notice.subject_public_id:
+            raise ContractValidationError("ingestion notice subject is required")
+        notice_key = (notice.code, notice.subject_type, notice.subject_public_id)
+        if notice_key in notice_keys:
+            raise ContractValidationError("duplicate ingestion notice")
+        notice_keys.add(notice_key)
