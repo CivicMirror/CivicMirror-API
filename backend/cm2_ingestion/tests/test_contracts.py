@@ -11,7 +11,10 @@ from cm2_ingestion.contracts import (
     JurisdictionRecord,
     OfficeRecord,
     PersonSourceEvidence,
+    PostElectionBatch,
     PreElectionBatch,
+    PrecinctResultObservation,
+    validate_post_election_batch,
     validate_pre_election_batch,
 )
 
@@ -246,3 +249,92 @@ def test_validation_error_never_echoes_protected_values():
 
     message = str(exc_info.value)
     assert all(value not in message for value in protected_values)
+
+
+def _results_jurisdiction():
+    return JurisdictionRecord(
+        public_id="nc/jurisdiction/state/north-carolina/aaaaaaaaaaaaaaaa",
+        name="North Carolina",
+        classification="state",
+        state="NC",
+        record_status="verified",
+        source_key="NC",
+    )
+
+
+def _results_office(jurisdiction):
+    return OfficeRecord(
+        public_id="nc/office/us-senator/aaaaaaaaaaaaaaaa",
+        jurisdiction_public_id=jurisdiction.public_id,
+        canonical_name="U.S. Senator",
+        role="senator",
+        record_status="provisional",
+        source_key="US SENATE",
+    )
+
+
+def _results_contest(office):
+    return ContestRecord(
+        public_id="nc/contest/us-senator/aaaaaaaaaaaaaaaa",
+        election_public_id="nc/election/2026-03-03/primary/aaaaaaaaaaaaaaaa",
+        office_public_id=office.public_id,
+        party_contest="REP",
+        vote_for=1,
+        is_partisan=True,
+        source_key="US SENATE (REP)",
+    )
+
+
+def test_post_election_batch_validates_state_and_uniqueness():
+    jurisdiction = _results_jurisdiction()
+    office = _results_office(jurisdiction)
+    contest = _results_contest(office)
+    batch = PostElectionBatch(
+        state="NC",
+        new_jurisdictions=(jurisdiction,),
+        new_offices=(office,),
+        new_contests=(contest,),
+        observations=(
+            PrecinctResultObservation(
+                source_observation_key="obs-1",
+                contest_public_id=contest.public_id,
+                source_choice_key="choice-1",
+                source_label="Elizabeth A. Temple",
+                normalized_label="elizabeth a. temple",
+                choice_type="candidate",
+                choice_party="REP",
+                vote_total=33,
+            ),
+        ),
+    )
+    validate_post_election_batch(batch)
+
+
+def test_post_election_batch_rejects_lowercase_state():
+    with pytest.raises(ContractValidationError):
+        validate_post_election_batch(PostElectionBatch(state="nc"))
+
+
+def test_post_election_batch_rejects_duplicate_contest_public_ids():
+    jurisdiction = _results_jurisdiction()
+    office = _results_office(jurisdiction)
+    contest = _results_contest(office)
+    with pytest.raises(ContractValidationError):
+        validate_post_election_batch(
+            PostElectionBatch(
+                state="NC",
+                new_jurisdictions=(jurisdiction,),
+                new_offices=(office,),
+                new_contests=(contest, contest),
+            )
+        )
+
+
+def test_post_election_batch_rejects_invalid_notice():
+    with pytest.raises(ContractValidationError):
+        validate_post_election_batch(
+            PostElectionBatch(
+                state="NC",
+                notices=(IngestionNotice(code="Bad Code", subject_type="x", subject_public_id="y"),),
+            )
+        )

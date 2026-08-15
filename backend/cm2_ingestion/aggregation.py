@@ -28,6 +28,7 @@ def aggregate_precinct_observations(
             observation.source_label,
             observation.normalized_label,
             observation.choice_type,
+            observation.choice_party,
         )
         group = grouped.get(group_key)
         if group is None:
@@ -46,7 +47,7 @@ def aggregate_precinct_observations(
 
     result: list[AggregatedResultChoice] = []
     for (contest_public_id, source_choice_key), group in sorted(grouped.items()):
-        source_label, normalized_label, choice_type = group["metadata"]
+        source_label, normalized_label, choice_type, choice_party = group["metadata"]
         denominator = contest_totals[contest_public_id]
         percentage = (
             (Decimal(group["vote_total"]) * Decimal("100") / Decimal(denominator)).quantize(
@@ -68,6 +69,7 @@ def aggregate_precinct_observations(
                 percentage=percentage,
                 observation_count=len(observation_keys),
                 observation_keys=observation_keys,
+                choice_party=choice_party,
             )
         )
 
