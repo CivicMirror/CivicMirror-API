@@ -1,5 +1,7 @@
+import io
 import json
-from datetime import timedelta
+import zipfile
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -11,7 +13,8 @@ from cm2_elections.models import Candidacy, Contest, Election, Jurisdiction, Off
 from cm2_elections.serializers import CandidacySerializer, PersonSerializer
 from cm2_ingestion.contracts import ContractValidationError
 from cm2_ingestion.models import ReconciliationReport, SyncLog
-from cm2_nc.ingest import ingest_nc_pre_election_contents
+from cm2_nc.ingest import ingest_nc_post_election_contents, ingest_nc_pre_election_contents
+from cm2_results.models import ContestResult, ResultChoice
 from cm2_review.models import IdentityReviewCase
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -165,3 +168,43 @@ def test_parser_failure_writes_sanitized_failed_sync_without_domain_rows():
     candidate_artifact = SourceArtifact.objects.get(source_type=SourceArtifact.SourceType.CANDIDATES)
     assert candidate_artifact.processing_status == SourceArtifact.ProcessingStatus.FAILED
     assert private_value.decode() not in candidate_artifact.error
+
+
+def _results_zip_bytes() -> bytes:
+    text = (FIXTURES / "results_pct_sanitized.txt").read_text()
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("results_pct_20260303.txt", text)
+    return buffer.getvalue()
+
+
+@pytest.mark.django_db
+def test_nc_post_election_ingestion_persists_results_for_existing_election():
+    ingest_nc_pre_election_contents(**fixture_content(), retrieved_at=timezone.now())
+    election = Election.objects.filter(election_date=date(2026, 3, 3)).first()
+    if election is None:
+        election = Election.objects.create(
+            public_id="nc/election/2026-03-03/primary",
+            name="2026 North Carolina Primary",
+            election_date=date(2026, 3, 3),
+            election_type="primary",
+            lifecycle_status="active",
+        )
+
+    results_report = ingest_nc_post_election_contents(
+        results_content=_results_zip_bytes(),
+        election_date=date(2026, 3, 3),
+        retrieved_at=timezone.now(),
+    )
+
+    assert isinstance(results_report, ReconciliationReport)
+    assert SourceArtifact.objects.filter(source_type=SourceArtifact.SourceType.RESULTS).exists()
+    assert ContestResult.objects.exists()
+    assert ResultChoice.objects.exists()
+
+    replay = ingest_nc_post_election_contents(
+        results_content=_results_zip_bytes(),
+        election_date=date(2026, 3, 3),
+        retrieved_at=timezone.now(),
+    )
+    assert replay.pk == results_report.pk
