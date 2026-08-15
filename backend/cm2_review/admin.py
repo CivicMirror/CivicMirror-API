@@ -13,7 +13,7 @@ from .models import IdentityReviewCase, IdentityReviewSuggestion
 class IdentityReviewSuggestionInline(admin.TabularInline):
     model = IdentityReviewSuggestion
     extra = 0
-    raw_id_fields = ("suggested_person",)
+    autocomplete_fields = ("suggested_person",)
 
 
 class ReviewCaseActionForm(ActionForm):
@@ -39,7 +39,7 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
     list_display = ("priority", "case_type", "status", "created_at", "reviewed_at", "reviewed_by", "has_private_evidence")
     list_filter = ("status", "case_type", "has_private_evidence")
     search_fields = ("public_id", "deduplication_key", "provisional_person__canonical_name")
-    raw_id_fields = (
+    autocomplete_fields = (
         "source_record",
         "provisional_person",
         "result_choice",
@@ -312,4 +312,4 @@ class IdentityReviewSuggestionAdmin(admin.ModelAdmin):
     list_display = ("review_case", "rank", "suggested_person", "external_scheme", "uses_private_evidence")
     list_filter = ("external_scheme", "uses_private_evidence")
     search_fields = ("review_case__public_id", "suggested_person__canonical_name", "external_identifier")
-    raw_id_fields = ("review_case", "suggested_person")
+    autocomplete_fields = ("review_case", "suggested_person")
