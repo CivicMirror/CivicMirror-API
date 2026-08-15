@@ -16,7 +16,7 @@ from cm2_ingestion.contracts import (
 )
 from cm2_nc.source_records import NcCandidateRow
 
-from .identity import normalize_identity_part, stable_public_id
+from .identity import contest_public_id, normalize_identity_part, stable_public_id
 from .jurisdictions import map_jurisdiction
 from .measures import is_measure_contest
 from .offices import map_office
@@ -99,12 +99,11 @@ def _reported_name(row: NcCandidateRow) -> str:
 
 
 def _contest_key(row: NcCandidateRow, *, election: ElectionRecord, office: OfficeRecord) -> str:
-    return stable_public_id(
-        "contest",
-        election.public_id,
-        office.public_id,
-        row.party_contest or "all-voters",
-        "unexpired" if row.is_unexpired else "regular-term",
+    return contest_public_id(
+        election_public_id=election.public_id,
+        office_public_id=office.public_id,
+        party_contest=row.party_contest,
+        is_unexpired=row.is_unexpired,
     )
 
 

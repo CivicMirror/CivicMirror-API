@@ -88,8 +88,8 @@ def map_office(
     contest_name: str,
     jurisdiction: JurisdictionRecord,
     *,
-    term_years: int,
     vote_for: int,
+    term_years: int | None = None,
 ) -> OfficeRecord:
     del vote_for
     contest = _strip_unexpired(contest_name)
@@ -99,7 +99,7 @@ def map_office(
         jurisdiction_public_id=jurisdiction.public_id,
         canonical_name=canonical_name,
         role=_role(canonical_name),
-        default_term_months=term_years * 12,
+        default_term_months=term_years * 12 if term_years is not None else None,
         positions=1,
         record_status="provisional",
         source_key=contest,
