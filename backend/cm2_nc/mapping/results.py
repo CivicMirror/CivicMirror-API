@@ -24,6 +24,7 @@ from .offices import map_office
 _PARTY_SUFFIX_RE = re.compile(r"\s*\(([A-Z]{2,5})\)$")
 _UNEXPIRED_SUFFIX_RE = re.compile(r"\s*\(UNEXPIRED\)$")
 _WRITE_IN_MARKER_RE = re.compile(r"\(\s*WRITE-IN\s*\)|\bWRITE-IN\b|\(\s*MISCELLANEOUS\s*\)", re.IGNORECASE)
+_WRITE_IN_AGGREGATE_LABEL = "Write-In"
 
 
 def split_contest_label(raw_label: str) -> tuple[str, str, bool]:
@@ -104,13 +105,22 @@ def build_post_election_batch(
         row.row_number: split_contest_label(row.contest_name) for row in rows
     }
 
+    choice_labels_by_contest: dict[tuple[date, str, str], set[str]] = defaultdict(set)
+    for row in rows:
+        base_name, party, _ = split_by_row[row.row_number]
+        contest_key = (row.election_date, normalize_identity_part(base_name), party)
+        choice_labels_by_contest[contest_key].add(
+            normalized_choice_label(row.choice, classify_choice(row.choice))
+        )
+
     eligible_rows: list[NcResultRow] = []
     notices: list[IngestionNotice] = []
     seen_measures: set[tuple[date, str, str]] = set()
     for row in rows:
         base_name, party, _ = split_by_row[row.row_number]
-        if is_measure_contest(base_name):
-            measure_key = (row.election_date, normalize_identity_part(base_name), party)
+        contest_key = (row.election_date, normalize_identity_part(base_name), party)
+        if is_measure_contest(base_name, choice_labels=choice_labels_by_contest[contest_key]):
+            measure_key = contest_key
             if measure_key not in seen_measures:
                 seen_measures.add(measure_key)
                 notices.append(_measure_notice(row, base_name, party))
@@ -181,13 +191,15 @@ def build_post_election_batch(
             row.county_name,
             row.precinct,
             normalized_label,
+            row.choice,
         )
+        source_label = _WRITE_IN_AGGREGATE_LABEL if choice_type == "write_in_aggregate" else row.choice
         observations.append(
             PrecinctResultObservation(
                 source_observation_key=observation_key,
                 contest_public_id=contest_id,
                 source_choice_key=source_choice_key,
-                source_label=row.choice,
+                source_label=source_label,
                 normalized_label=normalized_label,
                 choice_type=choice_type,
                 choice_party=row.choice_party,
