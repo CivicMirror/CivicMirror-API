@@ -130,7 +130,7 @@ def test_parse_results_rows_reads_tab_delimited_zip_entry():
     content = (FIXTURES / "results_pct_sanitized.txt").read_text()
     rows = parse_results_rows(_zip_bytes(content))
 
-    assert len(rows) == 8
+    assert len(rows) == 11
     first = rows[0]
     assert first.county_name == "BUNCOMBE"
     assert first.election_date == date(2026, 3, 3)

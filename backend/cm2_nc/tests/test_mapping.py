@@ -360,6 +360,98 @@ def test_build_post_election_batch_classifies_write_ins():
     assert by_type == {"named_write_in", "write_in_aggregate"}
 
 
+def _harrellsville_write_in_row(**overrides) -> NcResultRow:
+    values = {
+        "county_name": "HERTFORD",
+        "precinct": "HV",
+        "contest_name": "TOWN OF HARRELLSVILLE MAYOR",
+        "contest_type": "C",
+        "choice_party": "",
+        "vote_for": 1,
+    }
+    values.update(overrides)
+    return _result_row(**values)
+
+
+def test_build_post_election_batch_tolerates_duplicate_anonymous_write_in_label_variants():
+    first = _harrellsville_write_in_row(row_number=10, choice="Write-In (Miscellaneous)", total_votes=2)
+    second = _harrellsville_write_in_row(row_number=11, choice="MIscellaneous (Write-In)", total_votes=4)
+
+    batch = build_post_election_batch((first, second), existing_elections=(_primary_election(),))
+
+    assert len(batch.observations) == 2
+    left, right = batch.observations
+    assert left.choice_type == right.choice_type == "write_in_aggregate"
+    # Distinct per-row observations ...
+    assert left.source_observation_key != right.source_observation_key
+    # ... that still aggregate into a single bucket with a canonicalized label.
+    assert left.source_choice_key == right.source_choice_key
+    assert left.source_label == right.source_label == "Write-In"
+    assert left.normalized_label == right.normalized_label == "write-in"
+
+
+def test_build_post_election_batch_still_rejects_truly_identical_duplicate_rows():
+    first = _harrellsville_write_in_row(row_number=10, choice="Write-In (Miscellaneous)", total_votes=2)
+    duplicate = _harrellsville_write_in_row(row_number=11, choice="Write-In (Miscellaneous)", total_votes=2)
+
+    with pytest.raises(ContractValidationError):
+        build_post_election_batch((first, duplicate), existing_elections=(_primary_election(),))
+
+
+def test_build_post_election_batch_preserves_source_label_for_named_write_ins_and_candidates():
+    candidate = _result_row(row_number=12, choice="Chuck Edwards", total_votes=33)
+    named = _result_row(row_number=13, choice="Jamie Ager (Write-In)", total_votes=2)
+
+    batch = build_post_election_batch((candidate, named), existing_elections=(_primary_election(),))
+
+    labels = {observation.choice_type: observation.source_label for observation in batch.observations}
+    assert labels == {"candidate": "Chuck Edwards", "named_write_in": "Jamie Ager (Write-In)"}
+
+
+def test_is_measure_contest_falls_back_to_for_against_choice_set():
+    assert is_measure_contest("TOWN OF ROBERSONVILLE MIXED BEVERAGE ELECTION") is False
+    assert (
+        is_measure_contest(
+            "TOWN OF ROBERSONVILLE MIXED BEVERAGE ELECTION",
+            choice_labels={"for", "against"},
+        )
+        is True
+    )
+    assert (
+        is_measure_contest("CITY OF ASHEVILLE CITY COUNCIL", choice_labels={"nina ireland", "write-in"})
+        is False
+    )
+
+
+def test_build_post_election_batch_excludes_keywordless_for_against_contest_as_measure():
+    for_row = _result_row(
+        row_number=20,
+        county_name="MARTIN",
+        precinct="RBV",
+        contest_name="TOWN OF ROBERSONVILLE MIXED BEVERAGE ELECTION",
+        contest_type="C",
+        choice="For",
+        choice_party="",
+        total_votes=65,
+    )
+    against_row = _result_row(
+        row_number=21,
+        county_name="MARTIN",
+        precinct="RBV",
+        contest_name="TOWN OF ROBERSONVILLE MIXED BEVERAGE ELECTION",
+        contest_type="C",
+        choice="Against",
+        choice_party="",
+        total_votes=37,
+    )
+
+    batch = build_post_election_batch((for_row, against_row), existing_elections=(_primary_election(),))
+
+    assert batch.observations == ()
+    assert batch.new_contests == ()
+    assert [notice.code for notice in batch.notices] == ["measure_excluded"]
+
+
 def test_build_post_election_batch_raises_when_no_election_matches_date():
     with pytest.raises(ContractValidationError):
         build_post_election_batch((_result_row(),), existing_elections=())

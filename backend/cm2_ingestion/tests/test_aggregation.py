@@ -86,3 +86,48 @@ def test_aggregation_preserves_choice_party():
         )
     )
     assert aggregated[0].choice_party == "REP"
+
+
+def test_canonicalized_write_in_aggregate_label_variants_merge_into_one_choice():
+    # Producers must canonicalize source_label for write_in_aggregate choices; two source rows whose raw
+    # labels differ ("Write-In (Miscellaneous)" vs "MIscellaneous (Write-In)") then merge cleanly here.
+    aggregated = aggregate_precinct_observations(
+        (
+            PrecinctResultObservation(
+                source_observation_key="hv/write-in-miscellaneous",
+                contest_public_id="nc/2026-03-03/primary/harrellsville-mayor",
+                source_choice_key="write-in",
+                source_label="Write-In",
+                normalized_label="write-in",
+                choice_type="write_in_aggregate",
+                choice_party="",
+                vote_total=2,
+            ),
+            PrecinctResultObservation(
+                source_observation_key="hv/miscellaneous-write-in",
+                contest_public_id="nc/2026-03-03/primary/harrellsville-mayor",
+                source_choice_key="write-in",
+                source_label="Write-In",
+                normalized_label="write-in",
+                choice_type="write_in_aggregate",
+                choice_party="",
+                vote_total=4,
+            ),
+        )
+    )
+
+    assert len(aggregated) == 1
+    choice = aggregated[0]
+    assert choice.vote_total == 6
+    assert choice.observation_count == 2
+    assert choice.source_label == "Write-In"
+
+
+def test_write_in_aggregate_observations_with_uncanonicalized_labels_still_conflict():
+    with pytest.raises(ContractValidationError):
+        aggregate_precinct_observations(
+            (
+                observation("hv/a", "write-in", "Write-In (Miscellaneous)", "write_in_aggregate", 2),
+                observation("hv/b", "write-in", "MIscellaneous (Write-In)", "write_in_aggregate", 4),
+            )
+        )
