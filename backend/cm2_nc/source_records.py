@@ -25,3 +25,18 @@ class NcCandidateRow:
     is_partisan: bool
     vote_for: int
     term_years: int
+
+
+@dataclass(frozen=True, slots=True)
+class NcResultRow:
+    row_number: int
+    county_name: str
+    election_date: date
+    precinct: str
+    contest_type: str
+    contest_name: str
+    choice: str
+    choice_party: str
+    vote_for: int
+    total_votes: int
+    is_real_precinct: bool
