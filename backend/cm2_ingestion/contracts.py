@@ -253,7 +253,7 @@ def validate_post_election_batch(batch: PostElectionBatch) -> None:
 
     jurisdiction_ids = _unique_keys(batch.new_jurisdictions, "public_id", "jurisdiction")
     office_ids = _unique_keys(batch.new_offices, "public_id", "office")
-    contest_ids = _unique_keys(batch.new_contests, "public_id", "contest")
+    _unique_keys(batch.new_contests, "public_id", "contest")
     _validate_jurisdiction_hierarchy(batch.new_jurisdictions, jurisdiction_ids)
 
     for jurisdiction in batch.new_jurisdictions:
