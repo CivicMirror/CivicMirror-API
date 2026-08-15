@@ -8,7 +8,7 @@ class SyncLogAdmin(admin.ModelAdmin):
     list_display = ("state", "source_system", "capability", "status", "started_at", "completed_at")
     list_filter = ("state", "source_system", "capability", "status")
     search_fields = ("run_key",)
-    raw_id_fields = ("source_artifact",)
+    autocomplete_fields = ("source_artifact",)
     readonly_fields = (
         "id",
         "run_key",
@@ -31,5 +31,5 @@ class ReconciliationReportAdmin(admin.ModelAdmin):
     list_display = ("public_id", "sync_log", "source_artifact", "created_at")
     list_filter = ("sync_log__state", "sync_log__capability", "sync_log__status")
     search_fields = ("public_id", "sync_log__run_key")
-    raw_id_fields = ("sync_log", "source_artifact")
+    autocomplete_fields = ("sync_log", "source_artifact")
     readonly_fields = ("id", "public_id", "sync_log", "source_artifact", "details", "created_at", "updated_at")

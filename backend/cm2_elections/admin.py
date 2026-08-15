@@ -18,7 +18,7 @@ class JurisdictionAdmin(admin.ModelAdmin):
     list_display = ("name", "classification", "state", "record_status", "parent")
     list_filter = ("state", "classification", "record_status")
     search_fields = ("public_id", "name", "source_key")
-    raw_id_fields = ("parent", "source_artifact")
+    autocomplete_fields = ("parent", "source_artifact")
 
 
 @admin.register(Office)
@@ -26,7 +26,7 @@ class OfficeAdmin(admin.ModelAdmin):
     list_display = ("canonical_name", "jurisdiction", "role", "positions", "record_status")
     list_filter = ("record_status", "role", "jurisdiction__state")
     search_fields = ("public_id", "canonical_name", "jurisdiction__name", "source_key")
-    raw_id_fields = ("jurisdiction", "source_artifact")
+    autocomplete_fields = ("jurisdiction", "source_artifact")
 
 
 @admin.register(Election)
@@ -34,7 +34,7 @@ class ElectionAdmin(admin.ModelAdmin):
     list_display = ("name", "election_date", "election_type", "lifecycle_status")
     list_filter = ("election_type", "lifecycle_status", "election_date")
     search_fields = ("public_id", "name", "source_key")
-    raw_id_fields = ("source_artifact",)
+    autocomplete_fields = ("source_artifact",)
     ordering = ("-election_date",)
 
 
@@ -43,7 +43,7 @@ class ContestAdmin(admin.ModelAdmin):
     list_display = ("office", "election", "party_contest", "lifecycle_status", "result_status")
     list_filter = ("lifecycle_status", "result_status", "is_partisan", "is_unexpired")
     search_fields = ("public_id", "office__canonical_name", "election__name", "party_contest", "source_key")
-    raw_id_fields = ("election", "office", "source_artifact")
+    autocomplete_fields = ("election", "office", "source_artifact")
 
 
 @admin.register(Person)
@@ -51,7 +51,7 @@ class PersonAdmin(admin.ModelAdmin):
     list_display = ("canonical_name", "identity_state", "family_name", "given_name", "merged_into")
     list_filter = ("identity_state",)
     search_fields = ("public_id", "canonical_name", "given_name", "family_name", "source_key")
-    raw_id_fields = ("merged_into", "source_artifact")
+    autocomplete_fields = ("merged_into", "source_artifact")
 
 
 @admin.register(PersonIdentifier)
@@ -59,7 +59,7 @@ class PersonIdentifierAdmin(admin.ModelAdmin):
     list_display = ("scheme", "identifier", "person", "verification_method", "verified_at")
     list_filter = ("scheme", "verification_method")
     search_fields = ("scheme", "identifier", "person__canonical_name", "person__public_id")
-    raw_id_fields = ("person", "verified_by")
+    autocomplete_fields = ("person", "verified_by")
 
 
 @admin.register(PersonSourceRecord)
@@ -67,7 +67,7 @@ class PersonSourceRecordAdmin(admin.ModelAdmin):
     list_display = ("reported_name", "ballot_name", "source_artifact", "source_row_key", "person")
     list_filter = ("source_artifact__source_system", "source_artifact__source_type")
     search_fields = ("reported_name", "ballot_name", "source_row_key", "person__public_id")
-    raw_id_fields = ("source_artifact", "person")
+    autocomplete_fields = ("source_artifact", "person")
     readonly_fields = (
         "id",
         "source_artifact",
@@ -95,7 +95,7 @@ class CandidacyAdmin(admin.ModelAdmin):
     list_display = ("ballot_name", "contest", "person", "party_candidate", "status")
     list_filter = ("status", "party_candidate")
     search_fields = ("public_id", "ballot_name", "person__canonical_name", "contest__public_id")
-    raw_id_fields = ("person", "contest", "source_artifact", "source_records")
+    autocomplete_fields = ("person", "contest", "source_artifact", "source_records")
 
 
 @admin.register(OfficeTerm)
@@ -103,4 +103,4 @@ class OfficeTermAdmin(admin.ModelAdmin):
     list_display = ("person", "office", "role", "start_date", "end_date", "method_of_selection")
     list_filter = ("method_of_selection", "role")
     search_fields = ("public_id", "person__canonical_name", "office__canonical_name")
-    raw_id_fields = ("person", "office", "source_artifact")
+    autocomplete_fields = ("person", "office", "source_artifact")

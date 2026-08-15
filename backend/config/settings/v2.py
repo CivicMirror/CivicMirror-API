@@ -3,7 +3,7 @@ from cm2_core.isolation import require_database_name, require_task_queue
 from .base import *  # noqa: F401,F403
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "cm2_core.admin_site.CivicMirrorAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
