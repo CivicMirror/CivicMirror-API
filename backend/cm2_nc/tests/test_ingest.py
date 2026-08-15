@@ -174,7 +174,9 @@ def _results_zip_bytes() -> bytes:
     text = (FIXTURES / "results_pct_sanitized.txt").read_text()
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
-        archive.writestr("results_pct_20260303.txt", text)
+        # Pin the entry timestamp: zipfile defaults to "now" (2-second resolution), which would make the
+        # bytes -- and therefore the artifact content hash -- differ between calls and break replay tests.
+        archive.writestr(zipfile.ZipInfo("results_pct_20260303.txt", date_time=(2026, 3, 3, 0, 0, 0)), text)
     return buffer.getvalue()
 
 
@@ -208,3 +210,55 @@ def test_nc_post_election_ingestion_persists_results_for_existing_election():
         retrieved_at=timezone.now(),
     )
     assert replay.pk == results_report.pk
+
+
+@pytest.mark.django_db
+def test_nc_post_election_ingestion_preserves_pre_election_owned_contest_fields():
+    pre_report = ingest_nc_pre_election_contents(**fixture_content(), retrieved_at=timezone.now())
+    assert pre_report is not None
+    election = Election.objects.filter(election_date=date(2026, 3, 3)).first()
+    if election is None:
+        election = Election.objects.create(
+            public_id="nc/election/2026-03-03/primary",
+            name="2026 North Carolina Primary",
+            election_date=date(2026, 3, 3),
+            election_type="primary",
+            lifecycle_status="active",
+        )
+
+    before = {
+        contest.public_id: (
+            contest.source_key,
+            contest.source_artifact_id,
+            contest.lifecycle_status,
+            contest.result_status,
+        )
+        for contest in Contest.objects.all()
+    }
+    assert before
+
+    results_report = ingest_nc_post_election_contents(
+        results_content=_results_zip_bytes(),
+        election_date=date(2026, 3, 3),
+        retrieved_at=timezone.now(),
+    )
+
+    after = {
+        contest.public_id: (
+            contest.source_key,
+            contest.source_artifact_id,
+            contest.lifecycle_status,
+            contest.result_status,
+        )
+        for contest in Contest.objects.filter(public_id__in=before)
+    }
+    assert after == before
+
+    # The check above is only meaningful if the results file actually landed on a pre-existing contest.
+    assert ContestResult.objects.filter(contest__public_id__in=before).exists()
+
+    result_only = results_report.details["result_only_contests"]
+    assert result_only
+    assert set(result_only).isdisjoint(before)
+    assert set(result_only) <= set(Contest.objects.values_list("public_id", flat=True))
+    assert ContestResult.objects.filter(contest__public_id__in=result_only).exists()
