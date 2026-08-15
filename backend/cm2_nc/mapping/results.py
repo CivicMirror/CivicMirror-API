@@ -173,10 +173,11 @@ def build_post_election_batch(
         contest_id = row_contest_id[row.row_number]
         choice_type = classify_choice(row.choice)
         normalized_label = normalized_choice_label(row.choice, choice_type)
-        source_choice_key = stable_public_id("result-choice", contest_id, normalized_label)
+        source_choice_key = stable_public_id("result-choice", contest_id, choice_type, normalized_label)
         observation_key = stable_public_id(
             "result-observation",
             contest_id,
+            choice_type,
             row.county_name,
             row.precinct,
             normalized_label,
