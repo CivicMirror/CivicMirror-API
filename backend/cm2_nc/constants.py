@@ -6,3 +6,5 @@ CANDIDATE_LIST_URL = (
 SOURCE_TIMEOUT_SECONDS = 60
 UPCOMING_PARSER_VERSION = "nc-upcoming-v1"
 CANDIDATE_PARSER_VERSION = "nc-candidates-v1"
+S3_BASE_URL = "https://s3.amazonaws.com/dl.ncsbe.gov"
+RESULTS_PARSER_VERSION = "nc-results-v1"

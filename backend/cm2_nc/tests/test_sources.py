@@ -114,3 +114,63 @@ def test_source_acquisition_uses_official_url_timeout_and_status_check(source_cl
     assert source.acquire() == payload
     assert session.calls == [(url, 60)]
     assert session.response.status_checked is True
+
+
+import io
+import zipfile
+from datetime import date
+from pathlib import Path
+
+from cm2_nc.sources.results import NcResultsZipSource, parse_results_rows, results_zip_url
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _zip_bytes(text: str) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("results_pct_20260303.txt", text)
+    return buffer.getvalue()
+
+
+def test_parse_results_rows_reads_tab_delimited_zip_entry():
+    content = (FIXTURES / "results_pct_sanitized.txt").read_text()
+    rows = parse_results_rows(_zip_bytes(content))
+
+    assert len(rows) == 8
+    first = rows[0]
+    assert first.county_name == "BUNCOMBE"
+    assert first.election_date == date(2026, 3, 3)
+    assert first.precinct == "19.1"
+    assert first.contest_type == "S"
+    assert first.contest_name == "US HOUSE OF REPRESENTATIVES DISTRICT 11 (REP)"
+    assert first.choice == "Chuck Edwards"
+    assert first.choice_party == "REP"
+    assert first.vote_for == 1
+    assert first.total_votes == 33
+    assert first.is_real_precinct is True
+
+
+def test_parse_results_rows_handles_blank_choice_party():
+    content = (FIXTURES / "results_pct_sanitized.txt").read_text()
+    rows = parse_results_rows(_zip_bytes(content))
+    nonpartisan = next(row for row in rows if row.choice == "Nina Ireland")
+    assert nonpartisan.choice_party == ""
+
+
+def test_parse_results_rows_treats_data_unavailable_placeholder_as_empty():
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("Readme.txt", "Data Unavailable")
+    assert parse_results_rows(buffer.getvalue()) == ()
+
+
+def test_results_zip_url_uses_enrs_prefix():
+    assert results_zip_url(date(2026, 3, 3)) == (
+        "https://s3.amazonaws.com/dl.ncsbe.gov/ENRS/2026_03_03/results_pct_20260303.zip"
+    )
+
+
+def test_nc_results_zip_source_builds_url_from_election_date():
+    source = NcResultsZipSource(election_date=date(2026, 3, 3))
+    assert source.url.endswith("ENRS/2026_03_03/results_pct_20260303.zip")
