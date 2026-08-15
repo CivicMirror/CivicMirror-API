@@ -4,6 +4,7 @@ from cm2_nc.mapping.identity import contest_public_id, stable_public_id
 from cm2_nc.mapping.jurisdictions import map_jurisdiction
 from cm2_nc.mapping.measures import is_measure_contest
 from cm2_nc.mapping.offices import map_office
+from cm2_nc.mapping.results import classify_choice, normalized_choice_label, split_contest_label
 
 
 @pytest.mark.parametrize(
@@ -211,3 +212,53 @@ def test_map_office_without_term_years_leaves_default_term_null():
     jurisdiction = map_jurisdiction("US SENATE (REP)".replace(" (REP)", ""), "")[-1]
     office = map_office("US SENATE", jurisdiction, vote_for=1)
     assert office.default_term_months is None
+
+
+def test_split_contest_label_extracts_party_only():
+    base, party, is_unexpired = split_contest_label("US HOUSE OF REPRESENTATIVES DISTRICT 11 (REP)")
+    assert base == "US HOUSE OF REPRESENTATIVES DISTRICT 11"
+    assert party == "REP"
+    assert is_unexpired is False
+
+
+def test_split_contest_label_extracts_unexpired_only():
+    base, party, is_unexpired = split_contest_label("GATES COUNTY BOARD OF EDUCATION DISTRICT 02 (UNEXPIRED)")
+    assert base == "GATES COUNTY BOARD OF EDUCATION DISTRICT 02"
+    assert party == ""
+    assert is_unexpired is True
+
+
+def test_split_contest_label_extracts_unexpired_and_party_in_order():
+    base, party, is_unexpired = split_contest_label(
+        "PERSON COUNTY BOARD OF COMMISSIONERS (UNEXPIRED) (REP)"
+    )
+    assert base == "PERSON COUNTY BOARD OF COMMISSIONERS"
+    assert party == "REP"
+    assert is_unexpired is True
+
+
+def test_split_contest_label_with_no_suffix():
+    base, party, is_unexpired = split_contest_label("CITY OF ASHEVILLE CITY COUNCIL")
+    assert base == "CITY OF ASHEVILLE CITY COUNCIL"
+    assert party == ""
+    assert is_unexpired is False
+
+
+def test_classify_choice_ordinary_candidate():
+    assert classify_choice("Chuck Edwards") == "candidate"
+
+
+def test_classify_choice_named_write_in():
+    assert classify_choice("Jamie Ager (Write-In)") == "named_write_in"
+
+
+def test_classify_choice_anonymous_write_in_both_spellings():
+    assert classify_choice("Write-In (Miscellaneous)") == "write_in_aggregate"
+    assert classify_choice("Miscellaneous (Write-In)") == "write_in_aggregate"
+    assert classify_choice("MIscellaneous (Write-In)") == "write_in_aggregate"
+
+
+def test_normalized_choice_label_strips_write_in_marker():
+    assert normalized_choice_label("Jamie Ager (Write-In)", "named_write_in") == "jamie ager"
+    assert normalized_choice_label("Chuck Edwards", "candidate") == "chuck edwards"
+    assert normalized_choice_label("Write-In (Miscellaneous)", "write_in_aggregate") == "write-in"
