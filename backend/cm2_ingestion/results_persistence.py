@@ -167,11 +167,15 @@ def _persist_contest_result(
                 normalized_label=choice.normalized_label,
             )
             if not resolution_status:
-                candidacy, _ = _create_provisional_candidacy(artifact=artifact, contest=contest, choice=choice)
+                candidacy, provisional_review_case = _create_provisional_candidacy(
+                    artifact=artifact, contest=contest, choice=choice
+                )
                 resolution_status = ResultChoice.ResolutionStatus.PROVISIONAL
                 counts["people_created"] += 1
                 counts["candidacies_created"] += 1
-                counts["review_cases_created"] += 1
+                if provisional_review_case is not None:
+                    counts["review_cases_created"] += 1
+                    details["review_cases"].append(provisional_review_case.public_id)
 
         values = {
             "source_label": choice.source_label,
@@ -254,9 +258,30 @@ def _persist_results_batch(
     }
     if len(elections) != len(existing_election_ids):
         raise ContractValidationError("post-election batch references an election that does not exist")
-    contests = entities.persist_contests(
-        artifact=artifact, records=batch.new_contests, elections=elections, offices=offices, counts=counts, details=details
+    # Contests that already exist were created by the pre-election (candidate filing) path, which owns
+    # their source_key/source_artifact/lifecycle_status/result_status. Re-upserting them here would
+    # clobber those fields and make the two ingestion paths fight on every alternating run.
+    referenced_contest_ids = [contest.public_id for contest in batch.new_contests]
+    existing_contests = {
+        contest.public_id: contest
+        for contest in Contest.objects.filter(public_id__in=referenced_contest_ids)
+    }
+    result_only_records = tuple(
+        record for record in batch.new_contests if record.public_id not in existing_contests
     )
+    contests = dict(existing_contests)
+    contests.update(
+        entities.persist_contests(
+            artifact=artifact,
+            records=result_only_records,
+            elections=elections,
+            offices=offices,
+            counts=counts,
+            details=details,
+        )
+    )
+    for record in result_only_records:
+        details["result_only_contests"].append(record.public_id)
 
     observations_by_contest: dict[str, list] = {}
     for observation in batch.observations:
