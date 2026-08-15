@@ -379,3 +379,26 @@ def test_build_post_election_batch_disambiguates_by_party_presence():
         existing_elections=(general, _primary_election()),
     )
     assert batch.new_contests[0].election_public_id == "nc/election/2026-03-03/primary"
+
+
+def test_build_post_election_batch_distinguishes_candidate_from_own_named_write_in():
+    candidate = _result_row(
+        row_number=5,
+        precinct="20.1",
+        contest_name="US HOUSE OF REPRESENTATIVES DISTRICT 11 (DEM)",
+        choice="Jamie Ager",
+        choice_party="DEM",
+        total_votes=10,
+    )
+    write_in = _result_row(
+        row_number=6,
+        precinct="20.1",
+        contest_name="US HOUSE OF REPRESENTATIVES DISTRICT 11 (DEM)",
+        choice="Jamie Ager (Write-In)",
+        choice_party="DEM",
+        total_votes=1,
+    )
+    batch = build_post_election_batch((candidate, write_in), existing_elections=(_primary_election(),))
+    candidate_observation, write_in_observation = batch.observations
+    assert candidate_observation.source_observation_key != write_in_observation.source_observation_key
+    assert candidate_observation.source_choice_key != write_in_observation.source_choice_key
