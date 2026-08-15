@@ -4,7 +4,7 @@ from typing import Protocol
 from .contracts import (
     CertificationEvidence,
     ElectionRecord,
-    PrecinctResultObservation,
+    PostElectionBatch,
     PreElectionBatch,
 )
 
@@ -35,7 +35,12 @@ class ResultsSource(Protocol):
 
     def acquire(self) -> bytes: ...
 
-    def parse(self, content: bytes) -> tuple[PrecinctResultObservation, ...]: ...
+    def parse(
+        self,
+        content: bytes,
+        *,
+        existing_elections: tuple[ElectionRecord, ...] = (),
+    ) -> PostElectionBatch: ...
 
 
 class CertificationSource(Protocol):

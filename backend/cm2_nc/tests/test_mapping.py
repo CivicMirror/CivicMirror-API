@@ -1,10 +1,19 @@
+from datetime import date
+
 import pytest
 
+from cm2_ingestion.contracts import ContractValidationError, ElectionRecord
 from cm2_nc.mapping.identity import contest_public_id, stable_public_id
 from cm2_nc.mapping.jurisdictions import map_jurisdiction
 from cm2_nc.mapping.measures import is_measure_contest
 from cm2_nc.mapping.offices import map_office
-from cm2_nc.mapping.results import classify_choice, normalized_choice_label, split_contest_label
+from cm2_nc.mapping.results import (
+    build_post_election_batch,
+    classify_choice,
+    normalized_choice_label,
+    split_contest_label,
+)
+from cm2_nc.source_records import NcResultRow
 
 
 @pytest.mark.parametrize(
@@ -262,3 +271,111 @@ def test_normalized_choice_label_strips_write_in_marker():
     assert normalized_choice_label("Jamie Ager (Write-In)", "named_write_in") == "jamie ager"
     assert normalized_choice_label("Chuck Edwards", "candidate") == "chuck edwards"
     assert normalized_choice_label("Write-In (Miscellaneous)", "write_in_aggregate") == "write-in"
+
+
+def _result_row(**overrides) -> NcResultRow:
+    values = {
+        "row_number": 2,
+        "county_name": "BUNCOMBE",
+        "election_date": date(2026, 3, 3),
+        "precinct": "19.1",
+        "contest_type": "S",
+        "contest_name": "US HOUSE OF REPRESENTATIVES DISTRICT 11 (REP)",
+        "choice": "Chuck Edwards",
+        "choice_party": "REP",
+        "vote_for": 1,
+        "total_votes": 33,
+        "is_real_precinct": True,
+    }
+    values.update(overrides)
+    return NcResultRow(**values)
+
+
+def _primary_election() -> ElectionRecord:
+    return ElectionRecord(
+        public_id="nc/election/2026-03-03/primary",
+        name="2026 North Carolina Primary",
+        election_date=date(2026, 3, 3),
+        election_type="primary",
+        lifecycle_status="active",
+        source_key="2026-03-03-primary",
+    )
+
+
+def test_build_post_election_batch_matches_existing_election_and_produces_observation():
+    batch = build_post_election_batch((_result_row(),), existing_elections=(_primary_election(),))
+    assert batch.state == "NC"
+    assert len(batch.observations) == 1
+    observation = batch.observations[0]
+    assert observation.choice_type == "candidate"
+    assert observation.choice_party == "REP"
+    assert observation.vote_total == 33
+    contest = batch.new_contests[0]
+    assert contest.election_public_id == "nc/election/2026-03-03/primary"
+    assert contest.party_contest == "REP"
+    assert contest.is_partisan is True
+
+
+def test_build_post_election_batch_reuses_contest_public_id_formula_across_precincts():
+    row_a = _result_row(precinct="19.1", total_votes=33)
+    row_b = _result_row(precinct="20.1", total_votes=20)
+    batch = build_post_election_batch((row_a, row_b), existing_elections=(_primary_election(),))
+    contest_ids = {contest.public_id for contest in batch.new_contests}
+    assert len(contest_ids) == 1
+    assert len({observation.contest_public_id for observation in batch.observations}) == 1
+
+
+def test_build_post_election_batch_excludes_measures_with_notice():
+    row = _result_row(
+        contest_name="CITY OF HENDERSONVILLE TRANSPORTATION BONDS REFERENDUM",
+        contest_type="C",
+        choice="FOR",
+        choice_party="",
+        vote_for=1,
+    )
+    batch = build_post_election_batch((row,), existing_elections=(_primary_election(),))
+    assert batch.observations == ()
+    assert batch.notices[0].code == "measure_excluded"
+
+
+def test_build_post_election_batch_classifies_write_ins():
+    named = _result_row(
+        row_number=3,
+        choice="Jamie Ager (Write-In)",
+        choice_party="DEM",
+        total_votes=2,
+    )
+    aggregate = _result_row(
+        row_number=4,
+        precinct="1.1",
+        contest_name="PERSON COUNTY BOARD OF COMMISSIONERS (UNEXPIRED) (REP)",
+        contest_type="C",
+        choice="Write-In (Miscellaneous)",
+        choice_party="",
+        county_name="PERSON",
+        total_votes=1,
+    )
+    batch = build_post_election_batch((named, aggregate), existing_elections=(_primary_election(),))
+    by_type = {observation.choice_type for observation in batch.observations}
+    assert by_type == {"named_write_in", "write_in_aggregate"}
+
+
+def test_build_post_election_batch_raises_when_no_election_matches_date():
+    with pytest.raises(ContractValidationError):
+        build_post_election_batch((_result_row(),), existing_elections=())
+
+
+def test_build_post_election_batch_disambiguates_by_party_presence():
+    general = ElectionRecord(
+        public_id="nc/election/2026-03-03/general",
+        name="General",
+        election_date=date(2026, 3, 3),
+        election_type="general",
+        lifecycle_status="active",
+        source_key="2026-03-03-general",
+    )
+    batch = build_post_election_batch(
+        (_result_row(),),
+        existing_elections=(general, _primary_election()),
+    )
+    assert batch.new_contests[0].election_public_id == "nc/election/2026-03-03/primary"
