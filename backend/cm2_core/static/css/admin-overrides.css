@@ -1,5 +1,14 @@
 /* Guarantees the floating bulk-action bar never clips its submit button,
-   regardless of how many extra ActionForm fields a ModelAdmin adds inline. */
+   regardless of how many extra ActionForm fields a ModelAdmin adds inline.
+   The outer fixed-position bar has a hardcoded height (e.g. lg:h-[64px])
+   that assumes a single row of content; once .primary wraps to more than
+   one row that fixed height clips everything below the first row,
+   including the submit button. Let the bar grow to fit instead. */
+div:has(> #changelist-actions-wrapper) {
+    height: auto !important;
+    min-height: 64px;
+}
+
 #changelist-actions-wrapper,
 #changelist-actions {
     overflow-x: auto;
