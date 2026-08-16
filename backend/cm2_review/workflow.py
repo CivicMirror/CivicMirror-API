@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from cm2_elections.models import Person, PersonIdentifier
+from cm2_elections.models import Candidacy, Person, PersonIdentifier
 
 from .models import IdentityReviewAuditEvent, IdentityReviewCase, IdentityReviewSuggestion
 
@@ -100,6 +100,28 @@ def transition_review_case(
         provisional.identity_state = Person.IdentityState.RESOLVED
         provisional.merged_into = None
         provisional.save(update_fields=["identity_state", "merged_into", "updated_at"])
+    elif action == IdentityReviewCase.ResolutionAction.CONFIRM_NEW and review_case.result_choice_id is not None:
+        result_choice = review_case.result_choice
+        if result_choice.candidacy_id is not None:
+            raise ValidationError({"result_choice": "This result choice is already linked to a candidacy."})
+        contest = result_choice.contest_result.contest
+        new_person = Person.objects.create(
+            canonical_name=result_choice.source_label,
+            identity_state=Person.IdentityState.RESOLVED,
+            source_artifact=result_choice.source_artifact,
+            source_key=result_choice.source_choice_key,
+        )
+        candidacy = Candidacy.objects.create(
+            person=new_person,
+            contest=contest,
+            ballot_name=result_choice.source_label,
+            status=Candidacy.Status.WRITE_IN,
+            source_artifact=result_choice.source_artifact,
+            source_key=result_choice.source_choice_key,
+        )
+        result_choice.candidacy = candidacy
+        result_choice.resolution_status = result_choice.ResolutionStatus.MATCHED
+        result_choice.save(update_fields=["candidacy", "resolution_status", "updated_at"])
     elif action in {
         IdentityReviewCase.ResolutionAction.LINK_EXISTING,
         IdentityReviewCase.ResolutionAction.MERGE_PEOPLE,
