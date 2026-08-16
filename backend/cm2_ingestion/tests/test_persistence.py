@@ -30,8 +30,10 @@ def test_valid_batch_creates_domain_provenance_review_and_aggregate_report(sourc
     assert Person.objects.count() == 1
     assert PersonSourceRecord.objects.count() == 2
     assert Candidacy.objects.count() == 1
-    assert IdentityReviewCase.objects.filter(status=IdentityReviewCase.Status.OPEN).count() == 1
-    assert IdentityReviewAuditEvent.objects.filter(event_type=IdentityReviewAuditEvent.EventType.CREATED).count() == 1
+    # No existing person resembles this one, so there is nothing to reconcile:
+    # the person is auto-resolved instead of queuing a no-op review case.
+    assert IdentityReviewCase.objects.count() == 0
+    assert IdentityReviewAuditEvent.objects.filter(event_type=IdentityReviewAuditEvent.EventType.CREATED).count() == 0
     assert report.sync_log.status == SyncLog.Status.SUCCESS
     assert report.sync_log.aggregate_counts == {
         "candidacies_created": 1,
@@ -44,13 +46,15 @@ def test_valid_batch_creates_domain_provenance_review_and_aggregate_report(sourc
         "jurisdictions_updated": 0,
         "offices_created": 1,
         "offices_updated": 0,
+        "people_auto_resolved": 1,
         "people_created": 1,
-        "review_cases_created": 1,
+        "review_cases_created": 0,
         "source_records_created": 2,
     }
     person = Person.objects.get()
     assert person.public_id in report.details["created"]["people"]
-    assert IdentityReviewCase.objects.get().public_id in report.details["review_cases"]
+    assert person.identity_state == Person.IdentityState.RESOLVED
+    assert report.details["review_cases"] == []
 
     sync_output = json.dumps(report.sync_log.aggregate_counts)
     assert "DeDreana" not in sync_output
@@ -203,7 +207,11 @@ def test_equal_names_without_deterministic_lineage_create_distinct_people(source
 
     assert Person.objects.filter(canonical_name="DeDreana Freeman").count() == 2
     assert Candidacy.objects.count() == 2
-    assert IdentityReviewCase.objects.count() == 2
+    # The first person has no existing match, so it's auto-resolved with no
+    # case; the second person matches the first by name and still gets a
+    # fuzzy-match case for a human to reconcile.
+    assert IdentityReviewCase.objects.count() == 1
+    assert IdentityReviewCase.objects.get().case_type == IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH
 
 
 @pytest.mark.django_db
@@ -248,7 +256,11 @@ def test_same_row_key_from_different_source_url_does_not_authorize_person_link(s
 
     assert Person.objects.count() == 2
     assert Candidacy.objects.count() == 2
-    assert IdentityReviewCase.objects.count() == 2
+    # First sync's person has no existing match and is auto-resolved with no
+    # case; the second sync's person matches it by name and still gets a
+    # fuzzy-match case for a human to reconcile.
+    assert IdentityReviewCase.objects.count() == 1
+    assert IdentityReviewCase.objects.get().case_type == IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH
 
 
 @pytest.mark.django_db

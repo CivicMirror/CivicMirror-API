@@ -35,6 +35,7 @@ _COUNT_KEYS = (
     "jurisdictions_updated",
     "offices_created",
     "offices_updated",
+    "people_auto_resolved",
     "people_created",
     "review_cases_created",
     "source_records_created",
@@ -321,38 +322,42 @@ def _persist_batch(*, artifact: SourceArtifact, batch: PreElectionBatch, sync_lo
         )
 
         if person_created:
-            has_private_evidence = any(
-                evidence.protected_address or evidence.protected_phone or evidence.protected_email
-                for evidence in candidate.source_records
-            )
             match_candidates = find_person_match_candidates(
                 canonical_name=person.canonical_name,
                 family_name=person.family_name,
                 exclude_person_id=person.id,
             )
-            case_type = (
-                IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH
-                if match_candidates
-                else IdentityReviewCase.CaseType.PERSON_IDENTITY
-            )
-            review_case, review_created = create_review_case(
-                deduplication_key=f"new-person:{artifact.public_id}:{candidate.filing_key}",
-                defaults={
-                    "case_type": case_type,
-                    "source_record": source_records[0],
-                    "provisional_person": person,
-                    "supporting_evidence": {
-                        "source_system": artifact.source_system,
-                        "filing_key": candidate.filing_key,
+            if match_candidates:
+                has_private_evidence = any(
+                    evidence.protected_address or evidence.protected_phone or evidence.protected_email
+                    for evidence in candidate.source_records
+                )
+                review_case, review_created = create_review_case(
+                    deduplication_key=f"new-person:{artifact.public_id}:{candidate.filing_key}",
+                    defaults={
+                        "case_type": IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+                        "source_record": source_records[0],
+                        "provisional_person": person,
+                        "supporting_evidence": {
+                            "source_system": artifact.source_system,
+                            "filing_key": candidate.filing_key,
+                        },
+                        "has_private_evidence": bool(has_private_evidence),
                     },
-                    "has_private_evidence": bool(has_private_evidence),
-                },
-            )
-            if review_created:
-                counts["review_cases_created"] += 1
-                if match_candidates:
+                )
+                if review_created:
+                    counts["review_cases_created"] += 1
                     generate_suggestions_for_case(review_case, match_candidates)
-            details["review_cases"].append(review_case.public_id)
+                details["review_cases"].append(review_case.public_id)
+            else:
+                # No existing person even resembles this one, so there is nothing
+                # for a reviewer to reconcile — resolve immediately instead of
+                # queuing a no-op "New Person" review case (see PR discussion:
+                # this queue previously grew by thousands of untouched cases per
+                # new state, each bulk-confirmed without individual review anyway).
+                person.identity_state = Person.IdentityState.RESOLVED
+                person.save(update_fields=["identity_state", "updated_at"])
+                counts["people_auto_resolved"] += 1
 
     completed_at = timezone.now()
     sync_log.status = SyncLog.Status.SUCCESS
