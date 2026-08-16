@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 from django.contrib import messages
 from django.contrib.admin.sites import AdminSite
@@ -6,10 +8,55 @@ from django.test import RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
-from cm2_elections.models import Person
+from cm2_core.models import SourceArtifact
+from cm2_elections.models import Candidacy, Contest, Election, Jurisdiction, Office, Person
+from cm2_results.models import ContestResult, ResultChoice
 from cm2_review.admin import IdentityReviewCaseAdmin
 from cm2_review.models import IdentityReviewCase, IdentityReviewSuggestion
 from cm2_review.serializers import IdentityReviewCaseSerializer
+
+
+@pytest.fixture
+def fuzzy_result_choice(db):
+    results_artifact = SourceArtifact.objects.create(
+        source_system="nc_sbe",
+        source_type=SourceArtifact.SourceType.RESULTS,
+        url="https://example.test/nc/admin-results.zip",
+        retrieved_at=timezone.now(),
+        content_sha256="f" * 64,
+        parser_version="nc-results-v1",
+        election_date=date(2026, 3, 3),
+    )
+    jurisdiction = Jurisdiction.objects.create(
+        name="Adminville",
+        classification="municipality",
+        state="NC",
+        record_status="verified",
+    )
+    office = Office.objects.create(jurisdiction=jurisdiction, canonical_name="Mayor", role="mayor")
+    election = Election.objects.create(
+        name="2026 Town of Adminville Election",
+        election_date=date(2026, 3, 3),
+        election_type="municipal",
+        lifecycle_status="active",
+    )
+    contest = Contest.objects.create(election=election, office=office, vote_for=1)
+    contest_result = ContestResult.objects.create(
+        contest=contest,
+        status=ContestResult.Status.UNOFFICIAL,
+        source_artifact=results_artifact,
+        total_votes=10,
+    )
+    return ResultChoice.objects.create(
+        contest_result=contest_result,
+        source_label="Pat Lee",
+        normalized_label="pat lee",
+        choice_type=ResultChoice.ChoiceType.CANDIDATE,
+        resolution_status=ResultChoice.ResolutionStatus.UNRESOLVED,
+        vote_total=4,
+        source_artifact=results_artifact,
+        source_choice_key="adminville-mayor:pat-lee",
+    )
 
 
 def _admin_request(rf, user, post_data=None):
@@ -118,6 +165,78 @@ def test_evidence_comparison_shows_unknown_source_when_person_has_none(
     html = model_admin.evidence_comparison(review)
 
     assert "Unknown source" in html
+
+
+@pytest.mark.django_db
+def test_evidence_comparison_shows_write_in_candidate_cards(fuzzy_result_choice, model_admin):
+    candidate_person = Person.objects.create(canonical_name="Pat Lee", family_name="Lee")
+    contest = fuzzy_result_choice.contest_result.contest
+    Candidacy.objects.create(person=candidate_person, contest=contest, ballot_name="Pat Lee", party_candidate="REP")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-write-in-comparison",
+        result_choice=fuzzy_result_choice,
+        supporting_evidence={"source_label": fuzzy_result_choice.source_label},
+    )
+    IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=candidate_person,
+        rank=1,
+        score="1.0000",
+        supporting_evidence={"ballot_name": "Pat Lee"},
+    )
+
+    html = model_admin.evidence_comparison(review)
+
+    assert "Pat Lee" in html
+    assert "Link write-in to Pat Lee" in html
+    # There's no provisional person to merge for a write-in case, so no merge action is offered.
+    assert "Merge people into" not in html
+
+
+@pytest.mark.django_db
+def test_evidence_comparison_falls_back_to_table_for_write_in_case_without_suggestions(
+    fuzzy_result_choice, model_admin
+):
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE,
+        deduplication_key="admin-write-in-no-suggestions",
+        result_choice=fuzzy_result_choice,
+        supporting_evidence={"source_label": fuzzy_result_choice.source_label},
+    )
+
+    html = model_admin.evidence_comparison(review)
+
+    assert "Supporting evidence" in html
+
+
+@pytest.mark.django_db
+def test_link_write_in_suggestion_view_links_result_choice_to_target(fuzzy_result_choice, model_admin, django_user_model):
+    reviewer = django_user_model.objects.create_user(username="write-in-card-reviewer", is_staff=True)
+    candidate_person = Person.objects.create(canonical_name="Pat Lee", family_name="Lee")
+    contest = fuzzy_result_choice.contest_result.contest
+    Candidacy.objects.create(person=candidate_person, contest=contest, ballot_name="Pat Lee", party_candidate="REP")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-write-in-link-view",
+        result_choice=fuzzy_result_choice,
+    )
+    suggestion = IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=candidate_person,
+        rank=1,
+        score="1.0000",
+    )
+    rf = RequestFactory()
+    request = _admin_get_request(rf, reviewer)
+
+    model_admin.link_existing_suggestion(request, review.pk, suggestion.pk)
+
+    fuzzy_result_choice.refresh_from_db()
+    review.refresh_from_db()
+    assert fuzzy_result_choice.resolution_status == ResultChoice.ResolutionStatus.MATCHED
+    assert fuzzy_result_choice.candidacy.person == candidate_person
+    assert review.status == IdentityReviewCase.Status.APPROVED
 
 
 @pytest.mark.django_db

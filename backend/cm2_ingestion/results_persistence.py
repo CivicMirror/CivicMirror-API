@@ -6,7 +6,12 @@ from django.utils import timezone
 from cm2_core.models import SourceArtifact
 from cm2_elections.models import Candidacy, Contest, Person
 from cm2_results.models import ContestResult, ResultChoice
-from cm2_review.matching import find_person_match_candidates, generate_suggestions_for_case, normalize_name_for_matching
+from cm2_review.matching import (
+    PersonMatchCandidate,
+    find_person_match_candidates,
+    generate_suggestions_for_case,
+    normalize_name_for_matching,
+)
 from cm2_review.models import IdentityReviewCase
 from cm2_review.workflow import create_review_case
 
@@ -56,7 +61,9 @@ def _safe_error_summary(exc: Exception) -> str:
     return f"{type(exc).__name__}: persistence failed"
 
 
-def _resolve_candidacy(*, contest: Contest, normalized_label: str) -> tuple[Candidacy | None, str, list[dict]]:
+def _resolve_candidacy(
+    *, contest: Contest, normalized_label: str
+) -> tuple[Candidacy | None, str, list[tuple[Candidacy, float | None]]]:
     candidacies = list(Candidacy.objects.filter(contest=contest).select_related("person"))
     exact = [
         candidacy for candidacy in candidacies
@@ -65,9 +72,7 @@ def _resolve_candidacy(*, contest: Contest, normalized_label: str) -> tuple[Cand
     if len(exact) == 1:
         return exact[0], ResultChoice.ResolutionStatus.MATCHED, []
     if len(exact) > 1:
-        return None, ResultChoice.ResolutionStatus.AMBIGUOUS, [
-            {"candidacy_public_id": candidacy.public_id, "ballot_name": candidacy.ballot_name} for candidacy in exact
-        ]
+        return None, ResultChoice.ResolutionStatus.AMBIGUOUS, [(candidacy, None) for candidacy in exact]
 
     matcher = SequenceMatcher(a=normalized_label)
     fuzzy = []
@@ -75,10 +80,31 @@ def _resolve_candidacy(*, contest: Contest, normalized_label: str) -> tuple[Cand
         matcher.set_seq2(normalize_name_for_matching(candidacy.ballot_name))
         score = matcher.ratio()
         if score >= _MATCH_SCORE_FLOOR:
-            fuzzy.append({"candidacy_public_id": candidacy.public_id, "ballot_name": candidacy.ballot_name, "score": round(score, 4)})
+            fuzzy.append((candidacy, round(score, 4)))
     if fuzzy:
         return None, ResultChoice.ResolutionStatus.UNRESOLVED, fuzzy
     return None, "", []
+
+
+def _candidate_matches_to_evidence(matches: list[tuple[Candidacy, float | None]]) -> list[dict]:
+    evidence = []
+    for candidacy, score in matches:
+        entry = {"candidacy_public_id": candidacy.public_id, "ballot_name": candidacy.ballot_name}
+        if score is not None:
+            entry["score"] = score
+        evidence.append(entry)
+    return evidence
+
+
+def _candidate_matches_to_person_candidates(matches: list[tuple[Candidacy, float | None]]) -> list[PersonMatchCandidate]:
+    return [
+        PersonMatchCandidate(
+            person=candidacy.person,
+            score=score if score is not None else 1.0,
+            supporting_evidence={"candidacy_public_id": candidacy.public_id, "ballot_name": candidacy.ballot_name},
+        )
+        for candidacy, score in matches
+    ]
 
 
 def _create_provisional_candidacy(
@@ -156,13 +182,13 @@ def _persist_contest_result(
 
     for choice in choices:
         candidacy = None
-        review_supporting_evidence: list[dict] = []
+        candidate_matches: list[tuple[Candidacy, float | None]] = []
         if choice.choice_type == "write_in_aggregate":
             resolution_status = ResultChoice.ResolutionStatus.NOT_APPLICABLE
         elif choice.choice_type == "named_write_in":
             resolution_status = ResultChoice.ResolutionStatus.UNRESOLVED
         else:
-            candidacy, resolution_status, review_supporting_evidence = _resolve_candidacy(
+            candidacy, resolution_status, candidate_matches = _resolve_candidacy(
                 contest=contest,
                 normalized_label=choice.normalized_label,
             )
@@ -219,9 +245,14 @@ def _persist_contest_result(
                 defaults={
                     "case_type": IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
                     "result_choice": result_choice,
-                    "supporting_evidence": {"source_label": choice.source_label, "candidates": review_supporting_evidence},
+                    "supporting_evidence": {
+                        "source_label": choice.source_label,
+                        "candidates": _candidate_matches_to_evidence(candidate_matches),
+                    },
                 },
             )
+            if created and candidate_matches:
+                generate_suggestions_for_case(review_case, _candidate_matches_to_person_candidates(candidate_matches))
             if created:
                 counts["review_cases_created"] += 1
             details["review_cases"].append(review_case.public_id)

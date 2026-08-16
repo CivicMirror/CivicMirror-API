@@ -229,7 +229,83 @@ class IdentityReviewCaseAdmin(ModelAdmin):
             suggestions = list(obj.suggestions.select_related("suggested_person").order_by("rank"))
             if obj.source_record is not None and suggestions:
                 return self._fuzzy_match_comparison(obj, suggestions)
+            if obj.result_choice is not None and suggestions:
+                return self._write_in_match_comparison(obj, suggestions)
         return self._default_evidence_table(obj)
+
+    def _write_in_match_comparison(self, obj, suggestions):
+        result_choice = obj.result_choice
+        cards = format_html_join(
+            "\n",
+            "{}",
+            ((self._write_in_match_card(obj, result_choice, suggestion),) for suggestion in suggestions),
+        )
+        return format_html(
+            '<div class="rounded-default border border-base-200 dark:border-base-800 bg-base-50 '
+            'dark:bg-base-900/60 p-3 mb-4 text-sm text-base-600 dark:text-base-400">'
+            "Write-in <strong>{}</strong> — compared below against each candidate already filed for "
+            "<strong>{}</strong>.</div>{}",
+            result_choice.source_label,
+            result_choice.contest_result.contest,
+            cards,
+        )
+
+    def _write_in_match_card(self, obj, result_choice, suggestion):
+        person = suggestion.suggested_person
+        ballot_name = (suggestion.supporting_evidence or {}).get("ballot_name", "")
+        row = self._fuzzy_match_row("Name", result_choice.source_label, ballot_name or (person.canonical_name if person else ""))
+        score = f"{suggestion.score:.0%}" if suggestion.score is not None else "—"
+        header = format_html(
+            '<div class="flex items-center justify-between px-4 py-2 bg-base-50 dark:bg-base-800 '
+            'border-b border-base-200 dark:border-base-700 rounded-t-default">'
+            '<div class="font-semibold text-sm text-base-900 dark:text-base-100">'
+            "Rank {} match — {}</div>"
+            '<div class="text-xs text-base-500 dark:text-base-400">Score {}</div></div>',
+            suggestion.rank,
+            person.canonical_name if person else "(no linked person)",
+            score,
+        )
+        column_headers = format_html(
+            '<tr class="text-left text-xs uppercase text-base-400 dark:text-base-500 '
+            'border-b border-base-200 dark:border-base-800">'
+            '<th class="py-1 pr-2 font-medium">{}</th>'
+            '<th class="py-1 pr-2 font-medium">{}</th>'
+            '<th class="py-1 font-medium">{}</th></tr>',
+            "Field",
+            "Write-in on ballot",
+            "Filed candidate",
+        )
+        body = format_html(
+            '<div class="p-3"><table class="w-full text-sm"><thead>{}</thead><tbody>{}</tbody></table></div>',
+            column_headers,
+            row,
+        )
+        footer = self._write_in_match_actions(obj, suggestion)
+        return format_html(
+            '<div class="rounded-default border border-base-200 dark:border-base-800 bg-white '
+            'dark:bg-base-900 shadow-xs mb-4 overflow-hidden">{}{}{}</div>',
+            header,
+            body,
+            footer,
+        )
+
+    def _write_in_match_actions(self, obj, suggestion):
+        if suggestion.suggested_person is None:
+            return ""
+        if obj.status not in self._REOPENABLE_STATUSES:
+            return ""
+        link_url = reverse(
+            "admin:cm2_review_identityreviewcase_link_existing_suggestion",
+            args=[obj.pk, suggestion.pk],
+        )
+        return format_html(
+            '<div class="flex items-center gap-2 px-4 py-2 border-t border-base-200 dark:border-base-800">'
+            '<a href="{}" class="inline-flex items-center rounded-default bg-primary-600 '
+            'hover:bg-primary-700 px-2 py-1 text-xs font-medium text-white">'
+            "Link write-in to {}</a></div>",
+            link_url,
+            suggestion.suggested_person.canonical_name,
+        )
 
     def _default_evidence_table(self, obj):
         rows = []

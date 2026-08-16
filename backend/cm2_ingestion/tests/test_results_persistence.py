@@ -215,6 +215,45 @@ def test_ambiguous_candidate_choice_creates_fuzzy_person_match_review_case(artif
     assert review_case.case_type == IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH
     assert len(review_case.supporting_evidence["candidates"]) == 2
 
+    suggestions = list(review_case.suggestions.select_related("suggested_person").order_by("rank"))
+    assert len(suggestions) == 2
+    assert {s.suggested_person_id for s in suggestions} == {first.id, second.id}
+    for suggestion in suggestions:
+        assert suggestion.score == 1
+        assert suggestion.supporting_evidence["ballot_name"] == "Pat Lee"
+        assert "candidacy_public_id" in suggestion.supporting_evidence
+
+
+@pytest.mark.django_db
+def test_fuzzy_candidate_choice_creates_suggestion_rows_with_scores(artifact, existing_contest):
+    person = Person.objects.create(canonical_name="Elizabeth Temple", family_name="Temple")
+    Candidacy.objects.create(person=person, contest=existing_contest, ballot_name="Elizabeth Temple", party_candidate="REP")
+
+    batch = _batch(
+        existing_contest,
+        PrecinctResultObservation(
+            source_observation_key="obs-fuzzy",
+            contest_public_id=existing_contest.public_id,
+            source_choice_key="choice-elizabeth-temp",
+            source_label="Elizabeth Temp",
+            normalized_label="elizabeth temp",
+            choice_type="candidate",
+            choice_party="REP",
+            vote_total=3,
+        ),
+    )
+    apply_post_election_batch(artifact=artifact, batch=batch)
+
+    choice = ResultChoice.objects.get()
+    assert choice.resolution_status == ResultChoice.ResolutionStatus.UNRESOLVED
+    review_case = IdentityReviewCase.objects.get(result_choice=choice)
+    assert review_case.case_type == IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH
+
+    suggestion = review_case.suggestions.get()
+    assert suggestion.suggested_person == person
+    assert 0 < suggestion.score < 1
+    assert suggestion.supporting_evidence["ballot_name"] == "Elizabeth Temple"
+
 
 @pytest.mark.django_db
 def test_anonymous_write_in_bucket_is_not_applicable_and_counts_toward_total(artifact, existing_contest, existing_candidacy):
