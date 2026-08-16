@@ -187,6 +187,36 @@ def test_named_write_in_creates_unresolved_choice_and_review_case_without_candid
 
 
 @pytest.mark.django_db
+def test_ambiguous_candidate_choice_creates_fuzzy_person_match_review_case(artifact, existing_contest):
+    first = Person.objects.create(canonical_name="Pat Lee", family_name="Lee")
+    second = Person.objects.create(canonical_name="Pat Lee", family_name="Lee")
+    Candidacy.objects.create(person=first, contest=existing_contest, ballot_name="Pat Lee", party_candidate="REP")
+    Candidacy.objects.create(person=second, contest=existing_contest, ballot_name="Pat Lee", party_candidate="REP")
+
+    batch = _batch(
+        existing_contest,
+        PrecinctResultObservation(
+            source_observation_key="obs-ambiguous",
+            contest_public_id=existing_contest.public_id,
+            source_choice_key="choice-pat-lee",
+            source_label="Pat Lee",
+            normalized_label="pat lee",
+            choice_type="candidate",
+            choice_party="REP",
+            vote_total=5,
+        ),
+    )
+    apply_post_election_batch(artifact=artifact, batch=batch)
+
+    choice = ResultChoice.objects.get()
+    assert choice.resolution_status == ResultChoice.ResolutionStatus.AMBIGUOUS
+    assert choice.candidacy is None
+    review_case = IdentityReviewCase.objects.get(result_choice=choice)
+    assert review_case.case_type == IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH
+    assert len(review_case.supporting_evidence["candidates"]) == 2
+
+
+@pytest.mark.django_db
 def test_anonymous_write_in_bucket_is_not_applicable_and_counts_toward_total(artifact, existing_contest, existing_candidacy):
     batch = _batch(
         existing_contest,
