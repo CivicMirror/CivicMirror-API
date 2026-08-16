@@ -1,17 +1,19 @@
-from django.contrib import admin
-from unfold.admin import ModelAdmin
+from django.contrib import admin, messages
+from unfold.admin import ModelAdmin, TabularInline
 
 from .models import (
     Candidacy,
     Contest,
     Election,
     Jurisdiction,
+    LifecycleAuditEvent,
     Office,
     OfficeTerm,
     Person,
     PersonIdentifier,
     PersonSourceRecord,
 )
+from .workflow import record_lifecycle_event, record_lifecycle_note
 
 
 @admin.register(Jurisdiction)
@@ -30,21 +32,80 @@ class OfficeAdmin(ModelAdmin):
     autocomplete_fields = ("jurisdiction", "source_artifact")
 
 
+class ElectionLifecycleAuditInline(TabularInline):
+    model = LifecycleAuditEvent
+    fk_name = "election"
+    extra = 0
+    can_delete = False
+    fields = ("created_at", "event_type", "actor", "note", "metadata")
+    readonly_fields = fields
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+class ContestLifecycleAuditInline(TabularInline):
+    model = LifecycleAuditEvent
+    fk_name = "contest"
+    extra = 0
+    can_delete = False
+    fields = ("created_at", "event_type", "actor", "note", "metadata")
+    readonly_fields = fields
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+class LifecycleAuditAdminMixin:
+    """Auto-records a status_changed event on lifecycle_status edits and adds a note action."""
+
+    def save_model(self, request, obj, form, change):
+        old_status = None
+        if change and "lifecycle_status" in form.changed_data:
+            old_status = type(obj).objects.get(pk=obj.pk).lifecycle_status
+        super().save_model(request, obj, form, change)
+        if old_status is not None and old_status != obj.lifecycle_status:
+            record_lifecycle_event(
+                obj,
+                LifecycleAuditEvent.EventType.STATUS_CHANGED,
+                request.user,
+                metadata={"old_status": old_status, "new_status": obj.lifecycle_status},
+            )
+
+    @admin.action(description="Add note to selected (enter note text below)")
+    def add_lifecycle_note(self, request, queryset):
+        note = request.POST.get("note", "").strip()
+        if not note:
+            self.message_user(request, "Provide note text to add a note.", messages.ERROR)
+            return
+        added = 0
+        for obj in queryset:
+            record_lifecycle_note(obj, actor=request.user, note=note)
+            added += 1
+        self.message_user(request, f"Added a note to {added} record(s).", messages.SUCCESS)
+
+
 @admin.register(Election)
-class ElectionAdmin(ModelAdmin):
+class ElectionAdmin(LifecycleAuditAdminMixin, ModelAdmin):
     list_display = ("name", "election_date", "election_type", "lifecycle_status")
     list_filter = ("election_type", "lifecycle_status", "election_date")
     search_fields = ("public_id", "name", "source_key")
     autocomplete_fields = ("source_artifact",)
     ordering = ("-election_date",)
+    inlines = (ElectionLifecycleAuditInline,)
+    actions = ("add_lifecycle_note",)
 
 
 @admin.register(Contest)
-class ContestAdmin(ModelAdmin):
+class ContestAdmin(LifecycleAuditAdminMixin, ModelAdmin):
     list_display = ("office", "election", "party_contest", "lifecycle_status", "result_status")
     list_filter = ("lifecycle_status", "result_status", "is_partisan", "is_unexpired")
     search_fields = ("public_id", "office__canonical_name", "election__name", "party_contest", "source_key")
     autocomplete_fields = ("election", "office", "source_artifact")
+    inlines = (ContestLifecycleAuditInline,)
+    actions = ("add_lifecycle_note",)
 
 
 @admin.register(Person)

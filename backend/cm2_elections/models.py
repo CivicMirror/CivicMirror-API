@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from cm2_core.models import SourceTrackedModel, UUIDModel, require_unchanged_fields
@@ -388,3 +389,59 @@ class OfficeTerm(SourceTrackedModel):
 
     def __str__(self) -> str:
         return f"{self.person} — {self.office} ({self.start_date})"
+
+
+class LifecycleAuditEvent(UUIDModel):
+    class EventType(models.TextChoices):
+        STATUS_CHANGED = "status_changed", "Status changed"
+        NOTE_ADDED = "note_added", "Note added"
+
+    election = models.ForeignKey(
+        Election,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="lifecycle_audit_events",
+    )
+    contest = models.ForeignKey(
+        Contest,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="lifecycle_audit_events",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="cm2_lifecycle_audit_events",
+    )
+    event_type = models.CharField(max_length=24, choices=EventType.choices)
+    note = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["election", "created_at"]),
+            models.Index(fields=["contest", "created_at"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(election__isnull=False, contest__isnull=True)
+                    | models.Q(election__isnull=True, contest__isnull=False)
+                ),
+                name="cm2_lifecycle_event_single_subject",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        subject = self.election or self.contest
+        return f"{subject}:{self.event_type}:{self.created_at.isoformat()}"
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValidationError("Lifecycle audit events are immutable.")
+        return super().save(*args, **kwargs)
