@@ -284,6 +284,7 @@ class IdentityReviewCaseAdmin(ModelAdmin):
 
     def _fuzzy_match_card(self, obj, source, suggestion):
         person = suggestion.suggested_person
+        source_row = self._fuzzy_match_source_row(source, person)
         field_rows = format_html_join(
             "\n",
             "{}",
@@ -323,8 +324,9 @@ class IdentityReviewCaseAdmin(ModelAdmin):
             "Existing possible match",
         )
         body = format_html(
-            '<div class="p-3"><table class="w-full text-sm"><thead>{}</thead><tbody>{}{}</tbody></table></div>',
+            '<div class="p-3"><table class="w-full text-sm"><thead>{}</thead><tbody>{}{}{}</tbody></table></div>',
             column_headers,
+            source_row,
             field_rows,
             contact_rows,
         )
@@ -365,6 +367,32 @@ class IdentityReviewCaseAdmin(ModelAdmin):
             suggestion.suggested_person.canonical_name,
             merge_url,
             suggestion.suggested_person.canonical_name,
+        )
+
+    def _source_artifact_link(self, artifact):
+        if artifact is None:
+            return format_html(
+                '<span class="text-base-400 dark:text-base-600 italic">{}</span>', "Unknown source"
+            )
+        url = reverse("admin:cm2_core_sourceartifact_change", args=[artifact.pk])
+        description = f"{artifact.source_system} · {artifact.get_source_type_display()}"
+        retrieved = artifact.retrieved_at.strftime("%b %-d, %Y") if artifact.retrieved_at else None
+        return format_html(
+            '<a href="{}" class="text-primary-600 dark:text-primary-400 underline">{}</a>{}',
+            url,
+            description,
+            format_html(" · retrieved {}", retrieved) if retrieved else "",
+        )
+
+    def _fuzzy_match_source_row(self, source, person):
+        left = self._source_artifact_link(source.source_artifact if source is not None else None)
+        right = self._source_artifact_link(person.source_artifact if person is not None else None)
+        return format_html(
+            '<tr class="border-b border-base-100 dark:border-base-900 bg-base-100 dark:bg-base-800">'
+            '<td class="py-1 pr-2 text-base-500 dark:text-base-400 align-top">Source</td>'
+            '<td class="py-1 pr-2 align-top">{}</td><td class="py-1 align-top">{}</td></tr>',
+            left,
+            right,
         )
 
     def _fuzzy_match_row(self, label, left_value, right_value, *, right_label=None):
