@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.contrib.admin.sites import AdminSite
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory
+from django.urls import reverse
 from django.utils import timezone
 
 from cm2_elections.models import Person
@@ -87,6 +88,36 @@ def test_evidence_comparison_shows_side_by_side_fuzzy_match_cards(
     # Per-suggestion action buttons let a reviewer resolve straight from the comparison card.
     assert "Link existing to Deidra Freeman" in html
     assert "Merge people into Deidra Freeman" in html
+    # Both sides trace back to the artifact that sourced them, linked into its admin page.
+    assert "nc_sbe" in html
+    assert reverse("admin:cm2_core_sourceartifact_change", args=[source_artifact.pk]) in html
+
+
+@pytest.mark.django_db
+def test_evidence_comparison_shows_unknown_source_when_person_has_none(
+    source_record,
+    provisional_person,
+    model_admin,
+):
+    """A pre-existing person ingested before source tracking (or created without a
+    source_artifact) should read as an explicit unknown, not silently blank."""
+    no_source_person = Person.objects.create(canonical_name="No Source Person")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-fuzzy-no-source",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=no_source_person,
+        rank=1,
+        score="0.9000",
+    )
+
+    html = model_admin.evidence_comparison(review)
+
+    assert "Unknown source" in html
 
 
 @pytest.mark.django_db
