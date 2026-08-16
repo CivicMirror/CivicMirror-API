@@ -543,6 +543,122 @@ def test_confirm_new_on_write_in_case_creates_person_and_candidacy(write_in_resu
 
 
 @pytest.mark.django_db
+def test_link_existing_on_write_in_case_links_result_choice_to_target_person(
+    write_in_result_choice, django_user_model
+):
+    reviewer = django_user_model.objects.create_user(username="write-in-link-reviewer")
+    existing_person = Person.objects.create(canonical_name="Known Existing Person")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE,
+        deduplication_key="write-in-link-existing",
+        result_choice=write_in_result_choice,
+    )
+
+    transition_review_case(
+        review,
+        reviewer=reviewer,
+        status=IdentityReviewCase.Status.APPROVED,
+        action=IdentityReviewCase.ResolutionAction.LINK_EXISTING,
+        target_person=existing_person,
+    )
+
+    write_in_result_choice.refresh_from_db()
+    review.refresh_from_db()
+    assert write_in_result_choice.resolution_status == ResultChoice.ResolutionStatus.MATCHED
+    assert write_in_result_choice.candidacy is not None
+    assert write_in_result_choice.candidacy.person == existing_person
+    assert write_in_result_choice.candidacy.status == Candidacy.Status.WRITE_IN
+    assert write_in_result_choice.candidacy.contest_id == write_in_result_choice.contest_result.contest_id
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert review.audit_events.filter(event_type=IdentityReviewAuditEvent.EventType.RESOLVED).exists()
+
+
+@pytest.mark.django_db
+def test_link_existing_on_write_in_case_reuses_existing_candidacy_for_target_person(
+    write_in_result_choice, django_user_model
+):
+    reviewer = django_user_model.objects.create_user(username="write-in-link-reuse-reviewer")
+    contest = write_in_result_choice.contest_result.contest
+    existing_person = Person.objects.create(canonical_name="Already Filed Candidate")
+    existing_candidacy = Candidacy.objects.create(
+        person=existing_person,
+        contest=contest,
+        ballot_name="Already Filed Candidate",
+        status=Candidacy.Status.ACTIVE,
+    )
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE,
+        deduplication_key="write-in-link-existing-reuse",
+        result_choice=write_in_result_choice,
+    )
+
+    transition_review_case(
+        review,
+        reviewer=reviewer,
+        status=IdentityReviewCase.Status.APPROVED,
+        action=IdentityReviewCase.ResolutionAction.LINK_EXISTING,
+        target_person=existing_person,
+    )
+
+    write_in_result_choice.refresh_from_db()
+    assert write_in_result_choice.candidacy_id == existing_candidacy.id
+    assert Candidacy.objects.filter(person=existing_person, contest=contest).count() == 1
+
+
+@pytest.mark.django_db
+def test_link_existing_on_write_in_case_rejects_already_linked_choice(write_in_result_choice, django_user_model):
+    reviewer = django_user_model.objects.create_user(username="write-in-link-double-reviewer")
+    other_person = Person.objects.create(canonical_name="Someone Else")
+    write_in_result_choice.candidacy = Candidacy.objects.create(
+        person=other_person,
+        contest=write_in_result_choice.contest_result.contest,
+        ballot_name="Someone Else",
+        status=Candidacy.Status.WRITE_IN,
+    )
+    write_in_result_choice.resolution_status = ResultChoice.ResolutionStatus.MATCHED
+    write_in_result_choice.save(update_fields=["candidacy", "resolution_status"])
+    target_person = Person.objects.create(canonical_name="Target Person")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE,
+        deduplication_key="write-in-link-already-linked",
+        result_choice=write_in_result_choice,
+    )
+
+    with pytest.raises(ValidationError, match="result_choice"):
+        transition_review_case(
+            review,
+            reviewer=reviewer,
+            status=IdentityReviewCase.Status.APPROVED,
+            action=IdentityReviewCase.ResolutionAction.LINK_EXISTING,
+            target_person=target_person,
+        )
+
+
+@pytest.mark.django_db
+def test_merge_people_on_write_in_case_is_rejected(write_in_result_choice, django_user_model):
+    reviewer = django_user_model.objects.create_user(username="write-in-merge-reviewer")
+    target_person = Person.objects.create(canonical_name="Target Person")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE,
+        deduplication_key="write-in-merge-rejected",
+        result_choice=write_in_result_choice,
+    )
+
+    with pytest.raises(ValidationError, match="action"):
+        transition_review_case(
+            review,
+            reviewer=reviewer,
+            status=IdentityReviewCase.Status.APPROVED,
+            action=IdentityReviewCase.ResolutionAction.MERGE_PEOPLE,
+            target_person=target_person,
+        )
+
+    write_in_result_choice.refresh_from_db()
+    assert write_in_result_choice.resolution_status == ResultChoice.ResolutionStatus.UNRESOLVED
+    assert write_in_result_choice.candidacy is None
+
+
+@pytest.mark.django_db
 def test_confirm_new_on_write_in_case_rejects_already_linked_choice(write_in_result_choice, django_user_model):
     reviewer = django_user_model.objects.create_user(username="write-in-double-reviewer")
     other_person = Person.objects.create(canonical_name="Someone Else")

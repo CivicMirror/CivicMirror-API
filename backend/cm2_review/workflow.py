@@ -83,6 +83,12 @@ def transition_review_case(
         raise ValidationError({"target_person": "This action requires a target person."})
     if target_person is not None and review_case.provisional_person_id == target_person.id:
         raise ValidationError({"target_person": "A person cannot target itself."})
+    if (
+        action == IdentityReviewCase.ResolutionAction.MERGE_PEOPLE
+        and review_case.provisional_person_id is None
+        and review_case.result_choice_id is not None
+    ):
+        raise ValidationError({"action": "Write-in cases have no person to merge; use link_existing instead."})
 
     if action == IdentityReviewCase.ResolutionAction.LINK_CIVIC_DATA:
         if target_suggestion is None:
@@ -133,6 +139,24 @@ def transition_review_case(
         if review_case.source_record_id:
             review_case.source_record.person = target_person
             review_case.source_record.save(update_fields=["person"])
+        if provisional is None and review_case.result_choice_id is not None:
+            result_choice = review_case.result_choice
+            if result_choice.candidacy_id is not None:
+                raise ValidationError({"result_choice": "This result choice is already linked to a candidacy."})
+            contest = result_choice.contest_result.contest
+            candidacy, _ = Candidacy.objects.get_or_create(
+                person=target_person,
+                contest=contest,
+                defaults={
+                    "ballot_name": result_choice.source_label,
+                    "status": Candidacy.Status.WRITE_IN,
+                    "source_artifact": result_choice.source_artifact,
+                    "source_key": result_choice.source_choice_key,
+                },
+            )
+            result_choice.candidacy = candidacy
+            result_choice.resolution_status = result_choice.ResolutionStatus.MATCHED
+            result_choice.save(update_fields=["candidacy", "resolution_status", "updated_at"])
     elif action == IdentityReviewCase.ResolutionAction.REJECT:
         if provisional is not None:
             provisional.identity_state = Person.IdentityState.DISPUTED
