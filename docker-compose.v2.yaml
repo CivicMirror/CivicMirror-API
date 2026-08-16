@@ -1,5 +1,17 @@
 name: civicmirror-2-0
 
+x-v2-environment: &v2-environment
+  DJANGO_SETTINGS_MODULE: config.settings.v2
+  DJANGO_SECRET_KEY: civicmirror-v2-development-only
+  DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,${CIVICMIRROR_V2_LAN_HOST:-192.168.1.102}"
+  DATABASE_URL: postgres://civicmirror_v2:civicmirror_v2@db:5432/civicmirror_2_0
+  CIVICMIRROR_V2_DATABASE_NAME: civicmirror_2_0
+  CIVICMIRROR_V2_TEST_DATABASE_NAME: civicmirror_2_0_test
+  REDIS_URL: redis://redis:6379/2
+  CELERY_BROKER_URL: redis://redis:6379/2
+  CELERY_RESULT_BACKEND: redis://redis:6379/3
+  CIVICMIRROR_V2_TASK_QUEUE: civicmirror_2_0
+
 services:
   db:
     image: postgres:16-alpine
@@ -32,17 +44,13 @@ services:
     working_dir: /app
     user: appuser
     command: python manage.py runserver 0.0.0.0:8000
-    environment: &v2-environment
-      DJANGO_SETTINGS_MODULE: config.settings.v2
-      DJANGO_SECRET_KEY: civicmirror-v2-development-only
-      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,${CIVICMIRROR_V2_LAN_HOST:-192.168.1.102}"
-      DATABASE_URL: postgres://civicmirror_v2:civicmirror_v2@db:5432/civicmirror_2_0
-      CIVICMIRROR_V2_DATABASE_NAME: civicmirror_2_0
-      CIVICMIRROR_V2_TEST_DATABASE_NAME: civicmirror_2_0_test
-      REDIS_URL: redis://redis:6379/2
-      CELERY_BROKER_URL: redis://redis:6379/2
-      CELERY_RESULT_BACKEND: redis://redis:6379/3
-      CIVICMIRROR_V2_TASK_QUEUE: civicmirror_2_0
+    environment:
+      <<: *v2-environment
+      # DEBUG-only in this service: enables Django's runserver static-file
+      # serving (WhiteNoiseMiddleware is stripped from v2's MIDDLEWARE, and
+      # nothing else serves /static/ here). The `test` service intentionally
+      # stays DEBUG=False (its own default) for CI parity.
+      DJANGO_DEBUG: "True"
     ports:
       - "0.0.0.0:${CIVICMIRROR_V2_API_PORT:-58000}:8000"
     volumes:
