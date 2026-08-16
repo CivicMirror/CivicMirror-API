@@ -9,7 +9,7 @@ from cm2_core.models import PublicIdentityModel, UUIDModel
 
 class IdentityReviewCase(PublicIdentityModel):
     class CaseType(models.TextChoices):
-        PERSON_IDENTITY = "person_identity", "Person identity"
+        PERSON_IDENTITY = "person_identity", "New Person"
         FUZZY_PERSON_MATCH = "fuzzy_person_match", "Fuzzy person match"
         UNRESOLVED_RESULT_CHOICE = "unresolved_result_choice", "Unresolved result choice"
 
