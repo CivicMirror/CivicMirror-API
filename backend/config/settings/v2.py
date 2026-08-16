@@ -1,3 +1,4 @@
+from django.templatetags.static import static
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 
@@ -39,6 +40,7 @@ UNFOLD = {
     "SHOW_HISTORY": True,
     "SHOW_VIEW_ON_SITE": False,
     "DASHBOARD_CALLBACK": "cm2_core.dashboard.dashboard_callback",
+    "STYLES": [lambda request: static("css/admin-overrides.css")],
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": True,
