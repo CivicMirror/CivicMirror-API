@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils.html import format_html, format_html_join
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import action, display
+from unfold.widgets import UnfoldAdminTextareaWidget, UnfoldAdminTextInputWidget
 
 from cm2_elections.models import Person
 from cm2_review.workflow import add_review_note, supersede_review_case, transition_review_case
@@ -23,15 +24,17 @@ class IdentityReviewSuggestionInline(TabularInline):
 class ReviewCaseActionForm(ActionForm):
     target_person_public_id = forms.CharField(
         required=False,
+        widget=UnfoldAdminTextInputWidget(attrs={"size": 14, "placeholder": "person public id"}),
         help_text="Public ID of the target person for link/merge actions.",
     )
     target_case_public_id = forms.CharField(
         required=False,
+        widget=UnfoldAdminTextInputWidget(attrs={"size": 14, "placeholder": "case public id"}),
         help_text="Public ID of the superseding case for the supersede action.",
     )
     note = forms.CharField(
         required=False,
-        widget=forms.Textarea(attrs={"rows": 2}),
+        widget=UnfoldAdminTextareaWidget(attrs={"rows": 1, "cols": 20}),
         help_text="Note text for the add-note action.",
     )
 
