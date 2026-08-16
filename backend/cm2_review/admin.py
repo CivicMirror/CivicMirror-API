@@ -2,7 +2,11 @@ from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ActionForm
 from django.core.exceptions import ValidationError
+from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils.html import format_html, format_html_join
+from unfold.admin import ModelAdmin, TabularInline
+from unfold.decorators import action, display
 
 from cm2_elections.models import Person
 from cm2_review.workflow import add_review_note, supersede_review_case, transition_review_case
@@ -10,7 +14,7 @@ from cm2_review.workflow import add_review_note, supersede_review_case, transiti
 from .models import IdentityReviewCase, IdentityReviewSuggestion
 
 
-class IdentityReviewSuggestionInline(admin.TabularInline):
+class IdentityReviewSuggestionInline(TabularInline):
     model = IdentityReviewSuggestion
     extra = 0
     autocomplete_fields = ("suggested_person",)
@@ -33,10 +37,10 @@ class ReviewCaseActionForm(ActionForm):
 
 
 @admin.register(IdentityReviewCase)
-class IdentityReviewCaseAdmin(admin.ModelAdmin):
+class IdentityReviewCaseAdmin(ModelAdmin):
     _REOPENABLE_STATUSES = {IdentityReviewCase.Status.OPEN, IdentityReviewCase.Status.DEFERRED}
 
-    list_display = ("priority", "case_type", "status", "created_at", "reviewed_at", "reviewed_by", "has_private_evidence")
+    list_display = ("case_type_display", "status_display", "created_at", "reviewed_at", "reviewed_by", "has_private_evidence")
     list_filter = ("status", "case_type", "has_private_evidence")
     search_fields = ("public_id", "deduplication_key", "provisional_person__canonical_name")
     autocomplete_fields = (
@@ -73,6 +77,8 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
         "supersede_cases",
         "add_note_to_cases",
     )
+    actions_row = ("confirm_new_row", "defer_case_row", "reject_case_row")
+    actions_detail = ("confirm_new_row", "defer_case_row", "reject_case_row")
     fieldsets = (
         (None, {"fields": ("public_id", "case_type", "status", "has_private_evidence")}),
         ("Evidence comparison", {"fields": ("evidence_comparison",)}),
@@ -83,13 +89,79 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
         ("Metadata", {"fields": ("id", "deduplication_key", "created_at", "updated_at")}),
     )
 
-    @admin.display(ordering="case_type", description="Priority")
-    def priority(self, obj):
-        return {
-            IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE: "high",
-            IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH: "high",
-            IdentityReviewCase.CaseType.PERSON_IDENTITY: "normal",
-        }.get(obj.case_type, "normal")
+    @display(
+        description="Case Type",
+        ordering="case_type",
+        label={
+            IdentityReviewCase.CaseType.PERSON_IDENTITY: "info",
+            IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH: "warning",
+            IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE: "danger",
+        },
+    )
+    def case_type_display(self, obj):
+        return obj.get_case_type_display()
+
+    @display(
+        description="Status",
+        ordering="status",
+        label={
+            IdentityReviewCase.Status.OPEN: "warning",
+            IdentityReviewCase.Status.APPROVED: "success",
+            IdentityReviewCase.Status.REJECTED: "danger",
+            IdentityReviewCase.Status.DEFERRED: "info",
+            IdentityReviewCase.Status.SUPERSEDED: "info",
+        },
+    )
+    def status_display(self, obj):
+        return obj.get_status_display()
+
+    def _redirect_back(self, request):
+        return redirect(request.META.get("HTTP_REFERER") or reverse("admin:cm2_review_identityreviewcase_changelist"))
+
+    @action(description="Confirm as distinct person")
+    def confirm_new_row(self, request, object_id):
+        review_case = IdentityReviewCase.objects.get(pk=object_id)
+        if review_case.status in self._REOPENABLE_STATUSES:
+            transition_review_case(
+                review_case,
+                reviewer=request.user,
+                status=IdentityReviewCase.Status.APPROVED,
+                action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
+            )
+            self.message_user(request, "Confirmed as a distinct person.", messages.SUCCESS)
+        else:
+            self.message_user(request, "This case is not open or deferred.", messages.WARNING)
+        return self._redirect_back(request)
+
+    @action(description="Defer")
+    def defer_case_row(self, request, object_id):
+        review_case = IdentityReviewCase.objects.get(pk=object_id)
+        if review_case.status == IdentityReviewCase.Status.OPEN:
+            transition_review_case(
+                review_case,
+                reviewer=request.user,
+                status=IdentityReviewCase.Status.DEFERRED,
+                action=IdentityReviewCase.ResolutionAction.DEFER,
+            )
+            self.message_user(request, "Deferred.", messages.SUCCESS)
+        else:
+            self.message_user(request, "Only open cases can be deferred.", messages.WARNING)
+        return self._redirect_back(request)
+
+    @action(description="Reject")
+    def reject_case_row(self, request, object_id):
+        review_case = IdentityReviewCase.objects.get(pk=object_id)
+        if review_case.status in self._REOPENABLE_STATUSES:
+            transition_review_case(
+                review_case,
+                reviewer=request.user,
+                status=IdentityReviewCase.Status.REJECTED,
+                action=IdentityReviewCase.ResolutionAction.REJECT,
+            )
+            self.message_user(request, "Rejected.", messages.SUCCESS)
+        else:
+            self.message_user(request, "This case is not open or deferred.", messages.WARNING)
+        return self._redirect_back(request)
 
     @admin.display(description="Evidence comparison")
     def evidence_comparison(self, obj):
@@ -308,7 +380,7 @@ class IdentityReviewCaseAdmin(admin.ModelAdmin):
 
 
 @admin.register(IdentityReviewSuggestion)
-class IdentityReviewSuggestionAdmin(admin.ModelAdmin):
+class IdentityReviewSuggestionAdmin(ModelAdmin):
     list_display = ("review_case", "rank", "suggested_person", "external_scheme", "uses_private_evidence")
     list_filter = ("external_scheme", "uses_private_evidence")
     search_fields = ("review_case__public_id", "suggested_person__canonical_name", "external_identifier")
