@@ -3,10 +3,15 @@
    The outer fixed-position bar has a hardcoded height (e.g. lg:h-[64px])
    that assumes a single row of content; once .primary wraps to more than
    one row that fixed height clips everything below the first row,
-   including the submit button. Let the bar grow to fit instead. */
-div:has(> #changelist-actions-wrapper) {
+   including the submit button.
+
+   Matched by its literal Tailwind utility classes rather than :has(),
+   which isn't supported in every browser (a silently-ignored selector
+   would leave this whole rule inert with no visible failure). */
+.fixed.bottom-0.right-0.z-50 {
     height: auto !important;
-    min-height: 64px;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 #changelist-actions-wrapper,
