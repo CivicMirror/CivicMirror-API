@@ -1,12 +1,12 @@
 from django import forms
 from django.contrib import admin, messages
-from django.contrib.admin.helpers import ActionForm
 from django.core.exceptions import ValidationError
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.html import format_html, format_html_join
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import action, display
+from unfold.forms import ActionForm
 from unfold.widgets import UnfoldAdminTextareaWidget, UnfoldAdminTextInputWidget
 
 from cm2_elections.models import Person
