@@ -48,3 +48,7 @@ package-lock.json
 .claude/
 opencode.json
 pyrightconfig.json
+
+# Reconciliation command audit logs (contain real names; local record only)
+reconcile_*.jsonl
+merge_duplicate_races*.jsonl
