@@ -7,12 +7,20 @@ from django.utils import timezone
 
 from cm2_elections.models import Person
 from cm2_review.admin import IdentityReviewCaseAdmin
-from cm2_review.models import IdentityReviewCase
+from cm2_review.models import IdentityReviewCase, IdentityReviewSuggestion
 from cm2_review.serializers import IdentityReviewCaseSerializer
 
 
 def _admin_request(rf, user, post_data=None):
     request = rf.post("/admin/cm2_review/identityreviewcase/", data=post_data or {})
+    request.user = user
+    request.session = {}
+    request._messages = FallbackStorage(request)
+    return request
+
+
+def _admin_get_request(rf, user):
+    request = rf.get("/admin/cm2_review/identityreviewcase/")
     request.user = user
     request.session = {}
     request._messages = FallbackStorage(request)
@@ -38,6 +46,153 @@ def test_evidence_comparison_shows_protected_evidence_to_reviewer(source_record,
 
     assert "123 Private Lane" in html
     assert "private@example.test" in html
+
+
+@pytest.mark.django_db
+def test_evidence_comparison_shows_side_by_side_fuzzy_match_cards(
+    source_record,
+    provisional_person,
+    source_artifact,
+    model_admin,
+):
+    spelled_differently = Person.objects.create(
+        canonical_name="Deidra Freeman",
+        given_name="Deidra",
+        family_name="Freeman",
+        source_artifact=source_artifact,
+    )
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-fuzzy-comparison",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=spelled_differently,
+        rank=1,
+        score="0.8200",
+    )
+
+    html = model_admin.evidence_comparison(review)
+
+    # Side-by-side headers for both records.
+    assert "New person found" in html
+    assert "Existing possible match" in html
+    # The differently-spelled given name is flagged as a diff, not silently shown as a match.
+    assert "DeDreana" in html
+    assert "Deidra" in html
+    # Middle name is absent on the candidate person record, so it should read as missing.
+    assert "Missing" in html
+    # Per-suggestion action buttons let a reviewer resolve straight from the comparison card.
+    assert "Link existing to Deidra Freeman" in html
+    assert "Merge people into Deidra Freeman" in html
+
+
+@pytest.mark.django_db
+def test_merge_people_suggestion_view_merges_provisional_into_target(
+    source_record,
+    provisional_person,
+    source_artifact,
+    django_user_model,
+    model_admin,
+):
+    target = Person.objects.create(canonical_name="William Randy Burton", source_artifact=source_artifact)
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-card-merge",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    suggestion = IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=target,
+        rank=1,
+        score="0.8700",
+    )
+    reviewer = django_user_model.objects.create_user(username="admin-card-merge-reviewer")
+    rf = RequestFactory()
+    request = _admin_get_request(rf, reviewer)
+
+    model_admin.merge_people_suggestion(request, str(review.pk), str(suggestion.pk))
+
+    review.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert review.resolution_action == IdentityReviewCase.ResolutionAction.MERGE_PEOPLE
+    assert provisional_person.merged_into == target
+
+
+@pytest.mark.django_db
+def test_link_existing_suggestion_view_links_provisional_to_target(
+    source_record,
+    provisional_person,
+    source_artifact,
+    django_user_model,
+    model_admin,
+):
+    target = Person.objects.create(canonical_name="Dedreana Freeman", source_artifact=source_artifact)
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-card-link",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    suggestion = IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=target,
+        rank=1,
+        score="0.9500",
+    )
+    reviewer = django_user_model.objects.create_user(username="admin-card-link-reviewer")
+    rf = RequestFactory()
+    request = _admin_get_request(rf, reviewer)
+
+    model_admin.link_existing_suggestion(request, str(review.pk), str(suggestion.pk))
+
+    review.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert review.resolution_action == IdentityReviewCase.ResolutionAction.LINK_EXISTING
+    assert provisional_person.merged_into == target
+
+
+@pytest.mark.django_db
+def test_merge_people_suggestion_view_rejects_already_resolved_case(
+    source_record,
+    provisional_person,
+    source_artifact,
+    django_user_model,
+    model_admin,
+):
+    target = Person.objects.create(canonical_name="William Randy Burton", source_artifact=source_artifact)
+    reviewer = django_user_model.objects.create_user(username="admin-card-resolved-reviewer")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-card-already-resolved",
+        source_record=source_record,
+        provisional_person=provisional_person,
+        status=IdentityReviewCase.Status.APPROVED,
+        resolution_action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
+        reviewed_by=reviewer,
+        reviewed_at=timezone.now(),
+    )
+    suggestion = IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=target,
+        rank=1,
+        score="0.8700",
+    )
+    rf = RequestFactory()
+    request = _admin_get_request(rf, reviewer)
+
+    model_admin.merge_people_suggestion(request, str(review.pk), str(suggestion.pk))
+
+    review.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert review.resolution_action == IdentityReviewCase.ResolutionAction.CONFIRM_NEW
+    assert provisional_person.merged_into is None
 
 
 @pytest.mark.django_db
