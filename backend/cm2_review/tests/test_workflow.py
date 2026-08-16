@@ -1,11 +1,58 @@
+from datetime import date
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from cm2_elections.models import Person, PersonIdentifier
+from cm2_core.models import SourceArtifact
+from cm2_elections.models import Candidacy, Contest, Election, Jurisdiction, Office, Person, PersonIdentifier
+from cm2_results.models import ContestResult, ResultChoice
 from cm2_review.models import IdentityReviewAuditEvent, IdentityReviewCase, IdentityReviewSuggestion
 from cm2_review.serializers import IdentityReviewCaseSerializer
 from cm2_review.workflow import add_review_note, create_review_case, supersede_review_case, transition_review_case
+
+
+@pytest.fixture
+def write_in_result_choice(db):
+    results_artifact = SourceArtifact.objects.create(
+        source_system="nc_sbe",
+        source_type=SourceArtifact.SourceType.RESULTS,
+        url="https://example.test/nc/results.zip",
+        retrieved_at=timezone.now(),
+        content_sha256="b" * 64,
+        parser_version="nc-results-v1",
+        election_date=date(2026, 3, 3),
+    )
+    jurisdiction = Jurisdiction.objects.create(
+        name="Harrellsville",
+        classification="municipality",
+        state="NC",
+        record_status="verified",
+    )
+    office = Office.objects.create(jurisdiction=jurisdiction, canonical_name="Mayor", role="mayor")
+    election = Election.objects.create(
+        name="2026 Town of Harrellsville Election",
+        election_date=date(2026, 3, 3),
+        election_type="municipal",
+        lifecycle_status="active",
+    )
+    contest = Contest.objects.create(election=election, office=office, vote_for=1)
+    contest_result = ContestResult.objects.create(
+        contest=contest,
+        status=ContestResult.Status.UNOFFICIAL,
+        source_artifact=results_artifact,
+        total_votes=10,
+    )
+    return ResultChoice.objects.create(
+        contest_result=contest_result,
+        source_label="Lori Nuss (Write-In)",
+        normalized_label="lori nuss",
+        choice_type=ResultChoice.ChoiceType.NAMED_WRITE_IN,
+        resolution_status=ResultChoice.ResolutionStatus.UNRESOLVED,
+        vote_total=4,
+        source_artifact=results_artifact,
+        source_choice_key="harrellsville-mayor:lori-nuss",
+    )
 
 
 @pytest.mark.django_db
@@ -453,3 +500,70 @@ def test_add_review_note_metadata_does_not_leak_note_text(source_record, provisi
     event = review.audit_events.get(event_type=IdentityReviewAuditEvent.EventType.NOTE_ADDED)
     assert secret_note not in str(event.metadata)
     assert "note" not in event.metadata
+
+
+@pytest.mark.django_db
+def test_confirm_new_on_write_in_case_creates_person_and_candidacy(write_in_result_choice, django_user_model):
+    reviewer = django_user_model.objects.create_user(username="write-in-reviewer")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE,
+        deduplication_key="write-in-confirm",
+        result_choice=write_in_result_choice,
+        supporting_evidence={"source_label": write_in_result_choice.source_label},
+    )
+
+    transition_review_case(
+        review,
+        reviewer=reviewer,
+        status=IdentityReviewCase.Status.APPROVED,
+        action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
+    )
+
+    write_in_result_choice.refresh_from_db()
+    review.refresh_from_db()
+    assert write_in_result_choice.resolution_status == ResultChoice.ResolutionStatus.MATCHED
+    assert write_in_result_choice.candidacy is not None
+
+    candidacy = write_in_result_choice.candidacy
+    assert candidacy.ballot_name == "Lori Nuss (Write-In)"
+    assert candidacy.status == Candidacy.Status.WRITE_IN
+    assert candidacy.contest_id == write_in_result_choice.contest_result.contest_id
+    assert candidacy.source_artifact_id == write_in_result_choice.source_artifact_id
+    assert candidacy.source_key == write_in_result_choice.source_choice_key
+
+    person = candidacy.person
+    assert person.canonical_name == "Lori Nuss (Write-In)"
+    assert person.identity_state == Person.IdentityState.RESOLVED
+    assert person.source_artifact_id == write_in_result_choice.source_artifact_id
+    assert person.source_key == write_in_result_choice.source_choice_key
+
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert review.resolution_action == IdentityReviewCase.ResolutionAction.CONFIRM_NEW
+    assert review.audit_events.filter(event_type=IdentityReviewAuditEvent.EventType.RESOLVED).exists()
+
+
+@pytest.mark.django_db
+def test_confirm_new_on_write_in_case_rejects_already_linked_choice(write_in_result_choice, django_user_model):
+    reviewer = django_user_model.objects.create_user(username="write-in-double-reviewer")
+    other_person = Person.objects.create(canonical_name="Someone Else")
+    write_in_result_choice.candidacy = Candidacy.objects.create(
+        person=other_person,
+        contest=write_in_result_choice.contest_result.contest,
+        ballot_name="Someone Else",
+        status=Candidacy.Status.WRITE_IN,
+    )
+    write_in_result_choice.resolution_status = ResultChoice.ResolutionStatus.MATCHED
+    write_in_result_choice.save(update_fields=["candidacy", "resolution_status"])
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE,
+        deduplication_key="write-in-already-linked",
+        result_choice=write_in_result_choice,
+    )
+
+    with pytest.raises(ValidationError, match="result_choice"):
+        transition_review_case(
+            review,
+            reviewer=reviewer,
+            status=IdentityReviewCase.Status.APPROVED,
+            action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
+        )
