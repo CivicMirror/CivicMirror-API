@@ -75,3 +75,64 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -v --tb=short
+
+  v2-foundation:
+    name: CivicMirror 2.0 Foundation
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: civicmirror_2_0
+          POSTGRES_USER: civicmirror_v2
+          POSTGRES_PASSWORD: civicmirror_v2
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U civicmirror_v2 -d civicmirror_2_0"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.v2
+      DJANGO_SECRET_KEY: ci-v2-test-secret-key-not-used-in-prod
+      DATABASE_URL: postgres://civicmirror_v2:civicmirror_v2@localhost:5432/civicmirror_2_0
+      CIVICMIRROR_V2_DATABASE_NAME: civicmirror_2_0
+      CIVICMIRROR_V2_TEST_DATABASE_NAME: civicmirror_2_0_test
+      REDIS_URL: redis://localhost:6379/2
+      CELERY_BROKER_URL: redis://localhost:6379/2
+      CELERY_RESULT_BACKEND: redis://localhost:6379/3
+      CIVICMIRROR_V2_TASK_QUEUE: civicmirror_2_0
+      CELERY_TASK_ALWAYS_EAGER: "True"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements/*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements/base.txt -r requirements/dev.txt
+
+      - name: Verify CivicMirror 2.0 foundation
+        run: ./scripts/verify_v2.sh

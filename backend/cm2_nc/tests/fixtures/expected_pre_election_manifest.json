@@ -1,0 +1,13 @@
+{
+  "source_rows": 13,
+  "jurisdictions": 9,
+  "offices": 8,
+  "elections": 3,
+  "contests": 10,
+  "candidates": 10,
+  "source_evidence_rows": 12,
+  "notices": {
+    "csv_only_election": 1,
+    "measure_excluded": 1
+  }
+}

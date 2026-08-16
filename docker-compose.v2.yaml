@@ -1,0 +1,93 @@
+name: civicmirror-2-0
+
+x-v2-environment: &v2-environment
+  DJANGO_SETTINGS_MODULE: config.settings.v2
+  DJANGO_SECRET_KEY: civicmirror-v2-development-only
+  DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,${CIVICMIRROR_V2_LAN_HOST:-192.168.1.102}"
+  DATABASE_URL: postgres://civicmirror_v2:civicmirror_v2@db:5432/civicmirror_2_0
+  CIVICMIRROR_V2_DATABASE_NAME: civicmirror_2_0
+  CIVICMIRROR_V2_TEST_DATABASE_NAME: civicmirror_2_0_test
+  REDIS_URL: redis://redis:6379/2
+  CELERY_BROKER_URL: redis://redis:6379/2
+  CELERY_RESULT_BACKEND: redis://redis:6379/3
+  CIVICMIRROR_V2_TASK_QUEUE: civicmirror_2_0
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: civicmirror_2_0
+      POSTGRES_USER: civicmirror_v2
+      POSTGRES_PASSWORD: civicmirror_v2
+    volumes:
+      - civicmirror_2_0_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U civicmirror_v2 -d civicmirror_2_0"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - civicmirror_2_0_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      target: development
+    working_dir: /app
+    user: appuser
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      <<: *v2-environment
+      # DEBUG-only in this service: enables Django's runserver static-file
+      # serving (WhiteNoiseMiddleware is stripped from v2's MIDDLEWARE, and
+      # nothing else serves /static/ here). The `test` service intentionally
+      # stays DEBUG=False (its own default) for CI parity.
+      DJANGO_DEBUG: "True"
+    ports:
+      - "0.0.0.0:${CIVICMIRROR_V2_API_PORT:-58000}:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=2).read()
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  test:
+    build:
+      context: ./backend
+      target: development
+    working_dir: /app
+    user: appuser
+    command: ./scripts/verify_v2.sh
+    environment:
+      <<: *v2-environment
+      CELERY_TASK_ALWAYS_EAGER: "True"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  civicmirror_2_0_postgres_data:
+  civicmirror_2_0_redis_data:

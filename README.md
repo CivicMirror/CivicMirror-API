@@ -2,6 +2,36 @@
 
 Election data aggregation and normalization platform. Ingests results from multiple public sources, normalizes them using FIPS codes and OCD-IDs, and serves a unified REST API for the [CivicMirror](https://github.com/tokendad/CivicMirror) web app.
 
+## CivicMirror 2.0 development
+
+CivicMirror 2.0 requires Python `>=3.13,<3.14`. Host Python 3.14 is not
+supported; use a repository-managed Python 3.13 environment or the development
+container.
+
+Run the canonical foundation verification from the repository root:
+
+```bash
+make verify-v2
+```
+
+Start the isolated development API with:
+
+```bash
+docker compose -f docker-compose.v2.yaml up -d db redis api
+```
+
+The API listens on `0.0.0.0:58000` by default and is available at
+`http://127.0.0.1:58000/api/v2/health/` or, on the current development host,
+`http://192.168.1.102:58000/api/v2/health/`. Set
+`CIVICMIRROR_V2_API_PORT` or `CIVICMIRROR_V2_LAN_HOST` in the shell before the
+Compose command if the host port or LAN address changes. Only the API port is
+published; the 2.0 Postgres and Redis services remain private to the Compose
+network.
+
+The Compose project, database, test database, volumes, Redis databases, and
+Celery queue are all 2.0-specific. The existing `docker-compose.dev.yaml` and
+legacy Django settings remain separate.
+
 ---
 
 ## At a Glance — State Coverage
