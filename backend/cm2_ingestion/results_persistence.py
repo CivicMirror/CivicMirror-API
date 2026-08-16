@@ -217,7 +217,7 @@ def _persist_contest_result(
             review_case, created = create_review_case(
                 deduplication_key=f"unresolved-choice:{result_choice.public_id}",
                 defaults={
-                    "case_type": IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE,
+                    "case_type": IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
                     "result_choice": result_choice,
                     "supporting_evidence": {"source_label": choice.source_label, "candidates": review_supporting_evidence},
                 },
