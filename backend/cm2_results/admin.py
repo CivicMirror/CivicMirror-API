@@ -1,9 +1,10 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin, TabularInline
 
 from .models import ContestResult, ResultChoice
 
 
-class ResultChoiceInline(admin.TabularInline):
+class ResultChoiceInline(TabularInline):
     model = ResultChoice
     extra = 0
     autocomplete_fields = ("candidacy", "source_artifact")
@@ -11,7 +12,7 @@ class ResultChoiceInline(admin.TabularInline):
 
 
 @admin.register(ContestResult)
-class ContestResultAdmin(admin.ModelAdmin):
+class ContestResultAdmin(ModelAdmin):
     list_display = ("contest", "status", "total_votes", "reported_at", "certified_at")
     list_filter = ("status",)
     search_fields = ("public_id", "contest__public_id", "contest__office__canonical_name")
@@ -20,7 +21,7 @@ class ContestResultAdmin(admin.ModelAdmin):
 
 
 @admin.register(ResultChoice)
-class ResultChoiceAdmin(admin.ModelAdmin):
+class ResultChoiceAdmin(ModelAdmin):
     list_display = (
         "source_label",
         "contest_result",

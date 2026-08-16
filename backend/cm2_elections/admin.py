@@ -1,4 +1,5 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import (
     Candidacy,
@@ -14,7 +15,7 @@ from .models import (
 
 
 @admin.register(Jurisdiction)
-class JurisdictionAdmin(admin.ModelAdmin):
+class JurisdictionAdmin(ModelAdmin):
     list_display = ("name", "classification", "state", "record_status", "parent")
     list_filter = ("state", "classification", "record_status")
     search_fields = ("public_id", "name", "source_key")
@@ -22,7 +23,7 @@ class JurisdictionAdmin(admin.ModelAdmin):
 
 
 @admin.register(Office)
-class OfficeAdmin(admin.ModelAdmin):
+class OfficeAdmin(ModelAdmin):
     list_display = ("canonical_name", "jurisdiction", "role", "positions", "record_status")
     list_filter = ("record_status", "role", "jurisdiction__state")
     search_fields = ("public_id", "canonical_name", "jurisdiction__name", "source_key")
@@ -30,7 +31,7 @@ class OfficeAdmin(admin.ModelAdmin):
 
 
 @admin.register(Election)
-class ElectionAdmin(admin.ModelAdmin):
+class ElectionAdmin(ModelAdmin):
     list_display = ("name", "election_date", "election_type", "lifecycle_status")
     list_filter = ("election_type", "lifecycle_status", "election_date")
     search_fields = ("public_id", "name", "source_key")
@@ -39,7 +40,7 @@ class ElectionAdmin(admin.ModelAdmin):
 
 
 @admin.register(Contest)
-class ContestAdmin(admin.ModelAdmin):
+class ContestAdmin(ModelAdmin):
     list_display = ("office", "election", "party_contest", "lifecycle_status", "result_status")
     list_filter = ("lifecycle_status", "result_status", "is_partisan", "is_unexpired")
     search_fields = ("public_id", "office__canonical_name", "election__name", "party_contest", "source_key")
@@ -47,7 +48,7 @@ class ContestAdmin(admin.ModelAdmin):
 
 
 @admin.register(Person)
-class PersonAdmin(admin.ModelAdmin):
+class PersonAdmin(ModelAdmin):
     list_display = ("canonical_name", "identity_state", "family_name", "given_name", "merged_into")
     list_filter = ("identity_state",)
     search_fields = ("public_id", "canonical_name", "given_name", "family_name", "source_key")
@@ -55,7 +56,7 @@ class PersonAdmin(admin.ModelAdmin):
 
 
 @admin.register(PersonIdentifier)
-class PersonIdentifierAdmin(admin.ModelAdmin):
+class PersonIdentifierAdmin(ModelAdmin):
     list_display = ("scheme", "identifier", "person", "verification_method", "verified_at")
     list_filter = ("scheme", "verification_method")
     search_fields = ("scheme", "identifier", "person__canonical_name", "person__public_id")
@@ -63,7 +64,7 @@ class PersonIdentifierAdmin(admin.ModelAdmin):
 
 
 @admin.register(PersonSourceRecord)
-class PersonSourceRecordAdmin(admin.ModelAdmin):
+class PersonSourceRecordAdmin(ModelAdmin):
     list_display = ("reported_name", "ballot_name", "source_artifact", "source_row_key", "person")
     list_filter = ("source_artifact__source_system", "source_artifact__source_type")
     search_fields = ("reported_name", "ballot_name", "source_row_key", "person__public_id")
@@ -91,7 +92,7 @@ class PersonSourceRecordAdmin(admin.ModelAdmin):
 
 
 @admin.register(Candidacy)
-class CandidacyAdmin(admin.ModelAdmin):
+class CandidacyAdmin(ModelAdmin):
     list_display = ("ballot_name", "contest", "person", "party_candidate", "status")
     list_filter = ("status", "party_candidate")
     search_fields = ("public_id", "ballot_name", "person__canonical_name", "contest__public_id")
@@ -99,7 +100,7 @@ class CandidacyAdmin(admin.ModelAdmin):
 
 
 @admin.register(OfficeTerm)
-class OfficeTermAdmin(admin.ModelAdmin):
+class OfficeTermAdmin(ModelAdmin):
     list_display = ("person", "office", "role", "start_date", "end_date", "method_of_selection")
     list_filter = ("method_of_selection", "role")
     search_fields = ("public_id", "person__canonical_name", "office__canonical_name")

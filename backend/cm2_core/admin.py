@@ -1,10 +1,11 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import SourceArtifact
 
 
 @admin.register(SourceArtifact)
-class SourceArtifactAdmin(admin.ModelAdmin):
+class SourceArtifactAdmin(ModelAdmin):
     list_display = (
         "source_system",
         "source_type",
