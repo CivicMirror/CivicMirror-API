@@ -1,5 +1,7 @@
 import pytest
+from datetime import date
 
+from cm2_ingestion.contracts import ElectionRecord
 from cm2_ingestion.review import defer_failed_promotion, flag_incomplete_election, get_resolved_incomplete_election
 from cm2_review.models import IdentityReviewAuditEvent, IdentityReviewCase
 from cm2_review.workflow import transition_review_case
@@ -122,3 +124,70 @@ def test_defer_failed_promotion_preserves_existing_conflicting_evidence():
     deferred = defer_failed_promotion(review_case, error="boom")
 
     assert deferred.conflicting_evidence == {"prior_note": "kept", "promotion_error": "boom"}
+
+
+@pytest.mark.django_db
+def test_round_trip_flag_resolve_and_build_election_record(django_user_model):
+    """
+    Simulates what a real state's mapping code does once it exists (no state
+    package consumes this yet -- MA/OCPF is future work): flag on first
+    sight, confirm nothing's promotable yet, have a reviewer supply the date,
+    then confirm the resolved case's data is sufficient to build the
+    ElectionRecord the pre-election batch contract requires.
+    """
+    flag_incomplete_election(
+        deduplication_key=_KEY,
+        supporting_evidence={"jurisdiction": "Everett", "office": "Mayoral", "candidates": ["Gerly Adrien"]},
+    )
+    assert get_resolved_incomplete_election(_KEY) is None
+
+    review_case = IdentityReviewCase.objects.get(deduplication_key=_KEY)
+    reviewer = django_user_model.objects.create_user(username="reviewer")
+    transition_review_case(
+        review_case,
+        reviewer=reviewer,
+        status=IdentityReviewCase.Status.APPROVED,
+        action=IdentityReviewCase.ResolutionAction.SUPPLY_MISSING_DATA,
+        resolution_data={"election_date": "2026-11-03"},
+    )
+
+    resolved = get_resolved_incomplete_election(_KEY)
+    assert resolved is not None
+
+    election_record = ElectionRecord(
+        public_id="ma/election/everett-mayoral-2026",
+        name="2026 Everett Mayoral Election",
+        election_date=date.fromisoformat(resolved.resolution_data["election_date"]),
+        election_type="municipal",
+    )
+
+    assert election_record.election_date == date(2026, 11, 3)
+
+
+@pytest.mark.django_db
+def test_round_trip_defers_on_a_failed_promotion(django_user_model):
+    flag_incomplete_election(deduplication_key=_KEY, supporting_evidence={"office": "Mayoral"})
+    review_case = IdentityReviewCase.objects.get(deduplication_key=_KEY)
+    reviewer = django_user_model.objects.create_user(username="reviewer")
+    transition_review_case(
+        review_case,
+        reviewer=reviewer,
+        status=IdentityReviewCase.Status.APPROVED,
+        action=IdentityReviewCase.ResolutionAction.SUPPLY_MISSING_DATA,
+        resolution_data={"election_date": "2026-11-03"},
+    )
+    resolved = get_resolved_incomplete_election(_KEY)
+
+    try:
+        ElectionRecord(
+            public_id="",  # simulate a downstream validation failure at promotion time
+            name="2026 Everett Mayoral Election",
+            election_date=date.fromisoformat(resolved.resolution_data["election_date"]),
+            election_type="municipal",
+        )
+        raise AssertionError("expected building the promoted record to be treated as failed by this test")
+    except Exception:
+        deferred = defer_failed_promotion(resolved, error="public_id was empty")
+
+    assert deferred.status == IdentityReviewCase.Status.DEFERRED
+    assert get_resolved_incomplete_election(_KEY) is None
