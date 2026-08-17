@@ -17,3 +17,10 @@ SOLVER_WAIT_SECONDS = 25
 UPCOMING_PARSER_VERSION = "ma-upcoming-v1"
 SPECIAL_INDEX_PARSER_VERSION = "ma-special-index-v1"
 SPECIAL_CALENDAR_PARSER_VERSION = "ma-special-calendar-v1"
+
+OCPF_DISTRICT_CODE_LIST_URL = (
+    "https://ocpf2.blob.core.windows.net/downloads/data2/district_code_list.zip"
+)
+OCPF_FILERS_URL = "https://ocpf2.blob.core.windows.net/downloads/data2/ocpf-filers-excel.zip"
+OCPF_DISTRICT_PARSER_VERSION = "ma-ocpf-district-v1"
+OCPF_FILERS_PARSER_VERSION = "ma-ocpf-filers-v1"
