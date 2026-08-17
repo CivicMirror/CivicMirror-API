@@ -656,6 +656,24 @@ def test_link_existing_cases_action_reaches_deferred_cases(
 
 
 @pytest.mark.django_db
+def test_supply_missing_date_row_get_opens_dialog_without_transitioning(admin_client):
+    """A real reviewer click is a GET (htmx) that opens the dialog; it must not mutate the case."""
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026-dialog-open",
+        supporting_evidence={"office": "Mayoral"},
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
+
+    response = admin_client.get(url)
+
+    review_case.refresh_from_db()
+    assert response.status_code == 200
+    assert b"election_date" in response.content
+    assert review_case.status == IdentityReviewCase.Status.OPEN
+
+
+@pytest.mark.django_db
 def test_supply_missing_date_row_approves_case_with_supplied_date(admin_client):
     review_case = IdentityReviewCase.objects.create(
         case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
@@ -664,7 +682,9 @@ def test_supply_missing_date_row_approves_case_with_supplied_date(admin_client):
     )
     url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
 
-    response = admin_client.post(url, {"election_date": "2026-11-03"})
+    # Mirrors the dialog form's real POST body: the hidden _form_submitted flag the
+    # unfold dialog template always renders, plus the validated field itself.
+    response = admin_client.post(url, {"election_date": "2026-11-03", "_form_submitted": "True"})
 
     review_case.refresh_from_db()
     assert response.status_code == 302
@@ -680,9 +700,10 @@ def test_supply_missing_date_row_rejects_bad_date_format(admin_client):
     )
     url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
 
-    admin_client.post(url, {"election_date": "not-a-date"})
+    response = admin_client.post(url, {"election_date": "not-a-date", "_form_submitted": "True"})
 
     review_case.refresh_from_db()
+    assert response.status_code == 200
     assert review_case.status == IdentityReviewCase.Status.OPEN
 
 
@@ -696,7 +717,27 @@ def test_supply_missing_date_row_rejects_wrong_case_type(admin_client, source_re
     )
     url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
 
-    admin_client.post(url, {"election_date": "2026-11-03"})
+    admin_client.post(url, {"election_date": "2026-11-03", "_form_submitted": "True"})
 
     review_case.refresh_from_db()
     assert review_case.status == IdentityReviewCase.Status.OPEN
+
+
+@pytest.mark.django_db
+def test_supply_missing_date_row_rejects_non_open_status(admin_client, django_user_model):
+    reviewer = django_user_model.objects.create_user(username="admin-supply-date-deferred-reviewer")
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026-deferred",
+        status=IdentityReviewCase.Status.DEFERRED,
+        resolution_action=IdentityReviewCase.ResolutionAction.DEFER,
+        reviewed_by=reviewer,
+        reviewed_at=timezone.now(),
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
+
+    admin_client.post(url, {"election_date": "2026-11-03", "_form_submitted": "True"})
+
+    review_case.refresh_from_db()
+    assert review_case.status == IdentityReviewCase.Status.DEFERRED
+    assert review_case.resolution_data == {}

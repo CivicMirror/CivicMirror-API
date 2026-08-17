@@ -1,5 +1,3 @@
-from datetime import date
-
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
@@ -8,8 +6,8 @@ from django.urls import path, reverse
 from django.utils.html import format_html, format_html_join
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import action, display
-from unfold.forms import ActionForm
-from unfold.widgets import UnfoldAdminTextareaWidget, UnfoldAdminTextInputWidget
+from unfold.forms import ActionForm, BaseDialogForm
+from unfold.widgets import UnfoldAdminDateWidget, UnfoldAdminTextareaWidget, UnfoldAdminTextInputWidget
 
 from cm2_elections.models import Person
 from cm2_review.workflow import add_review_note, supersede_review_case, transition_review_case
@@ -39,10 +37,12 @@ class ReviewCaseActionForm(ActionForm):
         widget=UnfoldAdminTextareaWidget(attrs={"rows": 1, "cols": 20}),
         help_text="Note text for the add-note action.",
     )
-    election_date = forms.CharField(
-        required=False,
-        widget=UnfoldAdminTextInputWidget(attrs={"size": 14, "placeholder": "YYYY-MM-DD"}),
-        help_text="Election date to supply for an incomplete-election-data case.",
+
+
+class SupplyMissingDateDialogForm(BaseDialogForm):
+    election_date = forms.DateField(
+        widget=UnfoldAdminDateWidget(),
+        help_text="Election date to supply for this incomplete-election-data case.",
     )
 
 
@@ -232,8 +232,16 @@ class IdentityReviewCaseAdmin(ModelAdmin):
             self.message_user(request, "This case is not open or deferred.", messages.WARNING)
         return self._redirect_back(request)
 
-    @action(description="Supply election date")
-    def supply_missing_date_row(self, request, object_id):
+    @action(
+        description="Supply election date",
+        dialog={
+            "title": "Supply election date",
+            "description": "Enter the election date missing from this case's source data.",
+            "form_class": SupplyMissingDateDialogForm,
+            "form_submit_text": "Supply date",
+        },
+    )
+    def supply_missing_date_row(self, request, form, object_id):
         review_case = IdentityReviewCase.objects.get(pk=object_id)
         if review_case.case_type != IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA:
             self.message_user(
@@ -243,15 +251,7 @@ class IdentityReviewCaseAdmin(ModelAdmin):
         if review_case.status != IdentityReviewCase.Status.OPEN:
             self.message_user(request, "This case is not open.", messages.WARNING)
             return self._redirect_back(request)
-        raw_date = request.POST.get("election_date", "").strip()
-        if not raw_date:
-            self.message_user(request, "Provide an election date above.", messages.ERROR)
-            return self._redirect_back(request)
-        try:
-            parsed_date = date.fromisoformat(raw_date)
-        except ValueError:
-            self.message_user(request, "Election date must be in YYYY-MM-DD format.", messages.ERROR)
-            return self._redirect_back(request)
+        parsed_date = form.cleaned_data["election_date"]
         transition_review_case(
             review_case,
             reviewer=request.user,
