@@ -1,3 +1,5 @@
+from datetime import date
+
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
@@ -37,6 +39,11 @@ class ReviewCaseActionForm(ActionForm):
         widget=UnfoldAdminTextareaWidget(attrs={"rows": 1, "cols": 20}),
         help_text="Note text for the add-note action.",
     )
+    election_date = forms.CharField(
+        required=False,
+        widget=UnfoldAdminTextInputWidget(attrs={"size": 14, "placeholder": "YYYY-MM-DD"}),
+        help_text="Election date to supply for an incomplete-election-data case.",
+    )
 
 
 @admin.register(IdentityReviewCase)
@@ -62,6 +69,7 @@ class IdentityReviewCaseAdmin(ModelAdmin):
         "evidence_comparison",
         "status",
         "resolution_action",
+        "resolution_data",
         "reviewed_by",
         "reviewed_at",
         "superseded_by",
@@ -80,14 +88,14 @@ class IdentityReviewCaseAdmin(ModelAdmin):
         "supersede_cases",
         "add_note_to_cases",
     )
-    actions_row = ("confirm_new_row", "defer_case_row", "reject_case_row")
-    actions_detail = ("confirm_new_row", "defer_case_row", "reject_case_row")
+    actions_row = ("confirm_new_row", "defer_case_row", "reject_case_row", "supply_missing_date_row")
+    actions_detail = ("confirm_new_row", "defer_case_row", "reject_case_row", "supply_missing_date_row")
     fieldsets = (
         (None, {"fields": ("public_id", "case_type", "status", "has_private_evidence")}),
         ("Evidence comparison", {"fields": ("evidence_comparison",)}),
         (
             "Resolution",
-            {"fields": ("resolution_action", "reviewed_by", "reviewed_at", "notes", "superseded_by")},
+            {"fields": ("resolution_action", "resolution_data", "reviewed_by", "reviewed_at", "notes", "superseded_by")},
         ),
         ("Metadata", {"fields": ("id", "deduplication_key", "created_at", "updated_at")}),
     )
@@ -99,6 +107,7 @@ class IdentityReviewCaseAdmin(ModelAdmin):
             IdentityReviewCase.CaseType.PERSON_IDENTITY: "info",
             IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH: "warning",
             IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE: "danger",
+            IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA: "warning",
         },
     )
     def case_type_display(self, obj):
@@ -221,6 +230,36 @@ class IdentityReviewCaseAdmin(ModelAdmin):
             self.message_user(request, "Rejected.", messages.SUCCESS)
         else:
             self.message_user(request, "This case is not open or deferred.", messages.WARNING)
+        return self._redirect_back(request)
+
+    @action(description="Supply election date")
+    def supply_missing_date_row(self, request, object_id):
+        review_case = IdentityReviewCase.objects.get(pk=object_id)
+        if review_case.case_type != IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA:
+            self.message_user(
+                request, "This action only applies to incomplete-election-data cases.", messages.ERROR
+            )
+            return self._redirect_back(request)
+        if review_case.status != IdentityReviewCase.Status.OPEN:
+            self.message_user(request, "This case is not open.", messages.WARNING)
+            return self._redirect_back(request)
+        raw_date = request.POST.get("election_date", "").strip()
+        if not raw_date:
+            self.message_user(request, "Provide an election date above.", messages.ERROR)
+            return self._redirect_back(request)
+        try:
+            parsed_date = date.fromisoformat(raw_date)
+        except ValueError:
+            self.message_user(request, "Election date must be in YYYY-MM-DD format.", messages.ERROR)
+            return self._redirect_back(request)
+        transition_review_case(
+            review_case,
+            reviewer=request.user,
+            status=IdentityReviewCase.Status.APPROVED,
+            action=IdentityReviewCase.ResolutionAction.SUPPLY_MISSING_DATA,
+            resolution_data={"election_date": parsed_date.isoformat()},
+        )
+        self.message_user(request, f"Supplied election date {parsed_date.isoformat()}.", messages.SUCCESS)
         return self._redirect_back(request)
 
     @admin.display(description="Evidence comparison")

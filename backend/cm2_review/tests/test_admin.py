@@ -653,3 +653,50 @@ def test_link_existing_cases_action_reaches_deferred_cases(
     provisional_person.refresh_from_db()
     assert review.status == IdentityReviewCase.Status.APPROVED
     assert provisional_person.merged_into == existing
+
+
+@pytest.mark.django_db
+def test_supply_missing_date_row_approves_case_with_supplied_date(admin_client):
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026",
+        supporting_evidence={"office": "Mayoral"},
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
+
+    response = admin_client.post(url, {"election_date": "2026-11-03"})
+
+    review_case.refresh_from_db()
+    assert response.status_code == 302
+    assert review_case.status == IdentityReviewCase.Status.APPROVED
+    assert review_case.resolution_data == {"election_date": "2026-11-03"}
+
+
+@pytest.mark.django_db
+def test_supply_missing_date_row_rejects_bad_date_format(admin_client):
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026",
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
+
+    admin_client.post(url, {"election_date": "not-a-date"})
+
+    review_case.refresh_from_db()
+    assert review_case.status == IdentityReviewCase.Status.OPEN
+
+
+@pytest.mark.django_db
+def test_supply_missing_date_row_rejects_wrong_case_type(admin_client, source_record, provisional_person):
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="wrong-case-type",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
+
+    admin_client.post(url, {"election_date": "2026-11-03"})
+
+    review_case.refresh_from_db()
+    assert review_case.status == IdentityReviewCase.Status.OPEN
