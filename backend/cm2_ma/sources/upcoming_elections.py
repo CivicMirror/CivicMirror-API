@@ -27,11 +27,20 @@ _MONTHS = {
 _LABEL_SEPARATOR_RE = re.compile(r"[–—-]")
 
 _LABEL_TYPE_MAP = (
+    # "special state primary"/"special state election" are the real MA
+    # heading phrasing for special elections (e.g. the special-election
+    # calendar pages' own <h1> reads "Special State Election"). These must
+    # be checked before the plain "state primary"/"state election" keys
+    # below: "special state primary" contains "state primary" as a
+    # substring, so without this ordering (and without these more-specific
+    # keys) a special-election heading is misclassified as a plain primary.
+    ("special state primary", "special_primary"),
+    ("special state election", "special_general"),
+    ("special primary", "special_primary"),
+    ("special election", "special_general"),
     ("state primaries", "primary"),
     ("state primary", "primary"),
     ("state election", "general"),
-    ("special primary", "special_primary"),
-    ("special election", "special_general"),
 )
 
 

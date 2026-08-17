@@ -1,6 +1,5 @@
-from core.cf_solver import CfSolverClient
-
 from cm2_ma.constants import SOLVER_WAIT_SECONDS, SOURCE_SYSTEM
+from core.cf_solver import CfSolverClient
 
 
 class MaSolverBytesSource:

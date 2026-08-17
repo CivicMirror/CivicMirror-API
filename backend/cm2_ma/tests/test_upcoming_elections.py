@@ -21,6 +21,18 @@ def test_parses_date_embedded_in_heading_and_splits_label():
     assert all(record.lifecycle_status == "upcoming" for record in records)
 
 
+def test_special_state_primary_heading_classified_as_special_primary():
+    # "Special State Primary" contains "state primary" as a substring, so the
+    # _LABEL_TYPE_MAP must check the "special *" keys before the plain
+    # "state *" keys or this misclassifies as a regular primary.
+    content = b"<h2>March 3, 2026 \xe2\x80\x93 Special State Primary</h2><p>text</p>"
+
+    records = parse_upcoming_elections(content)
+
+    assert len(records) == 1
+    assert records[0].election_type == "special_primary"
+
+
 def test_headings_without_a_recognized_type_default_to_other():
     content = b"<h2>March 3, 2026 \xe2\x80\x93 Municipal Preliminary</h2><p>text</p>"
 

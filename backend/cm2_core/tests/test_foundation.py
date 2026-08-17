@@ -27,7 +27,7 @@ def test_runtime_uses_python_313():
 def test_v2_settings_exclude_legacy_apps():
     assert LEGACY_APPS.isdisjoint(settings.INSTALLED_APPS)
     assert "cm2_core" in settings.INSTALLED_APPS
-    assert settings.CIVICMIRROR_V2_ENABLED_STATES == ("NC",)
+    assert settings.CIVICMIRROR_V2_ENABLED_STATES == ("NC", "MA")
     assert settings.REST_FRAMEWORK["DEFAULT_PAGINATION_CLASS"] is None
     assert settings.REST_FRAMEWORK["PAGE_SIZE"] is None
     assert settings.CELERY_TASK_DEFAULT_QUEUE == "civicmirror_2_0"
@@ -43,7 +43,7 @@ def test_health_checks_database_and_reports_v2_runtime(path):
     assert response.json() == {
         "status": "ok",
         "version": "2.0",
-        "enabled_states": ["NC"],
+        "enabled_states": ["NC", "MA"],
     }
 
 
