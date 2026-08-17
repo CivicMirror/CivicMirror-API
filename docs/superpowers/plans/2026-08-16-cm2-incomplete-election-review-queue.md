@@ -16,6 +16,18 @@
 - No MA/OCPF adapter code in this plan — this is the shared mechanism only; MA is a future consumer.
 - `PersonSourceRecord.IMMUTABLE_SOURCE_FIELDS` and existing `IdentityReviewCase` constraints for the three existing case types (`person_identity`, `fuzzy_person_match`, `unresolved_result_choice`) must keep working unchanged.
 - Every DB-touching test runs via `pytest --no-migrations` (project convention; local test-DB creation breaks on migration replay otherwise).
+- **Test invocation correction (found during SDD setup, supersedes every task's literal `Run:` lines):** the `cm2_*` apps are only registered under `config.settings.v2` (via `pytest-v2.ini`), not the default `config.settings.dev` (`pytest.ini`) — running against the default settings module fails with `RuntimeError: Model class cm2_core.models.SourceArtifact doesn't declare an explicit app_label...`. The host Python is also 3.14, but this project requires `>=3.13,<3.14`. Every test run in this plan must use the `civicmirror-2-0-api` Docker image (Python 3.13) with `pytest-v2.ini`, from the worktree's `backend/` directory mounted at `/app`:
+  ```bash
+  docker run --rm --network civicmirror-2-0_default \
+    -e CELERY_BROKER_URL=redis://redis:6379/2 -e CELERY_RESULT_BACKEND=redis://redis:6379/3 \
+    -e DJANGO_DEBUG=True -e REDIS_URL=redis://redis:6379/2 \
+    -e DATABASE_URL=postgres://civicmirror_v2:civicmirror_v2@db:5432/civicmirror_2_0 \
+    -e CIVICMIRROR_V2_TEST_DATABASE_NAME=civicmirror_2_0_test -e CIVICMIRROR_V2_DATABASE_NAME=civicmirror_2_0 \
+    -v <absolute-path-to-this-worktree>/backend:/app -w /app \
+    civicmirror-2-0-api \
+    pytest -c pytest-v2.ini --no-migrations <path> -v
+  ```
+  Wherever a task step below says `Run: cd backend && pytest --no-migrations <path> -v`, run the equivalent `docker run ... pytest -c pytest-v2.ini --no-migrations <path> -v` command above instead. Baseline confirmed clean this way: 116 passed across `cm2_review` + `cm2_ingestion` before Task 1 started.
 
 ---
 
@@ -124,7 +136,7 @@ Widen the constraint (models.py:79-87 today):
 
 - [ ] **Step 4: Generate and inspect the migration**
 
-Run: `cd backend && python manage.py makemigrations cm2_review`
+Run (per the Global Constraints test-invocation correction — `makemigrations` also needs `config.settings.v2` and Python 3.13, same as tests): `docker run --rm --network civicmirror-2-0_default -e CELERY_BROKER_URL=redis://redis:6379/2 -e CELERY_RESULT_BACKEND=redis://redis:6379/3 -e DJANGO_DEBUG=True -e REDIS_URL=redis://redis:6379/2 -e DATABASE_URL=postgres://civicmirror_v2:civicmirror_v2@db:5432/civicmirror_2_0 -e CIVICMIRROR_V2_TEST_DATABASE_NAME=civicmirror_2_0_test -e CIVICMIRROR_V2_DATABASE_NAME=civicmirror_2_0 -e DJANGO_SETTINGS_MODULE=config.settings.v2 -v <absolute-path-to-this-worktree>/backend:/app -w /app civicmirror-2-0-api python manage.py makemigrations cm2_review`
 Confirm the generated file is named `backend/cm2_review/migrations/0006_*.py`, alters `case_type` and `resolution_action` choices, adds `resolution_data`, and replaces the `cm2_review_case_subject_required` constraint. Rename the auto-generated filename to `0006_incomplete_election_data_review.py` if Django picked a generic name.
 
 - [ ] **Step 5: Run the tests to verify they pass**
