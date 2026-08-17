@@ -179,3 +179,33 @@ def test_audit_events_are_immutable_and_record_public_metadata(source_record, pr
     event.metadata = {"status": "changed"}
     with pytest.raises(Exception, match="immutable"):
         event.save()
+
+
+@pytest.mark.django_db
+def test_incomplete_election_data_case_allows_no_subject():
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026",
+        supporting_evidence={"jurisdiction": "Everett", "office": "Mayoral"},
+    )
+    assert review_case.source_record_id is None
+    assert review_case.provisional_person_id is None
+    assert review_case.result_choice_id is None
+
+
+@pytest.mark.django_db
+def test_other_case_types_still_require_a_subject():
+    with pytest.raises(IntegrityError), transaction.atomic():
+        IdentityReviewCase.objects.create(
+            case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+            deduplication_key="no-subject-should-fail",
+        )
+
+
+@pytest.mark.django_db
+def test_resolution_data_defaults_to_empty_dict():
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026",
+    )
+    assert review_case.resolution_data == {}

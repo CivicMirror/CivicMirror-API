@@ -12,6 +12,7 @@ class IdentityReviewCase(PublicIdentityModel):
         PERSON_IDENTITY = "person_identity", "New Person"
         FUZZY_PERSON_MATCH = "fuzzy_person_match", "Fuzzy person match"
         UNRESOLVED_RESULT_CHOICE = "unresolved_result_choice", "Unmatched Write-in"
+        INCOMPLETE_ELECTION_DATA = "incomplete_election_data", "Incomplete election data"
 
     class Status(models.TextChoices):
         OPEN = "open", "Open"
@@ -27,6 +28,7 @@ class IdentityReviewCase(PublicIdentityModel):
         LINK_CIVIC_DATA = "link_civic_data", "Link Civic-Data"
         DEFER = "defer", "Defer"
         REJECT = "reject", "Reject"
+        SUPPLY_MISSING_DATA = "supply_missing_data", "Supply missing data"
 
     case_type = models.CharField(max_length=32, choices=CaseType.choices)
     deduplication_key = models.CharField(max_length=512, unique=True)
@@ -56,6 +58,7 @@ class IdentityReviewCase(PublicIdentityModel):
     has_private_evidence = models.BooleanField(default=False)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
     resolution_action = models.CharField(max_length=24, choices=ResolutionAction.choices, blank=True)
+    resolution_data = models.JSONField(default=dict, blank=True)
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -82,6 +85,7 @@ class IdentityReviewCase(PublicIdentityModel):
                     models.Q(source_record__isnull=False)
                     | models.Q(provisional_person__isnull=False)
                     | models.Q(result_choice__isnull=False)
+                    | models.Q(case_type="incomplete_election_data")
                 ),
                 name="cm2_review_case_subject_required",
             ),
