@@ -724,7 +724,12 @@ def test_supply_missing_date_row_rejects_wrong_case_type(admin_client, source_re
 
 
 @pytest.mark.django_db
-def test_supply_missing_date_row_rejects_non_open_status(admin_client, django_user_model):
+def test_supply_missing_date_row_reopens_a_deferred_case(admin_client, django_user_model):
+    """
+    A case previously deferred (e.g. by defer_failed_promotion after a failed
+    downstream promotion) must not be a dead end: re-supplying the date
+    should still work, same as for an OPEN case.
+    """
     reviewer = django_user_model.objects.create_user(username="admin-supply-date-deferred-reviewer")
     review_case = IdentityReviewCase.objects.create(
         case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
@@ -736,8 +741,41 @@ def test_supply_missing_date_row_rejects_non_open_status(admin_client, django_us
     )
     url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
 
-    admin_client.post(url, {"election_date": "2026-11-03", "_form_submitted": "True"})
+    response = admin_client.post(url, {"election_date": "2026-11-03", "_form_submitted": "True"})
 
     review_case.refresh_from_db()
-    assert review_case.status == IdentityReviewCase.Status.DEFERRED
-    assert review_case.resolution_data == {}
+    assert response.status_code == 302
+    assert review_case.status == IdentityReviewCase.Status.APPROVED
+    assert review_case.resolution_data == {"election_date": "2026-11-03"}
+
+
+@pytest.mark.django_db
+def test_confirm_new_row_rejects_incomplete_election_data_case(admin_client):
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026-confirm-new",
+        supporting_evidence={"office": "Mayoral"},
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_confirm_new_row", args=[review_case.pk])
+
+    admin_client.post(url)
+
+    review_case.refresh_from_db()
+    assert review_case.status == IdentityReviewCase.Status.OPEN
+    assert review_case.resolution_action == ""
+
+
+@pytest.mark.django_db
+def test_reject_case_row_rejects_incomplete_election_data_case(admin_client):
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026-reject",
+        supporting_evidence={"office": "Mayoral"},
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_reject_case_row", args=[review_case.pk])
+
+    admin_client.post(url)
+
+    review_case.refresh_from_db()
+    assert review_case.status == IdentityReviewCase.Status.OPEN
+    assert review_case.resolution_action == ""

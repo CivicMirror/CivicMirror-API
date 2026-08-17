@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from django.db import transaction
 
 from cm2_review.models import IdentityReviewAuditEvent, IdentityReviewCase
@@ -39,6 +41,15 @@ def get_resolved_incomplete_election(deduplication_key: str) -> IdentityReviewCa
     into a real Election/Contest/Candidacy. Returns None if no case exists
     for this key, or it exists but hasn't been approved with
     SUPPLY_MISSING_DATA yet (still open, deferred, or rejected).
+
+    Contract for `resolution_data` (set by the admin's "Supply election
+    date" dialog action, see cm2_review/admin.py's
+    `supply_missing_date_row`): a dict of the shape
+    `{"election_date": "<ISO-8601 date string>"}`. Callers that need the
+    actual `date` back must parse the string themselves with
+    `date.fromisoformat(...)` -- or, preferably, call
+    `get_resolved_election_date()` below instead of reading this field
+    directly, so the key name and parsing logic stay in one place.
     """
     return IdentityReviewCase.objects.filter(
         deduplication_key=deduplication_key,
@@ -46,6 +57,19 @@ def get_resolved_incomplete_election(deduplication_key: str) -> IdentityReviewCa
         status=IdentityReviewCase.Status.APPROVED,
         resolution_action=IdentityReviewCase.ResolutionAction.SUPPLY_MISSING_DATA,
     ).first()
+
+
+def get_resolved_election_date(deduplication_key: str) -> date | None:
+    """
+    Convenience wrapper around get_resolved_incomplete_election() for the
+    common case of just wanting the supplied election date. Returns None if
+    no resolved case exists for this key; otherwise parses and returns the
+    `resolution_data["election_date"]` ISO-8601 string as a `date`.
+    """
+    review_case = get_resolved_incomplete_election(deduplication_key)
+    if review_case is None:
+        return None
+    return date.fromisoformat(review_case.resolution_data["election_date"])
 
 
 @transaction.atomic

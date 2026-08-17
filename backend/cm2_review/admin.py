@@ -190,6 +190,14 @@ class IdentityReviewCaseAdmin(ModelAdmin):
     @action(description="Confirm as distinct person")
     def confirm_new_row(self, request, object_id):
         review_case = IdentityReviewCase.objects.get(pk=object_id)
+        if review_case.case_type == IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA:
+            self.message_user(
+                request,
+                "This action does not apply to incomplete-election-data cases; use "
+                "\"Supply election date\" instead.",
+                messages.ERROR,
+            )
+            return self._redirect_back(request)
         if review_case.status in self._REOPENABLE_STATUSES:
             transition_review_case(
                 review_case,
@@ -220,6 +228,14 @@ class IdentityReviewCaseAdmin(ModelAdmin):
     @action(description="Reject")
     def reject_case_row(self, request, object_id):
         review_case = IdentityReviewCase.objects.get(pk=object_id)
+        if review_case.case_type == IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA:
+            self.message_user(
+                request,
+                "This action does not apply to incomplete-election-data cases; use "
+                "\"Supply election date\" instead.",
+                messages.ERROR,
+            )
+            return self._redirect_back(request)
         if review_case.status in self._REOPENABLE_STATUSES:
             transition_review_case(
                 review_case,
@@ -248,8 +264,8 @@ class IdentityReviewCaseAdmin(ModelAdmin):
                 request, "This action only applies to incomplete-election-data cases.", messages.ERROR
             )
             return self._redirect_back(request)
-        if review_case.status != IdentityReviewCase.Status.OPEN:
-            self.message_user(request, "This case is not open.", messages.WARNING)
+        if review_case.status not in self._REOPENABLE_STATUSES:
+            self.message_user(request, "This case is not open or deferred.", messages.WARNING)
             return self._redirect_back(request)
         parsed_date = form.cleaned_data["election_date"]
         transition_review_case(
