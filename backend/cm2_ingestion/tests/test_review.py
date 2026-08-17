@@ -178,16 +178,9 @@ def test_round_trip_defers_on_a_failed_promotion(django_user_model):
     )
     resolved = get_resolved_incomplete_election(_KEY)
 
-    try:
-        ElectionRecord(
-            public_id="",  # simulate a downstream validation failure at promotion time
-            name="2026 Everett Mayoral Election",
-            election_date=date.fromisoformat(resolved.resolution_data["election_date"]),
-            election_type="municipal",
-        )
-        raise AssertionError("expected building the promoted record to be treated as failed by this test")
-    except Exception:
-        deferred = defer_failed_promotion(resolved, error="public_id was empty")
+    # Simulate a downstream validation failure during promotion (e.g. public_id
+    # validation failed after attempting to construct the ElectionRecord).
+    deferred = defer_failed_promotion(resolved, error="public_id was empty")
 
     assert deferred.status == IdentityReviewCase.Status.DEFERRED
     assert get_resolved_incomplete_election(_KEY) is None
