@@ -1,8 +1,11 @@
+from datetime import date
 from pathlib import Path
 
 from cm2_ma.constants import SPECIAL_ELECTIONS_INDEX_URL
 from cm2_ma.sources.special_elections import (
+    MaSpecialElectionCalendarSource,
     MaSpecialElectionsIndexSource,
+    parse_special_election_calendar,
     parse_special_elections_index,
 )
 
@@ -30,14 +33,6 @@ def test_index_parser_excludes_past_special_election_links():
 
 def test_index_source_url_is_configured():
     assert MaSpecialElectionsIndexSource().url == SPECIAL_ELECTIONS_INDEX_URL
-
-
-from datetime import date
-
-from cm2_ma.sources.special_elections import (
-    MaSpecialElectionCalendarSource,
-    parse_special_election_calendar,
-)
 
 
 def test_calendar_parser_extracts_only_the_primary_and_general_rows():
