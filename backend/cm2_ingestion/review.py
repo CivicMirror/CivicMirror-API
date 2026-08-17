@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from cm2_review.models import IdentityReviewCase
+from django.db import transaction
+
+from cm2_review.models import IdentityReviewAuditEvent, IdentityReviewCase
 from cm2_review.workflow import create_review_case
 
 
@@ -44,3 +46,30 @@ def get_resolved_incomplete_election(deduplication_key: str) -> IdentityReviewCa
         status=IdentityReviewCase.Status.APPROVED,
         resolution_action=IdentityReviewCase.ResolutionAction.SUPPLY_MISSING_DATA,
     ).first()
+
+
+@transaction.atomic
+def defer_failed_promotion(review_case: IdentityReviewCase, *, error: str) -> IdentityReviewCase:
+    """
+    Move a case back to DEFERRED after an ingestion run tried to promote its
+    supplied resolution_data and hit a downstream validation error (e.g. the
+    rebuilt batch still failed validate_pre_election_batch for an unrelated
+    reason). Distinct from transition_review_case: this is a system-triggered
+    transition, not a new human decision, so it bypasses the
+    authenticated-reviewer gate and records the error on conflicting_evidence
+    rather than notes, alongside the original supporting_evidence.
+    """
+    review_case.status = IdentityReviewCase.Status.DEFERRED
+    review_case.conflicting_evidence = {
+        **(review_case.conflicting_evidence or {}),
+        "promotion_error": error,
+    }
+    review_case.save(update_fields=["status", "conflicting_evidence", "updated_at"])
+    IdentityReviewAuditEvent.objects.create(
+        review_case=review_case,
+        actor=None,
+        event_type=IdentityReviewAuditEvent.EventType.DEFERRED,
+        metadata={"reason": "promotion_failed", "error": error},
+        has_private_evidence=review_case.has_private_evidence,
+    )
+    return review_case
