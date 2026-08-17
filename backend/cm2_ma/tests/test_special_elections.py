@@ -30,3 +30,48 @@ def test_index_parser_excludes_past_special_election_links():
 
 def test_index_source_url_is_configured():
     assert MaSpecialElectionsIndexSource().url == SPECIAL_ELECTIONS_INDEX_URL
+
+
+from datetime import date
+
+from cm2_ma.sources.special_elections import (
+    MaSpecialElectionCalendarSource,
+    parse_special_election_calendar,
+)
+
+
+def test_calendar_parser_extracts_only_the_primary_and_general_rows():
+    records = parse_special_election_calendar(
+        (FIXTURES / "special_election_calendar.html").read_bytes(),
+        source_artifact_public_id="artifact/ma-special-5th-essex",
+    )
+
+    assert [(record.election_date, record.election_type) for record in records] == [
+        (date(2026, 3, 3), "special_primary"),
+        (date(2026, 3, 31), "special_general"),
+    ]
+    assert all("5th Essex Representative District" in record.name for record in records)
+    assert all(
+        "death of Representative Ann-Margaret Ferrante" in record.name for record in records
+    )
+    assert {record.source_artifact_public_id for record in records} == {
+        "artifact/ma-special-5th-essex"
+    }
+
+
+def test_calendar_parser_ignores_non_matching_deadline_rows():
+    records = parse_special_election_calendar(
+        (FIXTURES / "special_election_calendar.html").read_bytes()
+    )
+
+    assert len(records) == 2
+
+
+def test_calendar_source_uses_constructor_provided_url():
+    url = "https://www.sec.state.ma.us/divisions/elections/recent-updates/current-special-election7.htm"
+    source = MaSpecialElectionCalendarSource(url=url)
+
+    assert source.url == url
+
+    records = source.parse((FIXTURES / "special_election_calendar.html").read_bytes())
+    assert len(records) == 2
