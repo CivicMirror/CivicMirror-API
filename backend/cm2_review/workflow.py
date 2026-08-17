@@ -57,6 +57,7 @@ def transition_review_case(
     target_person: Person | None = None,
     target_suggestion: "IdentityReviewSuggestion | None" = None,
     notes: str = "",
+    resolution_data: dict | None = None,
 ) -> IdentityReviewCase:
     """Apply an explicit human review decision and record an audit event."""
     if reviewer is None or not getattr(reviewer, "is_authenticated", False):
@@ -75,6 +76,11 @@ def transition_review_case(
         raise ValidationError({"action": "Rejected cases must use the reject action."})
     if status != IdentityReviewCase.Status.REJECTED and action == IdentityReviewCase.ResolutionAction.REJECT:
         raise ValidationError({"action": "The reject action requires rejected status."})
+    if action == IdentityReviewCase.ResolutionAction.SUPPLY_MISSING_DATA:
+        if status != IdentityReviewCase.Status.APPROVED:
+            raise ValidationError({"status": "Supplying missing data requires approved status."})
+        if not resolution_data:
+            raise ValidationError({"resolution_data": "This action requires resolution_data."})
 
     if action in {
         IdentityReviewCase.ResolutionAction.LINK_EXISTING,
@@ -188,16 +194,11 @@ def transition_review_case(
     review_case.reviewed_at = timezone.now()
     if notes:
         review_case.notes = _append_note(review_case.notes, notes)
-    review_case.save(
-        update_fields=[
-            "status",
-            "resolution_action",
-            "reviewed_by",
-            "reviewed_at",
-            "notes",
-            "updated_at",
-        ]
-    )
+    update_fields = ["status", "resolution_action", "reviewed_by", "reviewed_at", "notes", "updated_at"]
+    if resolution_data is not None:
+        review_case.resolution_data = resolution_data
+        update_fields.append("resolution_data")
+    review_case.save(update_fields=update_fields)
 
     event_type = (
         IdentityReviewAuditEvent.EventType.DEFERRED

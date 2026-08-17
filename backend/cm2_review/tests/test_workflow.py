@@ -683,3 +683,41 @@ def test_confirm_new_on_write_in_case_rejects_already_linked_choice(write_in_res
             status=IdentityReviewCase.Status.APPROVED,
             action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
         )
+
+
+@pytest.mark.django_db
+def test_supply_missing_data_requires_resolution_data(django_user_model):
+    reviewer = django_user_model.objects.create_user(username="reviewer")
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026",
+    )
+
+    with pytest.raises(ValidationError):
+        transition_review_case(
+            review_case,
+            reviewer=reviewer,
+            status=IdentityReviewCase.Status.APPROVED,
+            action=IdentityReviewCase.ResolutionAction.SUPPLY_MISSING_DATA,
+        )
+
+
+@pytest.mark.django_db
+def test_supply_missing_data_persists_resolution_data(django_user_model):
+    reviewer = django_user_model.objects.create_user(username="reviewer")
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026",
+    )
+
+    updated = transition_review_case(
+        review_case,
+        reviewer=reviewer,
+        status=IdentityReviewCase.Status.APPROVED,
+        action=IdentityReviewCase.ResolutionAction.SUPPLY_MISSING_DATA,
+        resolution_data={"election_date": "2026-11-03"},
+    )
+
+    updated.refresh_from_db()
+    assert updated.resolution_data == {"election_date": "2026-11-03"}
+    assert updated.status == IdentityReviewCase.Status.APPROVED
