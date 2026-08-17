@@ -32,6 +32,7 @@ INSTALLED_APPS.append("cm2_results")
 INSTALLED_APPS.append("cm2_review")
 INSTALLED_APPS.append("cm2_ingestion")
 INSTALLED_APPS.append("cm2_nc")
+INSTALLED_APPS.append("cm2_ma")
 
 UNFOLD = {
     "SITE_TITLE": "CivicMirror 2.0",
@@ -187,7 +188,7 @@ ROOT_URLCONF = "config.urls_v2"
 WSGI_APPLICATION = "config.wsgi_v2.application"
 ASGI_APPLICATION = "config.asgi_v2.application"
 
-CIVICMIRROR_V2_ENABLED_STATES = ("NC",)
+CIVICMIRROR_V2_ENABLED_STATES = ("NC", "MA")
 
 _configured_database_name = str(DATABASES["default"]["NAME"])
 _expected_database_name = env("CIVICMIRROR_V2_DATABASE_NAME", default="civicmirror_2_0")
