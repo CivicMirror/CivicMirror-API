@@ -2,9 +2,18 @@
 CivicMirror CF Solver — FastAPI microservice.
 
 Accepts a target URL, launches a nodriver Chrome browser via Xvfb, waits for
-Cloudflare's Managed Challenge to auto-resolve, then optionally fetches a
-payload URL from within the browser session (using its live cookie jar, which
-includes HttpOnly cookies that can't be extracted via document.cookie or CDP).
+an anti-bot challenge to auto-resolve, then optionally fetches a payload URL
+from within the browser session (using its live cookie jar, which includes
+HttpOnly cookies that can't be extracted via document.cookie or CDP).
+
+Despite the name, nothing here is Cloudflare-specific — the nodriver stealth
+launch args are what get past bot detection, not any CF-aware logic. Verified
+2026-08-17 against sec.state.ma.us (Incapsula) with no code changes beyond
+using a longer wait_seconds; see the "just a moment" guard below for the one
+CF-specific check, which is a soft early-fail heuristic, not the bypass
+mechanism. Kept the cf-solver name/container/env vars as-is to avoid touching
+the live docker-compose/Cloud Run config that oh_sos, ny_boe, and mi_sos
+already depend on in production.
 
 Two operation modes:
   1. Cookie-return mode (payload_url omitted): solves CF challenge and returns
@@ -141,6 +150,15 @@ class SolveRequest(BaseModel):
     payload_referer: Optional[str] = None  # Referer for payload fetch (defaults to url)
 
 
+# Known unsolved-challenge page titles across the anti-bot vendors this
+# service has been verified against. Incapsula (sec.state.ma.us) has not
+# been observed to render a distinct challenge title of its own — it either
+# resolves to the real page title or serves an empty JS-stub body — so there
+# is nothing to add here for it yet. Extend this tuple, not the check below,
+# when a new vendor's unsolved-challenge title is identified.
+_UNSOLVED_CHALLENGE_TITLE_MARKERS = ("just a moment",)
+
+
 class SolveResponse(BaseModel):
     cookies: dict[str, str]  # non-HttpOnly cookies from document.cookie (may be empty)
     user_agent: str
@@ -179,10 +197,10 @@ async def solve(
             webdriver_flag = await page.evaluate("navigator.webdriver", return_by_value=True)
             logger.info("cf_solver.solve page_title=%r navigator.webdriver=%r", title, webdriver_flag)
 
-            if "just a moment" in title.lower():
+            if any(marker in title.lower() for marker in _UNSOLVED_CHALLENGE_TITLE_MARKERS):
                 raise HTTPException(
                     status_code=502,
-                    detail=f"CF challenge not resolved after {req.wait_seconds}s — title={title!r}",
+                    detail=f"Challenge not resolved after {req.wait_seconds}s — title={title!r}",
                 )
 
             # Read whatever cookies are visible from JS (non-HttpOnly only).
