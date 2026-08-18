@@ -22,3 +22,23 @@ class OcpfCandidateRow:
     district_name_sought: str
     closed_date: str
     party_affiliation: str
+
+
+@dataclass(frozen=True, slots=True)
+class SecretaryCandidateRow:
+    office_label: str
+    district_label: str | None
+    party: str
+    raw_line: str
+    reported_name: str
+    given_name: str
+    middle_name: str
+    family_name: str
+    suffix: str
+    address: str
+
+
+@dataclass(frozen=True, slots=True)
+class SecretaryPageParseResult:
+    candidates: tuple[SecretaryCandidateRow, ...]
+    no_nominations: tuple[tuple[str, str | None], ...]
