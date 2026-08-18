@@ -1,3 +1,5 @@
+import re
+
 from cm2_ingestion.contracts import (
     CandidateFilingRecord,
     ContestRecord,
@@ -16,6 +18,17 @@ from cm2_ma.mapping.ocpf_pool import OcpfCandidatePool
 from cm2_ma.mapping.office_crosswalk import resolve_district_code
 from cm2_ma.mapping.offices import map_office
 from cm2_ma.source_records import SecretaryCandidateRow
+
+# Same vacancy-qualifier pattern used by office_crosswalk._office_key /
+# offices._office_key / jurisdictions._office_key: an office_label like
+# "Sheriff (to fill a vacancy)" carries a parenthetical qualifier that those
+# modules strip before lookup. Here we need the *opposite* signal: whether the
+# qualifier was present at all, since contest identity includes is_unexpired.
+_VACANCY_QUALIFIER_RE = re.compile(r"\s*\(.*\)\s*$")
+
+
+def _is_unexpired_term(office_label: str) -> bool:
+    return _VACANCY_QUALIFIER_RE.sub("", office_label).strip() != office_label.strip()
 
 
 def _select_primary_election(discovered_elections: tuple[ElectionRecord, ...]) -> ElectionRecord:
@@ -45,6 +58,11 @@ def _resolve_person_public_id(
     full_name = " ".join(part for part in (row.given_name, row.family_name) if part)
     match = ocpf_pool.find_by_name_and_district_code(full_name=full_name, district_code=district_code)
     if match is None:
+        return None
+    if match.party_affiliation.casefold() != row.party.casefold():
+        # A wrong crosswalk assumption should mean no match, never a wrong
+        # match: a same-name, same-district, opposite-party OCPF filer is not
+        # the same person as this Secretary-page row.
         return None
     return stable_public_id("person", "ocpf", str(match.cpf_id))
 
@@ -79,11 +97,12 @@ def build_pre_election_batch(
         office = map_office(row.office_label, jurisdiction)
         _put_unique(offices, office, label="office")
 
+        is_unexpired = _is_unexpired_term(row.office_label)
         contest_id = contest_public_id(
             election_public_id=election.public_id,
             office_public_id=office.public_id,
             party_contest=row.party,
-            is_unexpired=False,
+            is_unexpired=is_unexpired,
         )
         if contest_id not in contests:
             contests[contest_id] = ContestRecord(
@@ -93,7 +112,7 @@ def build_pre_election_batch(
                 party_contest=row.party,
                 vote_for=1,
                 is_partisan=True,
-                is_unexpired=False,
+                is_unexpired=is_unexpired,
                 lifecycle_status="upcoming",
                 result_status="pending",
                 source_key=f"{row.office_label}|{row.district_label or ''}|{row.party}",
@@ -110,7 +129,11 @@ def build_pre_election_batch(
             middle_name=row.middle_name,
             family_name=row.family_name,
             suffix=row.suffix,
-            filing_data={"office_label": row.office_label, "district_label": row.district_label or ""},
+            filing_data={
+                "office_label": row.office_label,
+                "district_label": row.district_label or "",
+                "raw_line": row.raw_line,
+            },
             protected_address=row.address,
             retrieval_context={"party": row.party},
         )

@@ -139,6 +139,56 @@ def test_missing_primary_election_raises():
         )
 
 
+def test_vacancy_qualified_office_label_produces_a_distinct_contest():
+    pool = OcpfCandidatePool.build(districts=_DISTRICTS, candidates=())
+    regular_row = _row(
+        office_label="Sheriff",
+        district_label=None,
+        reported_name="Regular Term Candidate",
+        given_name="Regular",
+        family_name="Candidate",
+        raw_line="Regular Term Candidate, 1 Main St., Boston",
+        address="1 Main St., Boston",
+    )
+    vacancy_row = _row(
+        office_label="Sheriff (to fill a vacancy)",
+        district_label=None,
+        reported_name="Vacancy Term Candidate",
+        given_name="Vacancy",
+        family_name="Candidate",
+        raw_line="Vacancy Term Candidate, 2 Main St., Boston",
+        address="2 Main St., Boston",
+    )
+
+    batch = build_pre_election_batch(
+        (regular_row, vacancy_row),
+        no_nominations=(),
+        discovered_elections=(_PRIMARY,),
+        ocpf_pool=pool,
+    )
+
+    assert len(batch.contests) == 2
+    public_ids = {contest.public_id for contest in batch.contests}
+    assert len(public_ids) == 2
+
+    is_unexpired_by_id = {contest.public_id: contest.is_unexpired for contest in batch.contests}
+    assert set(is_unexpired_by_id.values()) == {True, False}
+
+
+def test_ocpf_match_with_different_party_is_rejected():
+    pool = OcpfCandidatePool.build(
+        districts=_DISTRICTS, candidates=(_ocpf_candidate(party_affiliation="Republican"),)
+    )
+    batch = build_pre_election_batch(
+        (_row(party="DEMOCRATIC"),),
+        no_nominations=(),
+        discovered_elections=(_PRIMARY,),
+        ocpf_pool=pool,
+    )
+
+    assert batch.candidates[0].person_public_id is None
+
+
 def test_batch_state_is_ma_and_validates_cleanly():
     pool = OcpfCandidatePool.build(districts=_DISTRICTS, candidates=())
     batch = build_pre_election_batch(

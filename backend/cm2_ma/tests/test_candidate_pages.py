@@ -66,6 +66,30 @@ def test_reported_name_survives_even_with_imperfect_given_family_split():
     assert hayden.middle_name == "R."
 
 
+_FIXTURE_WITH_FOOTER = b"""
+<article>
+<h2 id="senator-in-congress">Senator in Congress</h2>
+<p>Edward J. Markey, 360 Charles St., Malden</p>
+</article>
+
+<h2>William Francis Galvin</h2>
+<p>1-800-392-6090
+cis@sec.state.ma.us</p>
+<h3>Connect with Us</h3>
+"""
+
+
+def test_footer_markup_after_article_is_not_parsed_as_candidates():
+    result = parse_candidate_page(_FIXTURE_WITH_FOOTER, party="DEMOCRATIC")
+
+    assert len(result.candidates) == 1
+    assert result.candidates[0].reported_name == "Edward J. Markey"
+    assert not any(c.office_label == "William Francis Galvin" for c in result.candidates)
+    assert not any(
+        office_label == "William Francis Galvin" for office_label, _ in result.no_nominations
+    )
+
+
 def test_source_url_and_party_are_configured():
     url = f"{SEC_BASE_URL}/divisions/elections/research-and-statistics/dem-state-primary-candidates2026.htm"
     source = MaCandidatePageSource(url=url, party="DEMOCRATIC")

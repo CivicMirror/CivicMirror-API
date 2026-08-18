@@ -50,7 +50,15 @@ def parse_candidate_page(content: bytes, *, party: str) -> SecretaryPageParseRes
     current_office: str | None = None
     current_district: str | None = None
 
-    for element in soup.find_all(re.compile(r"^(h2|h3|p)$")):
+    # Real Secretary candidate pages carry footer markup (address, phone,
+    # "Connect with Us" heading, etc.) after the closing </article> tag that
+    # wraps the actual office/candidate content. Scope the scan to that
+    # <article> so footer h2/h3/p elements never get parsed as fake rows.
+    # Fall back to the whole document when there's no <article> wrapper (as
+    # in older fixtures / unexpected markup) so we still parse something.
+    scope = soup.find("article") or soup
+
+    for element in scope.find_all(re.compile(r"^(h2|h3|p)$")):
         if element.name == "h2":
             current_office = " ".join(element.get_text(" ", strip=True).split())
             current_district = None
