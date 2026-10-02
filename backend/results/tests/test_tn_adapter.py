@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from results.adapters.registry import get_adapter
 from results.adapters.tn import TennesseeAdapter
 
@@ -114,3 +116,73 @@ def test_fetch_results_aggregates_sofficel_export_by_county_and_statewide():
     assert rows[("Governor", "Jerri Green", "")].vote_count == 73
     assert rows[("Governor", "Jerri Green", "")].raw["contest_type"] == "Democratic Primary"
     assert rows[("Governor", "Marsha Blackburn", "")].raw["party"] == "Republican"
+
+
+def _rec(name, votes, county="Anderson", office="Governor", party="Republican", contest="Republican Primary"):
+    from integrations.tn_sos.parsers import TnResultRecord
+    return TnResultRecord(
+        county=county, precinct="Andersonville", office_title=office, candidate_name=name,
+        party=party, vote_count=votes, source_url="https://example.test/x.xlsx", contest_type=contest,
+    )
+
+
+def test_aggregate_drops_no_candidate_placeholder_and_combines_write_ins():
+    from results.adapters.tn import WRITE_IN_LABEL, _aggregate_rows
+
+    rows = _aggregate_rows([
+        _rec("Marsha Blackburn", 300),
+        _rec("Write-In - David Fey", 3),
+        _rec("Write-In - Lore Bergman", 2),
+        _rec("Write-In - David Fey", 1, county="Union"),
+        _rec("No Candidate Qualified", 0, office="State Executive Committeeman District 5"),
+    ], "https://example.test/x.xlsx")
+
+    names = {r.candidate_name for r in rows}
+    assert "No Candidate Qualified" not in names
+    assert not any(n.startswith("Write-In - ") for n in names)
+
+    by_key = {(r.candidate_name, r.jurisdiction_fragment): r for r in rows}
+    statewide = by_key[(WRITE_IN_LABEL, "")]
+    assert statewide.is_write_in_aggregate is True
+    assert statewide.vote_count == 6
+    assert statewide.raw["write_in_names"] == ["Write-In - David Fey", "Write-In - Lore Bergman"]
+    assert statewide.raw["party"] == ""
+    assert by_key[(WRITE_IN_LABEL, "Anderson")].vote_count == 5
+    assert by_key[(WRITE_IN_LABEL, "Union")].vote_count == 1
+    assert by_key[("Marsha Blackburn", "")].is_write_in_aggregate is False
+
+
+
+@pytest.mark.django_db
+def test_tn_race_with_write_ins_and_placeholders_is_certified():
+    """Placeholders and named write-ins must no longer leave a race stuck in partial_results."""
+    from elections.models import Candidate, Election, Race
+    from results.adapters.base import AdapterResult
+    from results.adapters.tn import _aggregate_rows
+    from results.models import OfficialResult
+    from results.tasks import _process_race_results
+
+    election = Election.objects.create(
+        source_id="tn-test-2026-08-06", name="TN Primary", election_date="2026-08-06",
+        jurisdiction_level=Election.JurisdictionLevel.STATE, state="TN", status=Election.Status.RESULTS_PENDING,
+    )
+    race = Race.objects.create(
+        election=election, race_type=Race.RaceType.CANDIDATE, office_title="Governor",
+        jurisdiction="Tennessee", geography_scope="statewide", source=Race.Source.CIVIC_API,
+        canonical_key="tn:test:governor",
+    )
+    Candidate.objects.create(race=race, name="Marsha Blackburn")
+    rows = _aggregate_rows([
+        _rec("Marsha Blackburn", 300),
+        _rec("Write-In - David Fey", 3),
+        _rec("No Candidate Qualified", 0),
+    ], "https://example.test/x.xlsx")
+
+    _process_race_results(race, AdapterResult(rows=rows, source_url="https://example.test/x.xlsx",
+                                              mapping_confidence="full"), "TN")
+
+    race.refresh_from_db()
+    assert race.certification_status == Race.CertificationStatus.RESULTS_CERTIFIED
+    write_in = OfficialResult.objects.get(race=race, is_write_in_aggregate=True, jurisdiction_fragment="")
+    assert write_in.candidate is None and write_in.vote_count == 3
+    assert OfficialResult.objects.get(race=race, candidate__name="Marsha Blackburn", jurisdiction_fragment="").vote_count == 300

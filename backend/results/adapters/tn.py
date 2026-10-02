@@ -22,6 +22,15 @@ from .registry import register
 logger = logging.getLogger(__name__)
 
 
+# Placeholder the SOFFICEL export puts in empty candidate slots for offices nobody filed for.
+_NO_CANDIDATE_PLACEHOLDERS = {"no candidate qualified"}
+WRITE_IN_LABEL = "Write-In"
+
+
+def _is_write_in(name: str) -> bool:
+    return name.strip().lower().startswith("write-in")
+
+
 def _aggregate_rows(records, source_url: str) -> list[ResultRow]:
     """
     Roll precinct records up to one row per (office, candidate, county) plus a statewide total.
@@ -30,19 +39,39 @@ def _aggregate_rows(records, source_url: str) -> list[ResultRow]:
     precinct-level rows would collide on OfficialResult's natural key. County rows use the county
     name as jurisdiction_fragment; the statewide total uses '' (the aggregate row the results
     endpoint prefers).
+
+    "No Candidate Qualified" placeholder slots are dropped. Named write-ins ("Write-In - Jane Doe")
+    aren't on the candidate lists, so, as in the IL/MD adapters, they're summed into one combined
+    "Write-In" row per office and county with is_write_in_aggregate=True. Their names are kept in raw.
     """
     by_county: dict[tuple, int] = {}
     totals: dict[tuple, int] = {}
     party_for: dict[tuple, str] = {}
     contest_for: dict[tuple, str] = {}
+    write_in_names: dict[str, set] = {}
     for record in records:
-        key = (record.office_title, record.candidate_name)
+        name = record.candidate_name
+        if name.strip().lower() in _NO_CANDIDATE_PLACEHOLDERS:
+            continue
+        if _is_write_in(name):
+            write_in_names.setdefault(record.office_title, set()).add(name)
+            name = WRITE_IN_LABEL
+        key = (record.office_title, name)
         by_county[key + (record.county,)] = by_county.get(key + (record.county,), 0) + record.vote_count
         totals[key] = totals.get(key, 0) + record.vote_count
         party_for.setdefault(key, record.party)
         contest_for.setdefault(key, record.contest_type)
 
     def _row(office, candidate, votes, fragment, county):
+        is_write_in = candidate == WRITE_IN_LABEL
+        raw = {
+            "county": county,
+            "party": "" if is_write_in else party_for[(office, candidate)],
+            "contest_type": contest_for[(office, candidate)],
+            "source_url": source_url,
+        }
+        if is_write_in:
+            raw["write_in_names"] = sorted(write_in_names.get(office, ()))
         return ResultRow(
             candidate_name=candidate,
             option_label=None,
@@ -52,12 +81,8 @@ def _aggregate_rows(records, source_url: str) -> list[ResultRow]:
             result_type="official",
             office_title=office,
             jurisdiction_fragment=fragment,
-            raw={
-                "county": county,
-                "party": party_for[(office, candidate)],
-                "contest_type": contest_for[(office, candidate)],
-                "source_url": source_url,
-            },
+            is_write_in_aggregate=is_write_in,
+            raw=raw,
         )
 
     rows = [_row(office, candidate, votes, "", "") for (office, candidate), votes in totals.items()]
