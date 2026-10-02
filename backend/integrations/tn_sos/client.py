@@ -14,6 +14,18 @@ CANDIDATE_LIST_URL = "https://sos.tn.gov/elections/2026-candidate-lists"
 RESULTS_INDEX_URL = "https://sos.tn.gov/elections/results"
 RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
+# sos.tn.gov is served through CloudFront, which started rejecting our custom
+# "CivicMirror-TN-SOS/1.0" User-Agent with 403 on 2026-08-17 (#208). A standard
+# browser User-Agent and Accept headers are let through.
+DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
+
 
 class TnSosClient:
     def __init__(self, timeout: int = 30, max_retries: int = 3, backoff_seconds: float = 1.0):
@@ -21,7 +33,7 @@ class TnSosClient:
         self.max_retries = max_retries
         self.backoff_seconds = backoff_seconds
         self._session = requests.Session()
-        self._session.headers.update({"User-Agent": "CivicMirror-TN-SOS/1.0"})
+        self._session.headers.update(DEFAULT_HEADERS)
 
     def _get(self, url: str, timeout: int | None = None) -> requests.Response:
         effective_timeout = timeout or self.timeout

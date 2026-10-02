@@ -70,3 +70,30 @@ def test_503_is_retryable():
 
     with pytest.raises(TnSosRetryableError):
         client.get_calendar_html()
+
+
+def test_client_sends_browser_headers_not_custom_user_agent():
+    """
+    Regression test for #208: CloudFront in front of sos.tn.gov returns 403 for the old
+    'CivicMirror-TN-SOS/1.0' User-Agent. The session must send browser-style headers.
+    """
+    client = TnSosClient()
+    headers = client._session.headers
+    assert headers["User-Agent"].startswith("Mozilla/5.0")
+    assert "CivicMirror" not in headers["User-Agent"]
+    assert "text/html" in headers["Accept"]
+    assert headers["Accept-Language"].startswith("en-US")
+
+
+def test_403_is_non_retryable_error():
+    """A 403 (e.g. a CDN block) fails fast as TnSosError rather than retrying."""
+    import requests
+
+    blocked = _response(status_code=403)
+    blocked.raise_for_status.side_effect = requests.HTTPError("403 Client Error")
+    client = TnSosClient(backoff_seconds=0)
+    client._session.get = MagicMock(return_value=blocked)
+
+    with pytest.raises(TnSosError, match="403"):
+        client.get_calendar_html()
+    assert client._session.get.call_count == 1
