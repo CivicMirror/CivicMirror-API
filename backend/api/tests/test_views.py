@@ -6,8 +6,8 @@ from results.models import OfficialResult
 
 
 @pytest.fixture
-def client(settings):
-    settings.CIVICMIRROR_API_KEY = 'test-key'
+def client(make_api_key):
+    make_api_key('test-key')
     c = Client()
     c.defaults['HTTP_X_API_KEY'] = 'test-key'
     return c
@@ -451,9 +451,9 @@ def test_lookup_parent_election_status_visibility(client, db, election_status, e
 
 
 @pytest.mark.django_db
-def test_lookup_requires_auth(settings):
+def test_lookup_requires_auth(make_api_key):
     from django.test import Client
-    settings.CIVICMIRROR_API_KEY = 'test-key'
+    make_api_key('test-key')
     c = Client()
     response = c.get('/api/v1/lookup/?zip=70801')
     assert response.status_code == 403

@@ -22,7 +22,7 @@ class CivicMirrorAPIClient:
         timeout: int | float | None = None,
     ):
         self.base_url = (base_url or os.getenv("CIVICMIRROR_API_BASE_URL") or "http://127.0.0.1:8000/api/v1").rstrip("/")
-        self.api_key = api_key or os.getenv("CIVICMIRROR_MCP_API_KEY") or os.getenv("CIVICMIRROR_API_KEY")
+        self.api_key = api_key or os.getenv("CIVICMIRROR_MCP_API_KEY")
         self.session = session or requests.Session()
         self.timeout = timeout or float(os.getenv("CIVICMIRROR_MCP_TIMEOUT", "30"))
 

@@ -12,14 +12,14 @@ from api.models import ApiKey
 from api.throttling import get_client_ip
 from elections.models import Election, Race
 
-LEGACY_KEY = 'legacy-test-key'
+TEST_KEY = 'throttle-test-key'
 IP_A = '203.0.113.10'
 IP_B = '198.51.100.20'
 
 
 @pytest.fixture(autouse=True)
-def _settings(settings):
-    settings.CIVICMIRROR_API_KEY = LEGACY_KEY
+def _settings(settings, make_api_key):
+    make_api_key(TEST_KEY)
     settings.FIREBASE_AUTH_ENABLED = False
     settings.CIVICMIRROR_CLIENT_IP_HEADER = 'HTTP_CF_CONNECTING_IP'
     settings.CIVICMIRROR_CLIENT_IP_XFF_PROXIES = 0
@@ -79,7 +79,7 @@ def _login(client, username, ip=None):
                        content_type='application/json', **headers)
 
 
-def _vote(client, race, token, ip=None, key=LEGACY_KEY):
+def _vote(client, race, token, ip=None, key=TEST_KEY):
     headers = {'HTTP_CF_CONNECTING_IP': ip} if ip else {}
     return client.post(f'/api/v1/races/{race.pk}/vote/', data={}, content_type='application/json',
                        HTTP_X_API_KEY=key, HTTP_AUTHORIZATION=f'Token {token}', **headers)
@@ -213,7 +213,7 @@ def test_vote_throttled_per_ip_across_users(client, race):
 def test_vote_without_user_is_401_not_throttled(client, race):
     for _ in range(4):
         response = client.post(f'/api/v1/races/{race.pk}/vote/', data={}, content_type='application/json',
-                               HTTP_X_API_KEY=LEGACY_KEY, HTTP_CF_CONNECTING_IP=IP_A)
+                               HTTP_X_API_KEY=TEST_KEY, HTTP_CF_CONNECTING_IP=IP_A)
         assert response.status_code in (401, 429)
     # Anonymous attempts still count toward the IP backstop, but never toward a user bucket.
     token = _token('fresh')
@@ -223,7 +223,7 @@ def test_vote_without_user_is_401_not_throttled(client, race):
 @pytest.mark.django_db
 def test_tally_reads_are_not_throttled(client, race):
     for _ in range(6):
-        response = client.get(f'/api/v1/races/{race.pk}/tally/', HTTP_X_API_KEY=LEGACY_KEY,
+        response = client.get(f'/api/v1/races/{race.pk}/tally/', HTTP_X_API_KEY=TEST_KEY,
                               HTTP_CF_CONNECTING_IP=IP_A)
         assert response.status_code == 200
 
@@ -233,7 +233,7 @@ def test_community_create_throttled_per_user(client):
     token = _token('submitter')
     statuses = [
         client.post('/api/v1/races/community/', data={}, content_type='application/json',
-                    HTTP_X_API_KEY=LEGACY_KEY, HTTP_AUTHORIZATION=f'Token {token}').status_code
+                    HTTP_X_API_KEY=TEST_KEY, HTTP_AUTHORIZATION=f'Token {token}').status_code
         for _ in range(2)
     ]
     assert statuses[0] != 429

@@ -1,5 +1,5 @@
 import pytest
-from django.test import Client, override_settings
+from django.test import Client
 
 
 @pytest.fixture
@@ -8,8 +8,8 @@ def client():
 
 
 @pytest.fixture
-def api_key(settings):
-    settings.CIVICMIRROR_API_KEY = 'test-api-key-phase3'
+def api_key(make_api_key):
+    make_api_key('test-api-key-phase3')
     return 'test-api-key-phase3'
 
 
@@ -32,9 +32,16 @@ def test_valid_api_key_returns_200(client, api_key):
 
 
 @pytest.mark.django_db
-@override_settings(CIVICMIRROR_API_KEY='')
-def test_empty_configured_key_returns_403(client):
+def test_no_issued_keys_returns_403(client):
     response = client.get('/api/v1/elections/', HTTP_X_API_KEY='anything')
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_retired_legacy_setting_is_ignored(client, settings):
+    # The shared CIVICMIRROR_API_KEY was retired (#201); a leftover env value must not grant access.
+    settings.CIVICMIRROR_API_KEY = 'leftover-legacy-key'
+    response = client.get('/api/v1/elections/', HTTP_X_API_KEY='leftover-legacy-key')
     assert response.status_code == 403
 
 

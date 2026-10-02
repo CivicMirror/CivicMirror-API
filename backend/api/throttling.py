@@ -75,8 +75,8 @@ class ApiKeyRateThrottle(_ThrottleCacheMixin, SimpleRateThrottle):
     Per-service-key rate limit (ADR-010).
 
     Runs after ``HasAPIKey`` (DRF checks permissions before throttles), so ``request.api_key``
-    is already set. Requests without a DB-backed key are not throttled here: keyless AllowAny
-    views, and the legacy shared key, which fronts all public FrontEnd traffic.
+    is already set. Keyless AllowAny views have no key and aren't throttled here. Keys shared by
+    many end users (e.g. the FrontEnd's) should use ``throttle_rate='none'``.
 
     The rate is the key's ``throttle_rate``, falling back to ``CIVICMIRROR_API_KEY_DEFAULT_RATE``;
     ``'none'`` disables throttling for that key.
