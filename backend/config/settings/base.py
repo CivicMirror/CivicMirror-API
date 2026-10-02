@@ -380,5 +380,7 @@ LOGGING = {
         'results': {'handlers': ['console'], 'level': _LOG_LEVEL, 'propagate': False},
         'ops': {'handlers': ['console'], 'level': _LOG_LEVEL, 'propagate': False},
         'integrations': {'handlers': ['console'], 'level': _LOG_LEVEL, 'propagate': False},
+        # Per-request service API key attribution (prefix only, never the secret). ADR-010.
+        'api.access': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
     },
 }

@@ -6,7 +6,6 @@ from io import StringIO
 
 import pytest
 from django.contrib.auth.models import User
-from django.core.cache import cache
 from django.core.management import CommandError, call_command
 from django.test import Client
 from django.utils import timezone
@@ -41,9 +40,8 @@ def _settings(settings):
     settings.CIVICMIRROR_API_KEY = LEGACY_KEY
     settings.FIREBASE_AUTH_ENABLED = False
     settings.CIVICMIRROR_API_KEY_DEFAULT_RATE = '1000/hour'
-    cache.clear()
-    yield
-    cache.clear()
+    # No cache.clear(): throttle counters are keyed on each key's random prefix, and in CI the
+    # default cache is Redis DB 0, shared with Celery.
 
 
 @pytest.fixture
@@ -273,10 +271,16 @@ def test_last_used_at_updated_and_rate_limited(client, read_key):
 
 @pytest.mark.django_db
 def test_access_log_uses_prefix_not_secret(client, read_key, caplog):
+    import logging
     api_key, raw = read_key
-    with caplog.at_level('INFO', logger='api.access'):
-        client.get('/api/v1/elections/', HTTP_X_API_KEY=raw)
-        client.get('/api/v1/elections/', HTTP_X_API_KEY=f'{api_key.prefix}_wrong')
+    access_logger = logging.getLogger('api.access')  # propagate=False, so attach caplog directly
+    access_logger.addHandler(caplog.handler)
+    try:
+        with caplog.at_level('INFO', logger='api.access'):
+            client.get('/api/v1/elections/', HTTP_X_API_KEY=raw)
+            client.get('/api/v1/elections/', HTTP_X_API_KEY=f'{api_key.prefix}_wrong')
+    finally:
+        access_logger.removeHandler(caplog.handler)
     assert api_key.prefix in caplog.text
     assert raw not in caplog.text
     assert 'rejected' in caplog.text
