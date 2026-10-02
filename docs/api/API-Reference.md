@@ -32,6 +32,8 @@ The legacy shared key (`CIVICMIRROR_API_KEY` environment variable) is still acce
 
 **Requesting a key:** contact the project maintainer with your name or organization, intended use, and the access level you need. Keys look like `cm_1a2b3c4d_<secret>`. The `cm_1a2b3c4d` part is the public prefix used in logs and for revocation. The full key is shown once at creation and can't be recovered later; a lost key is replaced with a new one.
 
+**MCP access (coming soon):** service API keys will also grant access to the hosted CivicMirror MCP server once it's available (#200). The same key, access level, rate limit, and revocation will apply, so no separate credential is needed. Until then, key holders can run the open-source local MCP server (`mcp_server/`) with their key.
+
 **Rate limits:** each service key is rate-limited (default `1000/hour`, configurable per key). Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header. The legacy shared key isn't rate-limited.
 
 **Revoked or expired keys** return `403` on the next request.

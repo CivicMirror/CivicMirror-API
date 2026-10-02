@@ -23,6 +23,13 @@ export CIVICMIRROR_MCP_API_KEY="your-local-or-production-api-key"
 `CIVICMIRROR_MCP_API_KEY` is preferred for MCP usage. If it is not set, the
 server falls back to `CIVICMIRROR_API_KEY`.
 
+Use a CivicMirror **service API key** (a `read` key is enough, since all tools are read-only). See
+`docs/api/API-Reference.md` → Authentication for how to request one. Your key's rate limit and
+revocation apply to MCP requests too.
+
+> **Coming soon:** a hosted CivicMirror MCP server for approved developers (#200). It will accept the
+> same service API keys, so no local install will be needed.
+
 ## Run
 
 ```bash
