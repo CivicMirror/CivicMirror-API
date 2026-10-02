@@ -27,8 +27,8 @@ The API also serves two different audiences that shouldn't share an access model
 3. **`HasAPIKey` stays the single gate** on every view that already uses it. It now also enforces the access level, so the check can't be forgotten on an individual view:
    - data views (the default): `read` keys may use only `SAFE_METHODS`;
    - views with `api_key_scope = 'public'` (all `community` views) accept any valid key, because they authenticate the end user themselves and return `401` without one.
-4. **Legacy key:** `CIVICMIRROR_API_KEY` is still accepted as `read_write` during migration. If it's empty, DB keys still work (previously an empty setting rejected everything).
-5. **Per-key throttling** (`api.throttling.ApiKeyRateThrottle`, a global DRF throttle class) uses the key's `throttle_rate` or `CIVICMIRROR_API_KEY_DEFAULT_RATE` (default `1000/hour`). Counters are keyed on the prefix and stored in the default cache, which is Redis in production. The legacy key and keyless endpoints aren't throttled by this class.
+4. **Legacy key:** `CIVICMIRROR_API_KEY` was accepted as `read_write` during migration. **Retired 2026-10-02:** the FrontEnd (`frontend-web`, `read`, no per-key limit) and the MCP server (`mcp-local`, `read`) moved to their own keys, and the fallback was removed. A leftover env value is ignored.
+5. **Per-key throttling** (`api.throttling.ApiKeyRateThrottle`, a global DRF throttle class) uses the key's `throttle_rate` or `CIVICMIRROR_API_KEY_DEFAULT_RATE` (default `1000/hour`). Counters are keyed on the prefix and stored in the default cache, which is Redis in production. Keyless endpoints aren't throttled by this class; keys shared by every visitor use `throttle_rate='none'`.
 6. **Attribution:** `request.api_key` / `request.api_key_label` are set on every keyed request. The `api.access` logger records the prefix, method, and path for service-key requests, and rejected prefixed keys at `WARNING`. Secrets are never logged.
 7. **Management:** Django admin (create, edit, deactivate; no delete) and the `create_api_key`, `revoke_api_key`, and `list_api_keys` management commands.
 
@@ -40,8 +40,8 @@ The API also serves two different audiences that shouldn't share an access model
 - Public mock voting is unaffected: it stays behind user auth, not service scope.
 
 ### Negative / follow-ups
-- One indexed DB lookup per request for non-legacy keys.
-- **Legacy key retirement:** the FrontEnd should get its own `read` key (treated as public, since browser bundles are readable) and the MCP server its own secret key. Then the env-var fallback should be removed, which also invalidates the copy exposed in old FrontEnd builds.
+- One indexed DB lookup per request.
+- **Legacy key retirement (done):** the FrontEnd has its own `read` key (treated as public, since browser bundles are readable) and the MCP server its own key. The env-var fallback is removed, which also invalidates the copy exposed in old FrontEnd builds.
 - Public registration abuse is a separate concern (#202). Data-maintenance write endpoints don't exist yet (#203).
 
 ## Operations

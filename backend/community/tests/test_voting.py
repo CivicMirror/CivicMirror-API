@@ -19,8 +19,8 @@ OTHER_UID = 'firebase-uid-test-2'
 
 
 @pytest.fixture
-def client(settings):
-    settings.CIVICMIRROR_API_KEY = 'test-key'
+def client(settings, make_api_key):
+    make_api_key('test-key')
     settings.FIREBASE_AUTH_ENABLED = False
     c = Client()
     c.defaults['HTTP_X_API_KEY'] = 'test-key'
@@ -28,9 +28,9 @@ def client(settings):
 
 
 @pytest.fixture
-def authed_client(settings):
+def authed_client(settings, make_api_key):
     """Client with both API key and Firebase Bearer token."""
-    settings.CIVICMIRROR_API_KEY = 'test-key'
+    make_api_key('test-key')
     settings.FIREBASE_AUTH_ENABLED = True
     c = Client()
     c.defaults['HTTP_X_API_KEY'] = 'test-key'
@@ -39,9 +39,9 @@ def authed_client(settings):
 
 
 @pytest.fixture
-def other_authed_client(settings):
+def other_authed_client(settings, make_api_key):
     """Client authenticated as a different user."""
-    settings.CIVICMIRROR_API_KEY = 'test-key'
+    make_api_key('test-key')
     settings.FIREBASE_AUTH_ENABLED = True
     c = Client()
     c.defaults['HTTP_X_API_KEY'] = 'test-key'

@@ -14,8 +14,6 @@ from rest_framework.authtoken.models import Token
 from api.models import ApiKey, hash_api_key, prefix_from_raw_key
 from elections.models import Election, Race
 
-LEGACY_KEY = 'legacy-test-key'
-
 # Public-participation write endpoints: need any valid key plus an authenticated user.
 PUBLIC_WRITE_ENDPOINTS = [
     ('post', '/api/v1/races/{pk}/vote/'),
@@ -37,7 +35,6 @@ DATA_READ_ENDPOINTS = [
 
 @pytest.fixture(autouse=True)
 def _settings(settings):
-    settings.CIVICMIRROR_API_KEY = LEGACY_KEY
     settings.FIREBASE_AUTH_ENABLED = False
     settings.CIVICMIRROR_API_KEY_DEFAULT_RATE = '1000/hour'
     # No cache.clear(): throttle counters are keyed on each key's random prefix, and in CI the
@@ -172,15 +169,11 @@ def test_write_key_passes_key_check_on_data_writes(client, write_key, race, meth
 
 
 @pytest.mark.django_db
-def test_legacy_key_still_has_full_access(client, race):
-    assert client.get('/api/v1/elections/', HTTP_X_API_KEY=LEGACY_KEY).status_code == 200
-    assert client.post(f'/api/v1/races/{race.pk}/', HTTP_X_API_KEY=LEGACY_KEY).status_code == 405
-
-
-@pytest.mark.django_db
-def test_empty_legacy_setting_still_accepts_db_keys(client, settings, read_key):
-    settings.CIVICMIRROR_API_KEY = ''
+def test_retired_legacy_setting_grants_nothing(client, settings, read_key):
+    # The shared CIVICMIRROR_API_KEY was retired (#201): a leftover value is ignored, DB keys still work.
+    settings.CIVICMIRROR_API_KEY = 'leftover-legacy-key'
     _, raw = read_key
+    assert client.get('/api/v1/elections/', HTTP_X_API_KEY='leftover-legacy-key').status_code == 403
     assert client.get('/api/v1/elections/', HTTP_X_API_KEY=raw).status_code == 200
     assert client.get('/api/v1/elections/', HTTP_X_API_KEY='').status_code == 403
 
@@ -313,9 +306,11 @@ def test_rate_none_disables_throttle(client, settings):
 
 
 @pytest.mark.django_db
-def test_legacy_key_is_not_throttled(client, settings):
+def test_shared_frontend_style_key_with_rate_none_is_not_throttled(client, settings):
+    # Keys shared by every browser (the FrontEnd's) use throttle_rate='none' so the site isn't limited as a whole.
     settings.CIVICMIRROR_API_KEY_DEFAULT_RATE = '1/minute'
-    statuses = {client.get('/api/v1/elections/', HTTP_X_API_KEY=LEGACY_KEY).status_code for _ in range(3)}
+    _, raw = ApiKey.issue(name='frontend-web', throttle_rate='none')
+    statuses = {client.get('/api/v1/elections/', HTTP_X_API_KEY=raw).status_code for _ in range(3)}
     assert statuses == {200}
 
 

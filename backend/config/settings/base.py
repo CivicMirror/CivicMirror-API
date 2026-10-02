@@ -322,8 +322,6 @@ SPECTACULAR_SETTINGS = {
     },
 }
 
-# Legacy shared key (read_write). Service clients get per-client ApiKey records instead (ADR-010).
-CIVICMIRROR_API_KEY = env('CIVICMIRROR_API_KEY', default='')
 # Default per-key rate for ApiKey records without their own throttle_rate. Blank or 'none' disables.
 CIVICMIRROR_API_KEY_DEFAULT_RATE = env('CIVICMIRROR_API_KEY_DEFAULT_RATE', default='1000/hour')
 

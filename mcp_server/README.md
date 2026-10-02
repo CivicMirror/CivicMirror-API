@@ -20,8 +20,7 @@ export CIVICMIRROR_API_BASE_URL="http://127.0.0.1:8000/api/v1"
 export CIVICMIRROR_MCP_API_KEY="your-local-or-production-api-key"
 ```
 
-`CIVICMIRROR_MCP_API_KEY` is preferred for MCP usage. If it is not set, the
-server falls back to `CIVICMIRROR_API_KEY`.
+`CIVICMIRROR_MCP_API_KEY` holds your service API key.
 
 Use a CivicMirror **service API key** (a `read` key is enough, since all tools are read-only). See
 `docs/api/API-Reference.md` → Authentication for how to request one. Your key's rate limit and

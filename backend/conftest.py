@@ -40,3 +40,26 @@ def _clear_throttle_cache():
     """Reset rate-limit counters between tests (the throttle cache is LocMem in dev/test settings)."""
     from django.core.cache import caches
     caches['throttle'].clear()
+
+
+@pytest.fixture
+def make_api_key(db):
+    """
+    Create (or reuse) a DB-backed service API key whose plaintext is ``raw``, for tests that need a
+    known header value. Defaults to read_write with throttling disabled.
+    """
+    def _make(raw='test-key', access_level='read_write', throttle_rate='none'):
+        import secrets
+
+        from api.models import ApiKey, hash_api_key
+        api_key, _ = ApiKey.objects.get_or_create(
+            hashed_key=hash_api_key(raw),
+            defaults={
+                'name': f'test key {raw}',
+                'prefix': f'cm_{secrets.token_hex(4)}',
+                'access_level': access_level,
+                'throttle_rate': throttle_rate,
+            },
+        )
+        return api_key
+    return _make

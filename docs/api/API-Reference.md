@@ -28,13 +28,13 @@ The API serves two audiences with separate access models (see [ADR-010](../adr/A
   No data-write endpoints exist yet; they are tracked in #203.
 - **Public participation** endpoints (mock voting, community races, `/users/*`) accept **any** valid key regardless of level, and then require an authenticated end user (point 2 or 3 below). The level doesn't matter there, because those views authenticate the user themselves.
 
-The legacy shared key (`CIVICMIRROR_API_KEY` environment variable) is still accepted and treated as `read_write` while clients move to their own keys.
+The original shared key (`CIVICMIRROR_API_KEY`) was **retired** (#201). Every client, including the CivicMirror FrontEnd and the MCP server, now uses its own key. Keys built into the public FrontEnd bundle are `read`-only.
 
 **Requesting a key:** contact the project maintainer with your name or organization, intended use, and the access level you need. Keys look like `cm_1a2b3c4d_<secret>`. The `cm_1a2b3c4d` part is the public prefix used in logs and for revocation. The full key is shown once at creation and can't be recovered later; a lost key is replaced with a new one.
 
 **MCP access (coming soon):** service API keys will also grant access to the hosted CivicMirror MCP server once it's available (#200). The same key, access level, rate limit, and revocation will apply, so no separate credential is needed. Until then, key holders can run the open-source local MCP server (`mcp_server/`) with their key.
 
-**Rate limits:** each service key is rate-limited (default `1000/hour`, configurable per key). Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header. The legacy shared key isn't rate-limited.
+**Rate limits:** each service key is rate-limited (default `1000/hour`, configurable per key). Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header. Keys shared by every visitor (the FrontEnd's) are configured without a per-key limit; public writes are limited per user and per IP instead.
 
 **Revoked or expired keys** return `403` on the next request.
 
