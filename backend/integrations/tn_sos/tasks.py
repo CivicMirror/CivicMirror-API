@@ -179,16 +179,49 @@ def sync_tn_candidates(self, election_pk: int | None = None):
         raise
 
 
-def _link_date(link):
+# How far a results link's date may be from an election's date and still belong to it.
+_RESULT_LINK_MATCH_WINDOW_DAYS = 7
+
+
+def _link_dates(link) -> set:
+    """
+    Candidate dates for a results link: the page heading's date and the YYYYMMDD filename prefix.
+
+    Neither is reliable on its own. sos.tn.gov headed the 2026-08-06 primary "August 1, 2026" while
+    its files are named 20260806..., and the 2026-05-05 county primary's files are named 20260506...
+    (the posting date). Matching uses both, within a tolerance window.
+    """
+    dates = set()
     if link.election_date is not None:
-        return link.election_date
+        dates.add(link.election_date)
     match = _FILENAME_DATE_RE.match(link.source_version)
     if match:
         try:
-            return datetime.strptime(match.group(1), "%Y%m%d").date()
+            dates.add(datetime.strptime(match.group(1), "%Y%m%d").date())
         except ValueError:
-            return None
-    return None
+            pass
+    return dates
+
+
+def _match_election(link, elections):
+    """
+    Return the TN election nearest to any of the link's candidate dates, within the match window.
+    Returns None when nothing is close enough, or when two elections are equally close (ambiguous).
+    """
+    dates = _link_dates(link)
+    if not dates:
+        return None
+    scored = []
+    for election_obj in elections:
+        distance = min(abs((election_obj.election_date - d).days) for d in dates)
+        if distance <= _RESULT_LINK_MATCH_WINDOW_DAYS:
+            scored.append((distance, election_obj))
+    if not scored:
+        return None
+    scored.sort(key=lambda pair: pair[0])
+    if len(scored) > 1 and scored[0][0] == scored[1][0]:
+        return None
+    return scored[0][1]
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -199,12 +232,13 @@ def sync_tn_result_index(self):
 
     try:
         links = parse_results_index(client.get_results_index_html())
-        by_date: dict = {}
+        elections = list(Election.objects.filter(state="TN"))
+        by_election: dict = {}
         for link in links:
-            link_date = _link_date(link)
-            if link_date is None:
+            election_obj = _match_election(link, elections)
+            if election_obj is None:
                 continue
-            by_date.setdefault(link_date, []).append({
+            by_election.setdefault(election_obj.pk, (election_obj, []))[1].append({
                 "url": link.url,
                 "label": link.label,
                 "file_type": link.file_type,
@@ -212,13 +246,14 @@ def sync_tn_result_index(self):
                 "source_version": link.source_version,
             })
 
-        for election_obj in Election.objects.filter(state="TN", election_date__in=list(by_date)):
+        for election_obj, entries in by_election.values():
             existing = election_obj.source_metadata.get("tn_result_links", [])
             existing_urls = {entry["url"] for entry in existing}
-            new_entries = [
-                entry for entry in by_date[election_obj.election_date]
-                if entry["url"] not in existing_urls
-            ]
+            new_entries = []
+            for entry in entries:
+                if entry["url"] not in existing_urls:
+                    existing_urls.add(entry["url"])
+                    new_entries.append(entry)
             if not new_entries:
                 continue
             election_obj.source_metadata["tn_result_links"] = existing + new_entries

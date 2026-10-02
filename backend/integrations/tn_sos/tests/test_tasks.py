@@ -153,3 +153,78 @@ def test_sync_tn_result_index_stores_matching_result_links():
     election.refresh_from_db()
     urls = [link["url"] for link in election.source_metadata["tn_result_links"]]
     assert len(urls) == len(set(urls))
+
+
+# Mirrors the live sos.tn.gov layout (2026-10-02): the 2026-08-06 primary is headed
+# "August 1, 2026" while its files are named 20260806...; the 2026-05-05 county primary's
+# files are named 20260506... (posting date).
+_MISDATED_INDEX_HTML = """
+<ul>
+  <li>August 1, 2026
+    <ul>
+      <li><a href="https://sos-prod.tnsosgovfiles.com/s3fs-public/document/20260806AllbyPrecinct.xlsx">Results by Precinct Spreadsheet</a></li>
+      <li><a href="https://sos-prod.tnsosgovfiles.com/s3fs-public/document/20260806RepublicanPrimarybyCounty.pdf">By County</a></li>
+    </ul>
+  </li>
+  <li>May 5, 2026
+    <ul>
+      <li><a href="https://sos-prod.tnsosgovfiles.com/s3fs-public/document/20260506AllbyPrecinct.xlsx">Results by Precinct Spreadsheet</a></li>
+    </ul>
+  </li>
+  <li>March 3, 2026
+    <ul>
+      <li><a href="https://sos-prod.tnsosgovfiles.com/s3fs-public/document/20260303AllbyPrecinct.xlsx">Results by Precinct Spreadsheet</a></li>
+    </ul>
+  </li>
+</ul>
+"""
+
+
+def _run_result_index(html):
+    with patch("integrations.tn_sos.tasks.TnSosClient.get_results_index_html", return_value=html):
+        sync_tn_result_index()
+
+
+@pytest.mark.django_db
+def test_result_index_matches_when_page_heading_date_is_wrong():
+    """The August heading says Aug 1 but the election is Aug 6; the 20260806 filenames must still match."""
+    august = _make_tn_election(election_date=date(2026, 8, 6))
+    _run_result_index(_MISDATED_INDEX_HTML)
+    august.refresh_from_db()
+    urls = [entry["url"] for entry in august.source_metadata.get("tn_result_links", [])]
+    assert any(url.endswith("20260806AllbyPrecinct.xlsx") for url in urls)
+    assert any(url.endswith("20260806RepublicanPrimarybyCounty.pdf") for url in urls)
+    assert not any("20260506" in url or "20260303" in url for url in urls)
+
+
+@pytest.mark.django_db
+def test_result_index_matches_when_filename_is_posting_date():
+    """May files are named 20260506 but headed May 5 (the real election date)."""
+    may = _make_tn_election(
+        election_date=date(2026, 5, 5), name="May 5, 2026 - County Primary", source_id="tn_sos:2026-05-05:statewide",
+    )
+    _run_result_index(_MISDATED_INDEX_HTML)
+    may.refresh_from_db()
+    urls = [entry["url"] for entry in may.source_metadata.get("tn_result_links", [])]
+    assert urls == ["https://sos-prod.tnsosgovfiles.com/s3fs-public/document/20260506AllbyPrecinct.xlsx"]
+
+
+@pytest.mark.django_db
+def test_result_index_ignores_links_far_from_any_election():
+    november = _make_tn_election(
+        election_date=date(2026, 11, 3), name="November 3, 2026 - General", source_id="tn_sos:2026-11-03:statewide",
+    )
+    _run_result_index(_MISDATED_INDEX_HTML)
+    november.refresh_from_db()
+    assert november.source_metadata.get("tn_result_links", []) == []
+
+
+@pytest.mark.django_db
+def test_result_index_skips_links_equally_close_to_two_elections():
+    # Aug 1 heading / Aug 6 filename: elections on Jul 30 and Aug 8 are both 2 days away -> ambiguous.
+    first = _make_tn_election(election_date=date(2026, 7, 30), source_id="tn_sos:2026-07-30:statewide")
+    second = _make_tn_election(election_date=date(2026, 8, 8), source_id="tn_sos:2026-08-08:statewide")
+    _run_result_index(_MISDATED_INDEX_HTML)
+    for election in (first, second):
+        election.refresh_from_db()
+        assert not any("20260806" in e["url"] for e in election.source_metadata.get("tn_result_links", []))
