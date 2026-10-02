@@ -292,6 +292,27 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
     return created_races
 
 
+_SOURCE_URL_MAX_LENGTH = 200  # OfficialResult.source_url is a URLField (max_length=200)
+
+
+def _result_source_url(row, adapter_result, race) -> str:
+    """
+    Prefer the row's own source document (row.raw["source_url"]) over the adapter-wide URL.
+
+    Adapters that fetch many documents per election (e.g. MA split primaries, one CSV per office)
+    tag each row with its CSV. A value too long for the column is dropped with a warning instead of
+    aborting the whole election's ingest with a DataError.
+    """
+    url = (row.raw or {}).get("source_url") or adapter_result.source_url or ""
+    if len(url) > _SOURCE_URL_MAX_LENGTH:
+        logger.warning(
+            "_process_race_results: source_url longer than %d chars for race %s; storing blank",
+            _SOURCE_URL_MAX_LENGTH, race.id,
+        )
+        return ""
+    return url
+
+
 def _process_race_results(race, adapter_result, state: str):
     from elections.models import Candidate, MeasureOption, Race
     from results.models import OfficialResult
@@ -417,7 +438,7 @@ def _process_race_results(race, adapter_result, state: str):
                     'is_winner': row.is_winner,
                     'result_type': row.result_type,
                     'is_write_in_aggregate': row.is_write_in_aggregate,
-                    'source_url': adapter_result.source_url,
+                    'source_url': _result_source_url(row, adapter_result, race),
                     'raw_payload': row.raw,
                     'certified_at': _certified_at_for_row(race, row.result_type),
                 },

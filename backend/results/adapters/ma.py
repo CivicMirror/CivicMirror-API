@@ -205,7 +205,10 @@ class MassachusettsAdapter(StateResultsAdapter):
         new_hash = hashlib.sha256(b"".join(csv_bodies)).hexdigest()
         cache_key = f"ma_sos:hash:{election_id}"
         cached_hash = cache.get(cache_key)
-        source_url = "; ".join(urls)
+        # One CSV per office: each row carries its own URL in raw["source_url"]. Keep the
+        # adapter-level URL a single valid URL (OfficialResult.source_url is max 200 chars);
+        # the full list is logged below.
+        source_url = urls[0] if urls else ""
 
         if cached_hash == new_hash:
             logger.debug("ma_sos.adapter.unchanged election_id=%d (split)", election_id)
@@ -313,6 +316,7 @@ def _parse_election_csv(
                     "town": town,
                     "party": cand["party"],
                     "col_idx": col_idx,
+                    "source_url": source_url,  # this office's CSV; stored per result row
                     **({"contest_code": contest_code} if contest_code else {}),
                     **({"party_code": party_code} if party_code else {}),
                 },

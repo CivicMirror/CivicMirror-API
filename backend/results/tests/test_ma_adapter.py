@@ -451,3 +451,71 @@ def test_no_candidate_placeholder_helper():
     assert is_no_candidate_placeholder("No Nomination")
     assert is_no_candidate_placeholder("  no nomination ")
     assert not is_no_candidate_placeholder("Diana DiZoglio")
+
+
+def test_parse_election_csv_tags_each_row_with_its_csv_url():
+    from results.adapters.ma import _parse_election_csv
+
+    url = "https://electionstats.state.ma.us/elections/download/172881/precincts_include:0/"
+    rows = _parse_election_csv(CSV_BYTES, url, contest_code="172881", party_code="Democratic")
+    assert rows and all(r.raw["source_url"] == url for r in rows)
+
+
+@pytest.mark.django_db
+def test_split_primary_result_rows_store_their_own_short_source_url():
+    """
+    Regression: a split primary's adapter-level source_url was every CSV URL joined with '; '
+    (506 offices), which overflowed OfficialResult.source_url (varchar 200) and aborted the whole
+    ingest with DataError. Each result now stores its own office CSV URL.
+    """
+    from elections.models import Candidate, Election, Race
+    from results.adapters.base import AdapterResult
+    from results.adapters.ma import _parse_election_csv
+    from results.models import OfficialResult
+    from results.tasks import _process_race_results
+
+    election = Election.objects.create(
+        name="MA Primary", election_date="2026-09-01", election_type="primary",
+        jurisdiction_level="state", state="MA", canonical_key="MA:primary:2026-09-01:state",
+    )
+    race = Race.objects.create(
+        election=election, race_type=Race.RaceType.CANDIDATE, office_title="Auditor",
+        jurisdiction="Massachusetts", geography_scope="statewide", source=Race.Source.CIVIC_API,
+        canonical_key="ma:test:auditor", source_metadata={"contest_code": "172881", "party_code": "Democratic"},
+    )
+    Candidate.objects.create(race=race, name="Candidate A")
+    url = "https://electionstats.state.ma.us/elections/download/172881/precincts_include:0/"
+    rows = _parse_election_csv(CSV_BYTES, url, contest_code="172881", party_code="Democratic")
+    joined = "; ".join([url] * 300)  # what the split fetch used to pass as the adapter-level URL
+
+    _process_race_results(race, AdapterResult(rows=rows, source_url=joined, mapping_confidence="full"), "MA")
+
+    stored = OfficialResult.objects.filter(race=race, candidate__name="Candidate A")
+    assert stored.exists()
+    assert set(stored.values_list("source_url", flat=True)) == {url}
+
+
+@pytest.mark.django_db
+def test_overlong_adapter_source_url_is_dropped_not_fatal():
+    from elections.models import Candidate, Election, Race
+    from results.adapters.base import AdapterResult, ResultRow
+    from results.models import OfficialResult
+    from results.tasks import _process_race_results
+
+    election = Election.objects.create(
+        name="X", election_date="2026-09-01", election_type="primary",
+        jurisdiction_level="state", state="MA", canonical_key="MA:primary:2026-09-01:x",
+    )
+    race = Race.objects.create(
+        election=election, race_type=Race.RaceType.CANDIDATE, office_title="Treasurer",
+        jurisdiction="Massachusetts", geography_scope="statewide", source=Race.Source.CIVIC_API,
+        canonical_key="ma:test:treasurer",
+    )
+    Candidate.objects.create(race=race, name="Jane Doe")
+    row = ResultRow(candidate_name="Jane Doe", option_label=None, vote_count=10, vote_pct=None,
+                    is_winner=None, result_type="official", office_title="Treasurer", raw={})
+
+    _process_race_results(race, AdapterResult(rows=[row], source_url="https://x.test/" + "a" * 300,
+                                              mapping_confidence="full"), "MA")
+
+    assert OfficialResult.objects.get(race=race).source_url == ""
