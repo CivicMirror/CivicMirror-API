@@ -307,9 +307,22 @@ if HAS_DJANGO_FILTERS:
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'CivicMirror API',
-    'DESCRIPTION': 'Internal election data aggregation API for CivicMirror.',
+    'DESCRIPTION': (
+        'Normalized U.S. election data: elections, races, candidates, ballot measures, districts, '
+        'and official results.\n\n'
+        '**Authentication:** send your service API key in the `X-Api-Key` header (use **Authorize** '
+        'above to try requests). Keys are issued to individually approved developers and '
+        'organizations; `read` keys can call every GET endpoint.\n\n'
+        '**Rate limits:** per key (default 1000 requests/hour); exceeding it returns `429` with '
+        '`Retry-After`.\n\n'
+        'Full reference, including access levels and how to request a key: '
+        '[API-Reference.md](https://github.com/CivicMirror/CivicMirror-API/blob/main/docs/api/API-Reference.md)'
+    ),
     'VERSION': '1.0.0',
     'SCHEMA_PATH_PREFIX': '/api/v1/',
+    # Publish only the versioned public API; internal, auth, and alias routes are excluded (api/schema.py).
+    'PREPROCESSING_HOOKS': ['api.schema.preprocess_public_endpoints'],
+    'SWAGGER_UI_SETTINGS': {'persistAuthorization': True, 'displayRequestDuration': True},
     'SECURITY': [{'ApiKeyAuth': []}],
     'APPEND_COMPONENTS': {
         'securitySchemes': {

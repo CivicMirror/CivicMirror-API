@@ -30,6 +30,8 @@ The API serves two audiences with separate access models (see [ADR-010](../adr/A
 
 The original shared key (`CIVICMIRROR_API_KEY`) was **retired** (#201). Every client, including the CivicMirror FrontEnd and the MCP server, now uses its own key. Keys built into the public FrontEnd bundle are `read`-only.
 
+**Interactive docs:** https://civicmirror.app/api/docs/ (Swagger UI; authorize with your key to try requests).
+
 **Requesting a key:** contact the project maintainer with your name or organization, intended use, and the access level you need. Keys look like `cm_1a2b3c4d_<secret>`. The `cm_1a2b3c4d` part is the public prefix used in logs and for revocation. The full key is shown once at creation and can't be recovered later; a lost key is replaced with a new one.
 
 **MCP access (coming soon):** service API keys will also grant access to the hosted CivicMirror MCP server once it's available (#200). The same key, access level, rate limit, and revocation will apply, so no separate credential is needed. Until then, key holders can run the open-source local MCP server (`mcp_server/`) with their key.
@@ -789,8 +791,10 @@ Success responses:
 
 ```
 GET /api/schema/          → OpenAPI 3 YAML, generated from the live code (no key required)
-GET /api/docs/            → Swagger UI (DEBUG mode only)
+GET /api/docs/            → Swagger UI: public, interactive docs (no key required to view)
 ```
+
+**Public interactive docs:** https://civicmirror.app/api/docs/. Click **Authorize**, enter your service API key, then use **Try it out** to call endpoints. Both the docs and `/api/schema/` publish only the versioned public API (`/api/v1/`). Internal task triggers, account/auth endpoints (`/api/auth/*`, `/api/users/me/profile/`), and the unversioned `/api/` alias are deliberately excluded (`api/schema.py`).
 
 ---
 
