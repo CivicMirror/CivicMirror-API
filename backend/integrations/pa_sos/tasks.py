@@ -65,16 +65,31 @@ def _seed_elections() -> dict[str, Election]:
     return elections
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=300)
-def sync_pa_elections(self):
-    """Stage 1a: seed elections + upsert races/candidates from Candidate list JSON."""
-    from aggregation import ingest
+def _get_or_create_sync_log(sync_log_id: int | None) -> SyncLog:
+    """
+    One SyncLog row per scheduled run, shared by all of its retry attempts.
 
-    sync_log = SyncLog.objects.create(
+    Retries re-run the task from the top. Before, each attempt created its own row and an attempt
+    that scheduled a retry left that row in STARTED forever, so every nightly run leaked one
+    orphaned STARTED row per retry. Retries now pass the row's id forward and reuse it.
+    """
+    if sync_log_id is not None:
+        sync_log = SyncLog.objects.filter(pk=sync_log_id, task_name="sync_pa_elections").first()
+        if sync_log is not None:
+            return sync_log
+    return SyncLog.objects.create(
         source="pa_sos",
         task_name="sync_pa_elections",
         status=SyncLog.Status.STARTED,
     )
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+def sync_pa_elections(self, sync_log_id: int | None = None):
+    """Stage 1a: seed elections + upsert races/candidates from Candidate list JSON."""
+    from aggregation import ingest
+
+    sync_log = _get_or_create_sync_log(sync_log_id)
 
     try:
         elections = _seed_elections()
@@ -197,11 +212,13 @@ def sync_pa_elections(self):
 
     except PaSosRetryableError as exc:
         try:
-            raise self.retry(exc=exc)
+            raise self.retry(exc=exc, kwargs={"sync_log_id": sync_log.pk})
         except Retry:
-            # A further retry was scheduled — leave sync_log as STARTED,
-            # the eventual attempt (success, failure, or final exhaustion
-            # below) will give it a terminal state.
+            # A further retry was scheduled. Leave sync_log as STARTED; the retry reuses this
+            # same row (via sync_log_id), so the eventual attempt (success, failure, or final
+            # exhaustion below) gives it a terminal state.
+            sync_log.notes = f"Retry {self.request.retries + 1}/{self.max_retries} scheduled after: {exc}"[:2000]
+            sync_log.save(update_fields=["notes"])
             raise
         except PaSosRetryableError:
             # self.retry() re-raises the original exc as-is once max_retries

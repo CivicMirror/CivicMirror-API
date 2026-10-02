@@ -205,3 +205,52 @@ def test_sync_pa_elections_leaves_synclog_started_when_retry_scheduled():
     log = SyncLog.objects.filter(source="pa_sos", task_name="sync_pa_elections").latest("started_at")
     assert log.status == SyncLog.Status.STARTED
     assert log.completed_at is None
+
+
+@pytest.mark.django_db
+def test_sync_pa_elections_retry_reuses_the_same_synclog_row():
+    """
+    Regression test: each retry attempt used to create its own SyncLog row and leave the earlier
+    attempt's row STARTED forever (3 orphaned rows per nightly run). Retries must pass the row id
+    forward, and a retried attempt must reuse that row instead of creating a new one.
+    """
+    from integrations.pa_sos.tasks import sync_pa_elections
+    from ops.models import SyncLog
+
+    transient = PaSosRetryableError("temporary WAF hiccup")
+
+    with patch("integrations.pa_sos.tasks.PaSosClient") as MC, \
+         patch.object(sync_pa_elections, "retry", side_effect=Retry("retry scheduled")) as retry:
+        MC.return_value.__enter__.return_value.fetch_candidate_list.side_effect = transient
+        with pytest.raises(Retry):
+            sync_pa_elections.apply()
+
+    first = SyncLog.objects.get(source="pa_sos", task_name="sync_pa_elections")
+    assert retry.call_args.kwargs["kwargs"] == {"sync_log_id": first.pk}
+    assert first.status == SyncLog.Status.STARTED
+    assert "Retry" in first.notes
+
+    # The retried attempt (same sync_log_id) exhausts retries: still one row, now terminal.
+    exhausted = PaSosRetryableError("WAF challenge/block page did not clear after 3 attempts")
+    with patch("integrations.pa_sos.tasks.PaSosClient") as MC, \
+         patch.object(sync_pa_elections, "retry", side_effect=exhausted):
+        MC.return_value.__enter__.return_value.fetch_candidate_list.side_effect = exhausted
+        with pytest.raises(PaSosRetryableError):
+            sync_pa_elections.apply(kwargs={"sync_log_id": first.pk})
+
+    rows = SyncLog.objects.filter(source="pa_sos", task_name="sync_pa_elections")
+    assert rows.count() == 1
+    row = rows.get()
+    assert row.pk == first.pk
+    assert row.status == SyncLog.Status.FAILED
+    assert row.completed_at is not None
+
+
+@pytest.mark.django_db
+def test_sync_pa_elections_unknown_sync_log_id_creates_new_row():
+    """A stale/unknown sync_log_id (e.g. row deleted) falls back to creating a fresh row."""
+    from integrations.pa_sos.tasks import _get_or_create_sync_log
+    from ops.models import SyncLog
+
+    log = _get_or_create_sync_log(999999)
+    assert SyncLog.objects.filter(pk=log.pk, task_name="sync_pa_elections", status=SyncLog.Status.STARTED).exists()
