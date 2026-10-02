@@ -694,10 +694,12 @@ Mounted at `/api/` only (**not** `/api/v1/`). Distinct from the Firebase-based s
 ### `POST /api/auth/register/`
 
 ```json
-{ "username": "optional", "password": "required", "email": "", "age_range": "", "country": "", "us_state": "", "gender": "" }
+{ "username": "optional", "password": "required", "email": "", "age_range": "", "country": "", "us_state": "", "gender": "", "turnstile_token": "required when Turnstile is enabled" }
 ```
 Auto-generates a username if omitted. **Response `201`:** `{"token": "...", "user": {...}, "profile": {...}}`.
-**Error:** `400` — missing password, or username already taken.
+**Error:** `400` — missing password, username already taken, non-object body, or `{"turnstile": [...]}` when the Turnstile token is missing or invalid.
+
+**Bot protection:** when `TURNSTILE_SECRET_KEY` is configured, the request must include a [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/) token from the FrontEnd widget (action `register`). It's verified server-side with Cloudflare `siteverify` before anything else, and each token is single-use. If Cloudflare can't be reached, registration is refused (fails closed). Login doesn't require a token.
 
 ### `POST /api/auth/login/`
 
