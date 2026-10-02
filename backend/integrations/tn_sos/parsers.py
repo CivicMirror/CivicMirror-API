@@ -70,6 +70,10 @@ _NEGATIVE_STATUS_RE = re.compile(
     r"withdraw|withdrew|disqualif|deceased|reject|denied|not approved|insufficient",
     re.IGNORECASE,
 )
+# Placeholder TN SOS uses in candidate lists and result exports for offices nobody filed for.
+# It is not a person and must never become a Candidate.
+NO_CANDIDATE_PLACEHOLDERS = frozenset({"no candidate qualified"})
+
 _MONTH_DATE_RE = re.compile(
     r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December)"
     r"\s+\d{1,2},\s+\d{4}\b"
@@ -175,6 +179,8 @@ def parse_candidate_workbook(content: bytes, source_url: str) -> list[TnCandidat
                 office = _first(row, "office", "office title", "contest")
                 candidate_name = _first(row, "candidate", "candidate name", "name")
                 if not office or not candidate_name:
+                    continue
+                if candidate_name.strip().lower() in NO_CANDIDATE_PLACEHOLDERS:
                     continue
                 status = _first(row, "status", "candidate status")
                 if has_status_field and _NEGATIVE_STATUS_RE.search(status):

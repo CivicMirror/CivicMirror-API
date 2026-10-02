@@ -134,3 +134,22 @@ def test_parse_precinct_xlsx_still_reads_long_format():
     )
     assert [r.candidate_name for r in records] == ["Jane Candidate", "Alex Example"]
     assert all(r.contest_type == "" for r in records)
+
+
+def test_parse_candidate_workbook_skips_no_candidate_qualified_placeholder():
+    """TN lists 'No Candidate Qualified' for offices nobody filed for; it must not become a candidate."""
+    import io
+
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Office", "District", "Candidate Name", "Party", "Status"])
+    ws.append(["Tennessee House of Representatives", "93", "No Candidate Qualified", "", ""])
+    ws.append(["Tennessee House of Representatives", "94", "Real Person", "Republican", "Qualified"])
+    buf = io.BytesIO()
+    wb.save(buf)
+
+    records = parse_candidate_workbook(buf.getvalue(), "https://sos-prod.tnsosgovfiles.com/s3fs-public/document/house.xlsx")
+
+    assert [r.candidate_name for r in records] == ["Real Person"]

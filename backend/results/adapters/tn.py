@@ -14,7 +14,7 @@ import logging
 from django.core.cache import cache
 
 from integrations.tn_sos.client import TnSosClient
-from integrations.tn_sos.parsers import document_checksum, parse_precinct_xlsx
+from integrations.tn_sos.parsers import NO_CANDIDATE_PLACEHOLDERS, document_checksum, parse_precinct_xlsx
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
 from .registry import register
@@ -22,8 +22,6 @@ from .registry import register
 logger = logging.getLogger(__name__)
 
 
-# Placeholder the SOFFICEL export puts in empty candidate slots for offices nobody filed for.
-_NO_CANDIDATE_PLACEHOLDERS = {"no candidate qualified"}
 WRITE_IN_LABEL = "Write-In"
 
 
@@ -51,7 +49,7 @@ def _aggregate_rows(records, source_url: str) -> list[ResultRow]:
     write_in_names: dict[str, set] = {}
     for record in records:
         name = record.candidate_name
-        if name.strip().lower() in _NO_CANDIDATE_PLACEHOLDERS:
+        if name.strip().lower() in NO_CANDIDATE_PLACEHOLDERS:
             continue
         if _is_write_in(name):
             write_in_names.setdefault(record.office_title, set()).add(name)
