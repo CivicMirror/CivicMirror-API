@@ -7,7 +7,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.throttling import LoginIPThrottle, LoginUsernameThrottle, RegisterIPThrottle
+from api.throttling import LoginIPThrottle, LoginUsernameThrottle, RegisterIPThrottle, get_client_ip
+from api.turnstile import turnstile_enabled, verify_turnstile
 
 from .models import UserProfile, generate_username
 from .serializers import UserProfileSerializer, UserSerializer
@@ -35,6 +36,9 @@ class RegisterView(APIView):
     def post(self, request):
         if (error := _non_object_body(request)) is not None:
             return error
+        # Checked before anything else so bots learn nothing (e.g. whether a username exists).
+        if turnstile_enabled() and not verify_turnstile(request.data.get('turnstile_token'), get_client_ip(request)):
+            return Response({'turnstile': ['Human verification failed. Please try again.']}, status=400)
         username = (request.data.get('username') or '').strip() or generate_username()
         password = request.data.get('password', '')
 

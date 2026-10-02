@@ -345,6 +345,10 @@ CIVICMIRROR_THROTTLE_RATES = {
 CIVICMIRROR_CLIENT_IP_HEADER = env('CIVICMIRROR_CLIENT_IP_HEADER', default='HTTP_CF_CONNECTING_IP')
 # Optional fallback: trust X-Forwarded-For, taking the Nth entry from the right. 0 disables.
 CIVICMIRROR_CLIENT_IP_XFF_PROXIES = env.int('CIVICMIRROR_CLIENT_IP_XFF_PROXIES', default=0)
+
+# Cloudflare Turnstile on POST /api/auth/register/ (#202). Blank secret = verification disabled.
+TURNSTILE_SECRET_KEY = env('TURNSTILE_SECRET_KEY', default='')
+TURNSTILE_EXPECTED_ACTION = env('TURNSTILE_EXPECTED_ACTION', default='register')
 INTERNAL_TASK_TOKEN = env('INTERNAL_TASK_TOKEN', default='')
 SCHEDULER_OIDC_AUDIENCE = env('SCHEDULER_OIDC_AUDIENCE', default='')
 SCHEDULER_SA_EMAIL = env('SCHEDULER_SA_EMAIL', default='')
