@@ -52,3 +52,13 @@ def test_is_public_path():
     assert not is_public_path('/api/races/')
     assert not is_public_path('/api/auth/login/')
     assert not is_public_path('/internal/tasks/sync-elections/')
+
+
+@pytest.mark.django_db
+def test_schema_excludes_participation_endpoints(schema_paths):
+    for hidden in ('/api/v1/races/{id}/vote/', '/api/v1/races/ext/{external_id}/vote/',
+                   '/api/v1/races/{id}/tally/', '/api/v1/races/ext/{external_id}/tally/',
+                   '/api/v1/races/community/', '/api/v1/races/community/{id}/',
+                   '/api/v1/users/me/', '/api/v1/users/votes/'):
+        assert hidden not in schema_paths
+    assert not any('/vote/' in p or '/tally/' in p or '/users/' in p or '/community/' in p for p in schema_paths)

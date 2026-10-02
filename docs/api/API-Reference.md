@@ -794,7 +794,7 @@ GET /api/schema/          → OpenAPI 3 YAML, generated from the live code (no k
 GET /api/docs/            → Swagger UI: public, interactive docs (no key required to view)
 ```
 
-**Public interactive docs:** https://civicmirror.app/api/docs/. Click **Authorize**, enter your service API key, then use **Try it out** to call endpoints. Both the docs and `/api/schema/` publish only the versioned public API (`/api/v1/`). Internal task triggers, account/auth endpoints (`/api/auth/*`, `/api/users/me/profile/`), and the unversioned `/api/` alias are deliberately excluded (`api/schema.py`).
+**Public interactive docs:** https://civicmirror.app/api/docs/. Click **Authorize**, enter your service API key, then use **Try it out** to call endpoints. Both the docs and `/api/schema/` publish only the versioned public API (`/api/v1/`). Excluded on purpose (`api/schema.py`): internal task triggers, account/auth endpoints (`/api/auth/*`, `/api/users/me/profile/`), public-participation endpoints (mock voting, tallies, community races, `/users/*`, which serve the FrontEnd's logged-in users), and the unversioned `/api/` alias. They're still documented in this reference.
 
 ---
 
