@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.auth import FirebaseAuthentication
-from api.permissions import HasAPIKey, IsFirebaseAuthenticated
+from api.permissions import SCOPE_PUBLIC, HasAPIKey, IsFirebaseAuthenticated
 from api.serializers import RaceDetailSerializer
 from elections.models import Race
 
@@ -46,6 +46,7 @@ class PkVoteView(APIView):
     """POST /api/v1/races/{pk}/vote/"""
     authentication_classes = [FirebaseAuthentication, TokenAuthentication]
     permission_classes = [HasAPIKey]
+    api_key_scope = SCOPE_PUBLIC
 
     def post(self, request, pk):
         uid = _get_uid(request)
@@ -61,6 +62,7 @@ class PkVoteView(APIView):
 class PkTallyView(APIView):
     """GET /api/v1/races/{pk}/tally/"""
     permission_classes = [HasAPIKey]
+    api_key_scope = SCOPE_PUBLIC
 
     def get(self, request, pk):
         race = _get_race_by_pk(pk)
@@ -75,6 +77,7 @@ class ExtVoteView(APIView):
     """POST /api/v1/races/ext/{external_id}/vote/"""
     authentication_classes = [FirebaseAuthentication, TokenAuthentication]
     permission_classes = [HasAPIKey]
+    api_key_scope = SCOPE_PUBLIC
 
     def post(self, request, external_id):
         uid = _get_uid(request)
@@ -90,6 +93,7 @@ class ExtVoteView(APIView):
 class ExtTallyView(APIView):
     """GET /api/v1/races/ext/{external_id}/tally/"""
     permission_classes = [HasAPIKey]
+    api_key_scope = SCOPE_PUBLIC
 
     def get(self, request, external_id):
         race = _get_race_by_canonical_key(external_id)
@@ -104,6 +108,7 @@ class CommunityRaceListCreateView(APIView):
     """POST /api/v1/races/community/"""
     authentication_classes = [FirebaseAuthentication, TokenAuthentication]
     permission_classes = [HasAPIKey]
+    api_key_scope = SCOPE_PUBLIC
 
     def post(self, request):
         uid = _get_uid(request)
@@ -122,6 +127,7 @@ class CommunityRaceDetailView(APIView):
     """PATCH /DELETE /api/v1/races/community/{id}/"""
     authentication_classes = [FirebaseAuthentication, TokenAuthentication]
     permission_classes = [HasAPIKey]
+    api_key_scope = SCOPE_PUBLIC
 
     def _get_owned_race(self, request, pk):
         race = get_object_or_404(Race, pk=pk, source=Race.Source.COMMUNITY)
@@ -183,6 +189,7 @@ class UserProfileView(APIView):
     """GET /PATCH /api/v1/users/me/"""
     authentication_classes = [FirebaseAuthentication, TokenAuthentication]
     permission_classes = [HasAPIKey]
+    api_key_scope = SCOPE_PUBLIC
 
     def get(self, request):
         uid = _get_uid(request)
@@ -207,6 +214,7 @@ class UserVotesView(APIView):
     """GET /api/v1/users/votes/"""
     authentication_classes = [FirebaseAuthentication, TokenAuthentication]
     permission_classes = [HasAPIKey]
+    api_key_scope = SCOPE_PUBLIC
 
     def get(self, request):
         uid = _get_uid(request)

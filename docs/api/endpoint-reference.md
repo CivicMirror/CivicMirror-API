@@ -1,5 +1,7 @@
 # CivicMirror API — Endpoint Reference
 
+> ⚠️ **Historical design document.** It predates the implementation and doesn't match the live routes or auth. The canonical reference is [API-Reference.md](API-Reference.md).
+
 > **Version:** v1  
 > **Status:** Design / Pre-implementation  
 > **Base URL:** `https://api.civicmirror.io/api/v1`  

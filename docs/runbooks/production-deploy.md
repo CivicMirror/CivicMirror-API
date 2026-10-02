@@ -25,14 +25,24 @@ The API is only reachable from outside through the frontend's `/api/` proxy at
 ```bash
 cd /data/DockerConfigs/CivicMirror
 docker compose build civicmirror-api civicmirror-worker
+# Apply migrations with the NEW image before it takes traffic. Code that queries a
+# table the running database doesn't have yet (e.g. api_apikey) returns 500s until
+# the migration runs. Safe to run when there are no pending migrations.
+docker compose run --rm civicmirror-api migrate
 docker compose up -d civicmirror-api civicmirror-worker
 ```
 
-Run migrations if the change includes any:
+## Service API keys
+
+Service keys go to individually approved clients (ADR-010). Run inside the API container:
 
 ```bash
-docker exec civicmirror-api python manage.py migrate
+docker exec civicmirror-api python manage.py create_api_key --name "CivicData" --access read
+docker exec civicmirror-api python manage.py list_api_keys
+docker exec civicmirror-api python manage.py revoke_api_key cm_1a2b3c4d
 ```
+
+The key is printed once. Send it to the client over a private channel and don't store it in tickets or chat.
 
 ## Schedule
 

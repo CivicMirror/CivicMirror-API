@@ -281,6 +281,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],
+    'DEFAULT_THROTTLE_CLASSES': ['api.throttling.ApiKeyRateThrottle'],
     'DEFAULT_PAGINATION_CLASS': 'api.pagination.StandardPagination',
     'PAGE_SIZE': 25,
     'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer'],
@@ -311,7 +312,10 @@ SPECTACULAR_SETTINGS = {
     },
 }
 
+# Legacy shared key (read_write). Service clients get per-client ApiKey records instead (ADR-010).
 CIVICMIRROR_API_KEY = env('CIVICMIRROR_API_KEY', default='')
+# Default per-key rate for ApiKey records without their own throttle_rate. Blank or 'none' disables.
+CIVICMIRROR_API_KEY_DEFAULT_RATE = env('CIVICMIRROR_API_KEY_DEFAULT_RATE', default='1000/hour')
 INTERNAL_TASK_TOKEN = env('INTERNAL_TASK_TOKEN', default='')
 SCHEDULER_OIDC_AUDIENCE = env('SCHEDULER_OIDC_AUDIENCE', default='')
 SCHEDULER_SA_EMAIL = env('SCHEDULER_SA_EMAIL', default='')
