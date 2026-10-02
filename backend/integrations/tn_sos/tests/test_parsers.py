@@ -104,3 +104,33 @@ def test_parse_precinct_xlsx_returns_result_records():
     assert records[0].office_title == "U.S. House District 7"
     assert records[0].candidate_name == "Jane Candidate"
     assert records[0].vote_count == 123
+
+
+SOFFICEL_URL = "https://sos-prod.tnsosgovfiles.com/s3fs-public/document/20260806AllbyPrecinct.xlsx"
+
+
+def test_parse_precinct_xlsx_reads_wide_sofficel_export():
+    """
+    The real TN export (20260806AllbyPrecinct.xlsx, sheet SOFFICEL) is "wide": one row per
+    county/precinct/office/ballot style, candidates in RNAMEn/PARTYn/PVTALLYn groups. The fixture
+    uses the file's real 50-column header.
+    """
+    records = parse_precinct_xlsx((FIXTURES / "results_20260806_sofficel_sample.xlsx").read_bytes(), SOFFICEL_URL)
+
+    first = records[0]
+    assert (first.county, first.precinct, first.office_title) == ("Anderson", "Andersonville", "Governor")
+    assert (first.candidate_name, first.party, first.vote_count) == ("Marsha Blackburn", "Republican", 296)
+    assert first.contest_type == "Republican Primary"
+    # 3 + 2 + 3 + 3 + 2 non-empty candidate slots; empty slots 4..10 are skipped.
+    assert len(records) == 13
+    assert {r.contest_type for r in records} == {"Republican Primary", "Democratic Primary", "Judicial Retention"}
+    assert all(r.source_url == SOFFICEL_URL for r in records)
+
+
+def test_parse_precinct_xlsx_still_reads_long_format():
+    records = parse_precinct_xlsx(
+        (FIXTURES / "results_20251202_precinct_sample.xlsx").read_bytes(),
+        "https://sos-prod.tnsosgovfiles.com/s3fs-public/document/20251202AllbyPrecinct.xlsx",
+    )
+    assert [r.candidate_name for r in records] == ["Jane Candidate", "Alex Example"]
+    assert all(r.contest_type == "" for r in records)

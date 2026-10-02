@@ -38,10 +38,14 @@ def test_fetch_results_parses_precinct_xlsx_fixture():
         result = adapter.fetch_results(None, election_id=1)
 
     assert result.mapping_confidence == "full"
-    assert len(result.rows) == 2
-    assert result.rows[0].office_title == "U.S. House District 7"
-    assert result.rows[0].candidate_name == "Jane Candidate"
-    assert result.rows[0].vote_count == 123
+    # One statewide total ('' fragment) plus one county row per candidate.
+    assert len(result.rows) == 4
+    totals = [r for r in result.rows if r.jurisdiction_fragment == ""]
+    assert [(r.office_title, r.candidate_name, r.vote_count) for r in totals] == [
+        ("U.S. House District 7", "Jane Candidate", 123),
+        ("U.S. House District 7", "Alex Example", 98),
+    ]
+    assert {r.jurisdiction_fragment for r in result.rows} == {"", "Davidson"}
 
 
 def test_fetch_results_unchanged_when_checksum_cached():
@@ -82,3 +86,31 @@ def test_fetch_results_partial_for_non_xlsx_document():
 
     assert result.mapping_confidence == "partial"
     assert result.rows == []
+
+
+def test_fetch_results_aggregates_sofficel_export_by_county_and_statewide():
+    adapter = TennesseeAdapter()
+    election = MagicMock()
+    election.pk = 1924
+    url = "https://sos-prod.tnsosgovfiles.com/s3fs-public/document/20260806AllbyPrecinct.xlsx"
+    election.source_metadata = {"tn_result_links": [{"url": url, "file_type": "xlsx"}]}
+    fixture = open("integrations/tn_sos/tests/fixtures/results_20260806_sofficel_sample.xlsx", "rb").read()
+
+    with patch("elections.models.Election.objects.get", return_value=election), \
+         patch("results.adapters.tn.TnSosClient") as client_cls, \
+         patch("results.adapters.tn.cache") as cache:
+        cache.get.return_value = None
+        client_cls.return_value.download_file.return_value = (fixture, url)
+        result = adapter.fetch_results(None, election_id=1924)
+
+    assert result.mapping_confidence == "full"
+    rows = {(r.office_title, r.candidate_name, r.jurisdiction_fragment): r for r in result.rows}
+    # Split-precinct ballot styles are summed within the county: 296 + 4.
+    assert rows[("Governor", "Marsha Blackburn", "Anderson")].vote_count == 300
+    # Same precinct name in another county stays separate.
+    assert rows[("Governor", "Marsha Blackburn", "Union")].vote_count == 50
+    # Statewide total across counties.
+    assert rows[("Governor", "Marsha Blackburn", "")].vote_count == 350
+    assert rows[("Governor", "Jerri Green", "")].vote_count == 73
+    assert rows[("Governor", "Jerri Green", "")].raw["contest_type"] == "Democratic Primary"
+    assert rows[("Governor", "Marsha Blackburn", "")].raw["party"] == "Republican"

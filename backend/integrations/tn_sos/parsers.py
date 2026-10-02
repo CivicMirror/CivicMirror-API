@@ -60,6 +60,7 @@ class TnResultRecord:
     party: str
     vote_count: int
     source_url: str
+    contest_type: str = ""  # e.g. "Republican Primary", "State General" (SOFFICEL ELECTTYPE)
 
 
 # Denylist, not a "qualified"-only allowlist: during filing season the live
@@ -229,6 +230,10 @@ def parse_precinct_xlsx(content: bytes, source_url: str) -> list[TnResultRecord]
     try:
         for sheet in workbook.worksheets:
             rows = list(sheet.iter_rows(values_only=True))
+            wide_header_index = _find_header_row(rows, {"officename"}, {"rname1"}, {"pvtally1"})
+            if wide_header_index is not None:
+                records.extend(_parse_sofficel_rows(rows, wide_header_index, source_url))
+                continue
             header_index = _find_header_row(rows, {"office", "office title", "contest"}, {"candidate", "candidate name"}, {"votes", "vote count", "total votes"})
             if header_index is None:
                 continue
@@ -253,6 +258,60 @@ def parse_precinct_xlsx(content: bytes, source_url: str) -> list[TnResultRecord]
                 )
     finally:
         workbook.close()
+    return records
+
+
+def _parse_sofficel_rows(rows: list[tuple], header_index: int, source_url: str) -> list[TnResultRecord]:
+    """
+    Parse TN SOS's "wide" precinct export (sheet SOFFICEL, e.g. 20260806AllbyPrecinct.xlsx).
+
+    One row per county/precinct/office/ballot style, with candidates spread across repeated column
+    groups: RNAME1/PARTY1/PVTALLY1 ... RNAME10/PARTY10/PVTALLY10. Each non-empty group becomes one
+    record; empty trailing slots are skipped.
+    """
+    headers = [_normalize_key(value) for value in rows[header_index]]
+    slots = []
+    for index, header in enumerate(headers):
+        match = re.fullmatch(r"rname(\d+)", header)
+        if match:
+            n = match.group(1)
+            party_index = headers.index(f"party{n}") if f"party{n}" in headers else None
+            votes_index = headers.index(f"pvtally{n}") if f"pvtally{n}" in headers else None
+            if votes_index is not None:
+                slots.append((index, party_index, votes_index))
+
+    records: list[TnResultRecord] = []
+    for values in rows[header_index + 1:]:
+        row = _row_values(headers, values)
+        office = _first(row, "officename")
+        if not office:
+            continue
+        county = _first(row, "county")
+        precinct = _first(row, "precinct")
+        contest_type = _first(row, "electtype")
+        for name_index, party_index, votes_index in slots:
+            name = _clean_text(str(values[name_index])) if name_index < len(values) and values[name_index] else ""
+            if not name:
+                continue
+            raw_votes = values[votes_index] if votes_index < len(values) else None
+            vote_count = raw_votes if isinstance(raw_votes, int) else _parse_int(str(raw_votes or ""))
+            if vote_count is None:
+                continue
+            party = ""
+            if party_index is not None and party_index < len(values) and values[party_index]:
+                party = _clean_text(str(values[party_index]))
+            records.append(
+                TnResultRecord(
+                    county=county,
+                    precinct=precinct,
+                    office_title=office,
+                    candidate_name=name,
+                    party=party,
+                    vote_count=vote_count,
+                    source_url=source_url,
+                    contest_type=contest_type,
+                )
+            )
     return records
 
 

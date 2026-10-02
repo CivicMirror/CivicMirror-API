@@ -21,6 +21,53 @@ from .registry import register
 
 logger = logging.getLogger(__name__)
 
+
+def _aggregate_rows(records, source_url: str) -> list[ResultRow]:
+    """
+    Roll precinct records up to one row per (office, candidate, county) plus a statewide total.
+
+    Precinct names repeat across counties and split precincts appear once per ballot style, so
+    precinct-level rows would collide on OfficialResult's natural key. County rows use the county
+    name as jurisdiction_fragment; the statewide total uses '' (the aggregate row the results
+    endpoint prefers).
+    """
+    by_county: dict[tuple, int] = {}
+    totals: dict[tuple, int] = {}
+    party_for: dict[tuple, str] = {}
+    contest_for: dict[tuple, str] = {}
+    for record in records:
+        key = (record.office_title, record.candidate_name)
+        by_county[key + (record.county,)] = by_county.get(key + (record.county,), 0) + record.vote_count
+        totals[key] = totals.get(key, 0) + record.vote_count
+        party_for.setdefault(key, record.party)
+        contest_for.setdefault(key, record.contest_type)
+
+    def _row(office, candidate, votes, fragment, county):
+        return ResultRow(
+            candidate_name=candidate,
+            option_label=None,
+            vote_count=votes,
+            vote_pct=None,
+            is_winner=None,
+            result_type="official",
+            office_title=office,
+            jurisdiction_fragment=fragment,
+            raw={
+                "county": county,
+                "party": party_for[(office, candidate)],
+                "contest_type": contest_for[(office, candidate)],
+                "source_url": source_url,
+            },
+        )
+
+    rows = [_row(office, candidate, votes, "", "") for (office, candidate), votes in totals.items()]
+    rows += [
+        _row(office, candidate, votes, county, county)
+        for (office, candidate, county), votes in by_county.items()
+        if county
+    ]
+    return rows
+
 _CACHE_TTL = 86400 * 30  # 30 days
 
 
@@ -77,25 +124,7 @@ class TennesseeAdapter(StateResultsAdapter):
                 unchanged=True, source_version=checksum,
             )
 
-        rows = [
-            ResultRow(
-                candidate_name=record.candidate_name,
-                option_label=None,
-                vote_count=record.vote_count,
-                vote_pct=None,
-                is_winner=None,
-                result_type="official",
-                office_title=record.office_title,
-                jurisdiction_fragment=record.precinct,
-                raw={
-                    "county": record.county,
-                    "precinct": record.precinct,
-                    "party": record.party,
-                    "source_url": record.source_url,
-                },
-            )
-            for record in parse_precinct_xlsx(content, source_url)
-        ]
+        rows = _aggregate_rows(parse_precinct_xlsx(content, source_url), source_url)
 
         if not rows:
             return AdapterResult(
