@@ -4,10 +4,17 @@ from django.db import migrations
 
 
 def drop_legacy_terms_columns(apps, schema_editor):
-    if schema_editor.connection.vendor != 'postgresql':
-        return
-    schema_editor.execute('ALTER TABLE accounts_userprofile DROP COLUMN IF EXISTS terms_accepted_at;')
-    schema_editor.execute('ALTER TABLE accounts_userprofile DROP COLUMN IF EXISTS terms_version;')
+    connection = schema_editor.connection
+    if connection.vendor == 'postgresql':
+        schema_editor.execute('ALTER TABLE accounts_userprofile DROP COLUMN IF EXISTS terms_accepted_at;')
+        schema_editor.execute('ALTER TABLE accounts_userprofile DROP COLUMN IF EXISTS terms_version;')
+    elif connection.vendor == 'sqlite':
+        # Local/test DBs: without this, the leftover NOT NULL terms_version breaks UserProfile inserts.
+        with connection.cursor() as cursor:
+            columns = {c.name for c in connection.introspection.get_table_description(cursor, 'accounts_userprofile')}
+        for column in ('terms_accepted_at', 'terms_version'):
+            if column in columns:
+                schema_editor.execute(f'ALTER TABLE accounts_userprofile DROP COLUMN {column};')
 
 
 class Migration(migrations.Migration):

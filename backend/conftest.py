@@ -33,3 +33,10 @@ def _clear_seeded_source_precedence(request):
     request.getfixturevalue("db")
     from aggregation.models import SourcePrecedence
     SourcePrecedence.objects.all().delete()
+
+
+@pytest.fixture(autouse=True)
+def _clear_throttle_cache():
+    """Reset rate-limit counters between tests (the throttle cache is LocMem in dev/test settings)."""
+    from django.core.cache import caches
+    caches['throttle'].clear()
