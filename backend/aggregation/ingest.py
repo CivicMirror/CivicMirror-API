@@ -105,6 +105,15 @@ def ingest_election(*, source, source_id, identity, fields):
             jurisdiction_level=jurisdiction_level, name=fields.get("name", ""),
         )
 
+    fields = dict(fields)
+    if (
+        not created
+        and election.status in Election.TERMINAL_STATUSES
+        and fields.get("status") not in Election.TERMINAL_STATUSES
+    ):
+        # Most sources infer status from the date alone (past date -> results_pending). Never let
+        # that downgrade an election whose results were certified (or that was archived).
+        fields.pop("status", None)
     _apply_fields(election, state, source, {**fields, "election_date": election_date})
     _add_source(election, source)
     election.last_synced_at = timezone.now()

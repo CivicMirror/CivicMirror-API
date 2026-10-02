@@ -20,6 +20,9 @@ class Election(models.Model):
         RESULTS_CERTIFIED = 'results_certified', 'Results Certified'
         ARCHIVED = 'archived', 'Archived'
 
+    # Statuses that date-based source syncs must never overwrite (see aggregation.ingest).
+    TERMINAL_STATUSES = frozenset({Status.RESULTS_CERTIFIED, Status.ARCHIVED})
+
     class ElectionType(models.TextChoices):
         GENERAL = 'general', 'General'
         PRIMARY = 'primary', 'Primary'

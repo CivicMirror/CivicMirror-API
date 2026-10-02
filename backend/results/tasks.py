@@ -65,6 +65,7 @@ def ingest_official_results(self, state: str, election_id: int):
             "ingest_official_results: version unchanged for election %s (%s); skipping",
             election_id, state,
         )
+        _certify_election_if_complete(election)
         return
 
     if not result.rows:
@@ -96,6 +97,8 @@ def ingest_official_results(self, state: str, election_id: int):
     # cached, so the next run re-fetches and re-persists it.
     if hasattr(adapter, 'commit_versions'):
         adapter.commit_versions()
+
+    _certify_election_if_complete(election)
 
     # Write version to cache only after successful DB work AND races were processed.
     # Gating on `races` prevents caching a version that corresponds to an empty-race state.
@@ -290,6 +293,32 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
         len(created_races), election.pk, state,
     )
     return created_races
+
+
+def _certify_election_if_complete(election) -> bool:
+    """
+    Mark the election results_certified once every (non-cancelled) race is results_certified.
+
+    Races were already promoted individually, but nothing promoted the election, so fully certified
+    elections stayed results_pending and poll_pending_results kept re-polling them. Returns True if
+    the status changed.
+    """
+    from elections.models import Election, Race
+
+    if election.status in Election.TERMINAL_STATUSES:
+        return False
+    races = Race.objects.filter(election=election).exclude(race_status=Race.RaceStatus.CANCELLED)
+    if not races.exists():
+        return False
+    if races.exclude(certification_status=Race.CertificationStatus.RESULTS_CERTIFIED).exists():
+        return False
+    Election.objects.filter(pk=election.pk).update(status=Election.Status.RESULTS_CERTIFIED)
+    election.status = Election.Status.RESULTS_CERTIFIED
+    logger.info(
+        "ingest_official_results: all races certified; election %s marked results_certified",
+        election.pk,
+    )
+    return True
 
 
 _SOURCE_URL_MAX_LENGTH = 200  # OfficialResult.source_url is a URLField (max_length=200)
