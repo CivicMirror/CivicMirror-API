@@ -38,7 +38,7 @@ class RegisterView(APIView):
             return error
         # Checked before anything else so bots learn nothing (e.g. whether a username exists).
         if turnstile_enabled() and not verify_turnstile(request.data.get('turnstile_token'), get_client_ip(request)):
-            return Response({'turnstile': ['Human verification failed. Please try again.']}, status=400)
+            return Response({'turnstile': ['Human verification failed. Please refresh the page and try again.']}, status=400)
         username = (request.data.get('username') or '').strip() or generate_username()
         password = request.data.get('password', '')
 
