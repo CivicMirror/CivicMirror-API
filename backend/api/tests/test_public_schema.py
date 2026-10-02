@@ -62,3 +62,10 @@ def test_schema_excludes_participation_endpoints(schema_paths):
                    '/api/v1/users/me/', '/api/v1/users/votes/'):
         assert hidden not in schema_paths
     assert not any('/vote/' in p or '/tally/' in p or '/users/' in p or '/community/' in p for p in schema_paths)
+
+
+@pytest.mark.django_db
+def test_schema_description_starts_with_access_contact():
+    description = yaml.safe_load(Client().get('/api/schema/').content)['info']['description']
+    assert description.startswith('> **For Read Only API access contact')
+    assert 'mailto:contact@civicmirror.app' in description

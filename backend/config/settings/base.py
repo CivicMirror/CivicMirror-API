@@ -308,6 +308,8 @@ if HAS_DJANGO_FILTERS:
 SPECTACULAR_SETTINGS = {
     'TITLE': 'CivicMirror API',
     'DESCRIPTION': (
+        '> **For Read Only API access contact '
+        '[contact@civicmirror.app](mailto:contact@civicmirror.app)**\n\n'
         'Normalized U.S. election data: elections, races, candidates, ballot measures, districts, '
         'and official results.\n\n'
         '**Authentication:** send your service API key in the `X-Api-Key` header (use **Authorize** '
