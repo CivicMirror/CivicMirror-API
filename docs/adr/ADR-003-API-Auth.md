@@ -1,7 +1,7 @@
 # ADR-003: API Authentication — X-Api-Key Header
 
 ## Status
-Accepted
+Superseded by [ADR-010](ADR-010-Multi-Key-API-Auth.md): per-client service keys with access levels.
 
 ## Context
 

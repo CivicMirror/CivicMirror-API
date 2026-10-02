@@ -1,3 +1,5 @@
+import warnings
+
 from .base import *  # noqa: F401,F403
 
 DEBUG = False
@@ -11,3 +13,11 @@ CSRF_TRUSTED_ORIGINS = env.list(
         'https://civicmirror.app',
     ],
 )
+
+if not REDIS_URL:  # noqa: F405
+    warnings.warn(
+        'REDIS_URL is not set: caching and per-API-key rate limits fall back to per-process LocMemCache '
+        'and are not shared across workers.',
+        RuntimeWarning,
+        stacklevel=1,
+    )

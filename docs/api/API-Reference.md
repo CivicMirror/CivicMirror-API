@@ -10,13 +10,44 @@
 
 There are three independent auth mechanisms layered on this API:
 
-### 1. API key (required on almost everything under `/api/`)
+### 1. API key (required on every data and participation endpoint under `/api/`)
 
 ```
-X-Api-Key: <CIVICMIRROR_API_KEY>
+X-Api-Key: <key>
 ```
 
-Requests without a valid key return `403 Forbidden`. The key is stored in GCP Secret Manager as `CIVICMIRROR_API_KEY` and mounted into the Cloud Run service. Two endpoints are explicitly exempt: `GET /health/` and `GET /api/v1/coverage/sync-status/` (both `AllowAny`).
+The API serves two audiences with separate access models (see [ADR-010](../adr/ADR-010-Multi-Key-API-Auth.md)):
+
+- **Service API keys** go to people and organizations that pull election data or help maintain it. Each key is **individually approved** by the project owner (no self-service signup) and has an access level:
+
+  | Access level | Data endpoints (`GET`/`HEAD`/`OPTIONS`) | Data endpoints (other methods) |
+  |---|---|---|
+  | `read` | ✅ | ❌ `403 {"detail": "This API key has read-only access."}` |
+  | `read_write` | ✅ | ✅ |
+
+  No data-write endpoints exist yet; they are tracked in #203.
+- **Public participation** endpoints (mock voting, community races, `/users/*`) accept **any** valid key regardless of level, and then require an authenticated end user (point 2 or 3 below). The level doesn't matter there, because those views authenticate the user themselves.
+
+The legacy shared key (`CIVICMIRROR_API_KEY` environment variable) is still accepted and treated as `read_write` while clients move to their own keys.
+
+**Requesting a key:** contact the project maintainer with your name or organization, intended use, and the access level you need. Keys look like `cm_1a2b3c4d_<secret>`. The `cm_1a2b3c4d` part is the public prefix used in logs and for revocation. The full key is shown once at creation and can't be recovered later; a lost key is replaced with a new one.
+
+**Rate limits:** each service key is rate-limited (default `1000/hour`, configurable per key). Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header. The legacy shared key isn't rate-limited.
+
+**Revoked or expired keys** return `403` on the next request.
+
+**Endpoints that need no key:** `GET /health/`, `GET /api/v1/coverage/sync-status/`, `GET /api/schema/`, and the legacy account endpoints `/api/auth/register/`, `/api/auth/login/`, `/api/auth/logout/`, `/api/users/me/profile/` (these use DRF Token auth, point 3). Internal task triggers use their own token (see Internal Task Triggers).
+
+#### Required access by endpoint
+
+| Endpoints | Required |
+|---|---|
+| `elections`, `races` (incl. `/candidates/`, `/results/`), `ballot-measures`, `candidates`, `districts`, `lookup` (all `GET`) | key: `read` or `read_write` |
+| `races/{pk}/tally/`, `races/ext/{id}/tally/` | any key |
+| `races/{pk}/vote/`, `races/ext/{id}/vote/`, `races/community/`, `races/community/{id}/`, `users/me/`, `users/votes/` | any key **+** user auth (Firebase Bearer or DRF Token) |
+| `/api/auth/*`, `/api/users/me/profile/` | none (profile needs DRF Token) |
+| `/health/`, `/api/v1/coverage/sync-status/`, `/api/schema/` | none |
+| `/internal/tasks/*` | internal task token |
 
 ### 2. Firebase ID token (mock voting, community submissions, `/users/me/`, `/users/votes/`)
 
@@ -310,6 +341,12 @@ List candidates across all races.
 
 ---
 
+### `GET /api/v1/candidates/{id}/`
+
+Single candidate detail. Same shape as one item from `/candidates/`.
+
+---
+
 ### `GET /api/v1/districts/`
 
 List district records.
@@ -343,6 +380,12 @@ List district records.
   ]
 }
 ```
+
+---
+
+### `GET /api/v1/districts/{id}/`
+
+Single district detail. Same shape as one item from `/districts/`.
 
 ---
 
@@ -673,9 +716,11 @@ Each trigger acquires a per-task idempotency lock (keyed to the current schedule
 |------|-------------|
 | `/internal/tasks/sync-elections/` | Google Civic API election sync |
 | `/internal/tasks/poll-results/` | Poll all pending-results elections for registered state results adapters |
+| `/internal/tasks/poll-upcoming-results/` | Poll upcoming (not yet certified/archived) elections with a results adapter so candidate lists populate before election day |
 | `/internal/tasks/sync-openstates/` | OpenStates candidate sync (all 50 states) |
 | `/internal/tasks/sync-fec/` | FEC candidate sync |
 | `/internal/tasks/sync-sc-vrems/` | South Carolina VREMS sync |
+| `/internal/tasks/sync-hi-olvr/` | Hawaii OLVR election sync |
 | `/internal/tasks/sync-ia-sos/` | Iowa SOS sync |
 | `/internal/tasks/sync-co-sos/` | Colorado SOS sync |
 | `/internal/tasks/sync-va-elect/` (alias `/internal/tasks/sync-va-elections/`) | Virginia ELECT sync |
@@ -685,6 +730,10 @@ Each trigger acquires a per-task idempotency lock (keyed to the current schedule
 | `/internal/tasks/seed-election-calendar/` | Seed the 2026 election calendar |
 | `/internal/tasks/sync-nc-sbe/` | North Carolina SBE election sync |
 | `/internal/tasks/sync-nc-candidates/` | North Carolina candidate sync |
+| `/internal/tasks/sync-md-elections/` | Maryland election sync |
+| `/internal/tasks/sync-md-races/` | Maryland race sync |
+| `/internal/tasks/sync-ut-elections/` | Utah election sync |
+| `/internal/tasks/sync-ut-races/` | Utah race sync |
 | `/internal/tasks/sync-nj-elections/` | New Jersey county URL sync |
 | `/internal/tasks/sync-ny-elections/` | New York BOE election sync |
 | `/internal/tasks/sync-ny-races/` | New York BOE race sync |
@@ -704,6 +753,7 @@ Each trigger acquires a per-task idempotency lock (keyed to the current schedule
 | `/internal/tasks/sync-ky-sos/` | Kentucky SOS sync |
 | `/internal/tasks/sync-pa-sos/` | Pennsylvania SOS sync |
 | `/internal/tasks/sync-tn-sos/` | Tennessee SOS sync |
+| `/internal/tasks/sync-tn-result-index/` | Tennessee SOS results-index sync (links result pages to elections) |
 | `/internal/tasks/sync-al-elections/` | Alabama SOS election sync |
 | `/internal/tasks/sync-al-fcpa/` | Alabama FCPA candidate sync |
 | `/internal/tasks/sync-vt-sos/` | Vermont SOS sync |
@@ -718,7 +768,7 @@ Success responses:
 ## OpenAPI Schema
 
 ```
-GET /api/schema/          → OpenAPI 3 YAML
+GET /api/schema/          → OpenAPI 3 YAML (no key required)
 GET /api/docs/            → Swagger UI (DEBUG mode only)
 ```
 
@@ -751,8 +801,9 @@ GET /api/docs/            → Swagger UI (DEBUG mode only)
 | 204 | No content (logout, delete) |
 | 400 | Bad request (missing/invalid params) |
 | 401 | Missing or invalid Firebase/Token `Authorization` header (write endpoints) |
-| 403 | Missing/invalid `X-Api-Key` header, or not the resource owner |
+| 403 | Missing, invalid, revoked, or expired `X-Api-Key`; `read` key on a write method; or not the resource owner |
 | 404 | Resource not found |
 | 409 | Conflict (e.g. duplicate vote) |
+| 429 | Per-key rate limit exceeded (see `Retry-After`) |
 | 500 | Server error |
 | 503 | Internal task enqueue failed (Celery broker unavailable) |
