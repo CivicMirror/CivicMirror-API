@@ -961,3 +961,37 @@ def test_sync_ocpf_ma_candidates_scopes_to_year():
 
     assert result["updated"] == 0
     assert result["skipped"] == 1
+
+
+@pytest.mark.django_db
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+def test_sync_ma_races_never_creates_no_nomination_candidate():
+    """MA SOS prints "No Nomination" when a party has no nominee; it must not become a Candidate."""
+    from aggregation.models import SourcePrecedence
+    from elections.models import Candidate, Election, Race
+    from integrations.ma_sos.tasks import sync_ma_races
+
+    SourcePrecedence.objects.get_or_create(state="*", field_group="*", source="civic_api", defaults={"rank": 0})
+    e = Election.objects.create(
+        name="2026 MA Auditor Republican Primary",
+        election_date=date(2026, 9, 1),
+        election_type="primary",
+        jurisdiction_level="state",
+        state="MA",
+        canonical_key="MA:primary:2026-09-01:state",
+        source_metadata={"electionstats_id": 172999, "office": "Auditor", "district": "", "stage": "Republican"},
+        contributing_sources=["ma_sos"],
+    )
+    fake_csv = (
+        b'City/Town,,,"No Nomination",All Others,Blanks,Total Votes Cast\n'
+        b',,,,,,\n'
+        b'Boston,,,0,5,10,15\n'
+        b'TOTALS,,,0,5,10,15\n'
+    )
+    with patch("integrations.ma_sos.tasks.MaSosClient") as MockClient:
+        MockClient.return_value.download_election_csv.return_value = fake_csv
+        sync_ma_races.run(e.pk, 172999, office="Auditor", stage="Republican")
+
+    assert not Candidate.objects.filter(name__iexact="No Nomination").exists()
+    assert Candidate.objects.filter(race__election=e).count() == 0
+    assert Race.objects.filter(election=e).count() <= 1

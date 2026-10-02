@@ -36,6 +36,7 @@ import requests
 from django.core.cache import cache
 
 from elections.models import Election, Race
+from integrations.ma_sos.parsers import is_no_candidate_placeholder
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
 from .registry import register
@@ -56,6 +57,18 @@ _DATA_COL_OFFSET = 3
 @register
 class MassachusettsAdapter(StateResultsAdapter):
     state = "MA"
+
+    def __init__(self):
+        # cache_key -> CSV hash, staged during fetch_results() and written to cache only by
+        # commit_versions(), which ingest_official_results calls after the rows are persisted.
+        # Writing the hash during fetch meant one failed ingest marked the CSV "processed"
+        # forever, so later runs returned unchanged=True and stored nothing.
+        self._pending_versions: dict[str, str] = {}
+
+    def commit_versions(self) -> None:
+        for cache_key, content_hash in self._pending_versions.items():
+            cache.set(cache_key, content_hash, _CACHE_TTL)
+        self._pending_versions = {}
 
     def fetch_results(self, election_date, election_id: int) -> AdapterResult:
         try:
@@ -129,7 +142,7 @@ class MassachusettsAdapter(StateResultsAdapter):
             csv_bytes, csv_url, contest_code=str(electionstats_id), party_code=party_code,
         )
 
-        cache.set(cache_key, new_hash, _CACHE_TTL)
+        self._pending_versions[cache_key] = new_hash
 
         logger.info(
             "ma_sos.adapter.fetched election_id=%d rows=%d",
@@ -204,7 +217,7 @@ class MassachusettsAdapter(StateResultsAdapter):
                 source_version=new_hash,
             )
 
-        cache.set(cache_key, new_hash, _CACHE_TTL)
+        self._pending_versions[cache_key] = new_hash
 
         logger.info(
             "ma_sos.adapter.fetched_split election_id=%d electionstats_ids=%s rows=%d",
@@ -263,7 +276,7 @@ def _parse_election_csv(
     candidates: list[dict] = []
     for col_idx in range(_DATA_COL_OFFSET, len(header_row)):
         name = header_row[col_idx].strip().replace("\n", " ").replace("\r", "")
-        if not name:
+        if not name or is_no_candidate_placeholder(name):
             continue
         party = party_row[col_idx].strip() if col_idx < len(party_row) else ""
         candidates.append({"name": name, "party": party, "col_idx": col_idx})

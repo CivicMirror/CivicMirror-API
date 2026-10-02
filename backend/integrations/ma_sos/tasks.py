@@ -279,7 +279,10 @@ def sync_ma_races(
         candidate_rows = parsers.parse_election_csv(csv_bytes)
 
         # Filter out synthetic tally labels
-        real_candidates = [c for c in candidate_rows if c["name"] not in _TALLY_LABELS]
+        real_candidates = [
+            c for c in candidate_rows
+            if c["name"] not in _TALLY_LABELS and not parsers.is_no_candidate_placeholder(c["name"])
+        ]
 
         if not real_candidates and not candidate_rows:
             sync_log.notes = "Empty CSV — no candidates found"

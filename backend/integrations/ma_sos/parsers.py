@@ -20,6 +20,14 @@ logger = logging.getLogger(__name__)
 # Synthetic tally rows in election CSVs — not real candidates
 TALLY_LABELS = frozenset({"All Others", "Blanks", "Total Votes Cast", "Write-In"})
 
+# Placeholder MA SOS prints in a party's column when it has no nominee for an office.
+# It is not a person and must never become a Candidate or a result row.
+NO_CANDIDATE_PLACEHOLDERS = frozenset({"no nomination"})
+
+
+def is_no_candidate_placeholder(name: str) -> bool:
+    return (name or "").strip().lower() in NO_CANDIDATE_PLACEHOLDERS
+
 # Regex for the inline JS election_data object. Present on BOTH ballot
 # question view pages AND individual election view pages (same JS variable,
 # same structure, different field sets populated per page type).

@@ -135,8 +135,10 @@ def test_fetch_results_parses_csv_on_cache_miss(mock_get, mock_cache, mock_race_
     assert len(result.rows) > 0
     assert result.mapping_confidence == "full"
     assert all(r.raw.get("contest_code") == "165300" for r in result.rows)
-    # Cache should be set with new hash
-    mock_cache.set.assert_called_once()
+    # The hash is staged, not cached, until the caller confirms the rows were persisted.
+    mock_cache.set.assert_not_called()
+    adapter.commit_versions()
+    mock_cache.set.assert_called_once_with("ma_sos:hash:1", result.source_version, _CACHE_TTL_FOR_TEST())
 
 
 # ---------------------------------------------------------------------------
@@ -388,3 +390,64 @@ def test_split_primary_results_route_to_correct_race_end_to_end():
     assert rep_result.vote_count == 568
     assert not OfficialResult.objects.filter(race=dem_race, candidate=rep_candidate).exists()
     assert not OfficialResult.objects.filter(race=rep_race, candidate=dem_candidate).exists()
+
+
+
+def _CACHE_TTL_FOR_TEST():
+    from results.adapters.ma import _CACHE_TTL
+    return _CACHE_TTL
+
+
+@patch("results.adapters.ma.Race")
+@patch("results.adapters.ma.cache")
+@patch("results.adapters.ma.requests.get")
+def test_failed_ingest_does_not_mark_csv_processed(mock_get, mock_cache, mock_race_cls):
+    """
+    Regression: the hash used to be cached inside fetch_results, so an ingest that failed after
+    fetching left the CSV marked processed and every later run returned unchanged=True with no
+    rows ever stored. Without commit_versions(), the next run must fetch rows again.
+    """
+    from results.adapters.ma import MassachusettsAdapter
+
+    mock_get.return_value = MagicMock(content=CSV_BYTES, raise_for_status=MagicMock())
+    store = {}
+    mock_cache.get.side_effect = store.get
+    mock_cache.set.side_effect = lambda k, v, *_: store.__setitem__(k, v)
+    mock_race_cls.objects.filter.return_value = []
+    election = MagicMock(source_id="ma_sos_165300", source_metadata={"electionstats_id": 165300})
+
+    with patch("results.adapters.ma.Election") as mock_election_cls:
+        mock_election_cls.objects.get.return_value = election
+        first = MassachusettsAdapter().fetch_results(None, 1)      # ingest "crashes": no commit
+        second_adapter = MassachusettsAdapter()
+        second = second_adapter.fetch_results(None, 1)
+        assert second.unchanged is False and len(second.rows) == len(first.rows) > 0
+        second_adapter.commit_versions()                              # this ingest succeeds
+        third = MassachusettsAdapter().fetch_results(None, 1)
+
+    assert third.unchanged is True
+
+
+NO_NOMINATION_CSV = (
+    b'City/Town,,,"Diana DiZoglio","No Nomination","All Others","Blanks","Total Votes Cast"\r\n'
+    b',,,Democratic,,,,\r\n'
+    b'Abington,,,"1,200",0,4,27,"1,231"\r\n'
+    b'TOTALS,,,"1,200",0,4,27,"1,231"\r\n'
+)
+
+
+def test_parse_election_csv_skips_no_nomination_column():
+    from results.adapters.ma import _parse_election_csv
+
+    rows = _parse_election_csv(NO_NOMINATION_CSV, "https://example.test/x.csv", contest_code="1", party_code="")
+    names = {r.candidate_name for r in rows if r.candidate_name}
+    assert names == {"Diana DiZoglio"}
+    assert not any((r.option_label or "") == "No Nomination" for r in rows)
+
+
+def test_no_candidate_placeholder_helper():
+    from integrations.ma_sos.parsers import is_no_candidate_placeholder
+
+    assert is_no_candidate_placeholder("No Nomination")
+    assert is_no_candidate_placeholder("  no nomination ")
+    assert not is_no_candidate_placeholder("Diana DiZoglio")
