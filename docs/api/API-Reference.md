@@ -36,6 +36,22 @@ The legacy shared key (`CIVICMIRROR_API_KEY` environment variable) is still acce
 
 **Revoked or expired keys** return `403` on the next request.
 
+#### Rate limits on public endpoints
+
+Public-participation endpoints are also rate-limited per end user and per client IP (#202). Exceeding a limit returns `429 Too Many Requests` with a `Retry-After` header. Only the listed methods count; reads such as tallies aren't limited.
+
+| Endpoint | Method | Limit (default) | Keyed on |
+|---|---|---|---|
+| `/api/auth/register/` | POST | 5 / hour | client IP |
+| `/api/auth/login/` | POST | 30 / hour | client IP |
+| `/api/auth/login/` | POST | 20 / hour | username (case-insensitive) |
+| `/api/v1/races/{pk}/vote/`, `/api/v1/races/ext/{id}/vote/` | POST | 120 / hour | user |
+| same | POST | 600 / hour | client IP |
+| `/api/v1/races/community/` | POST | 10 / day | user |
+| same | POST | 30 / day | client IP |
+
+Operators can tune each limit with `THROTTLE_RATE_<SCOPE>` (e.g. `THROTTLE_RATE_REGISTER_IP=10/hour`; `none` disables it). The client IP comes from Cloudflare's `CF-Connecting-IP` header (`CIVICMIRROR_CLIENT_IP_HEADER`). If no trusted client IP can be resolved, IP limits are skipped rather than applied to everyone as a single bucket. Service-key requests to these endpoints also count toward the key's own limit.
+
 **Endpoints that need no key:** `GET /health/`, `GET /api/v1/coverage/sync-status/`, `GET /api/schema/`, and the legacy account endpoints `/api/auth/register/`, `/api/auth/login/`, `/api/auth/logout/`, `/api/users/me/profile/` (these use DRF Token auth, point 3). Internal task triggers use their own token (see Internal Task Triggers).
 
 #### Required access by endpoint
@@ -804,6 +820,6 @@ GET /api/docs/            → Swagger UI (DEBUG mode only)
 | 403 | Missing, invalid, revoked, or expired `X-Api-Key`; `read` key on a write method; or not the resource owner |
 | 404 | Resource not found |
 | 409 | Conflict (e.g. duplicate vote) |
-| 429 | Per-key rate limit exceeded (see `Retry-After`) |
+| 429 | Rate limit exceeded, per service key or per public user/IP (see `Retry-After`) |
 | 500 | Server error |
 | 503 | Internal task enqueue failed (Celery broker unavailable) |

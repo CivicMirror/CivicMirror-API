@@ -8,6 +8,14 @@ from rest_framework.views import APIView
 from api.auth import FirebaseAuthentication
 from api.permissions import SCOPE_PUBLIC, HasAPIKey, IsFirebaseAuthenticated
 from api.serializers import RaceDetailSerializer
+from api.throttling import (
+    ApiKeyRateThrottle,
+    CommunityCreateIPThrottle,
+    CommunityCreateUserThrottle,
+    VoteIPThrottle,
+    VoteUserThrottle,
+    get_request_uid,
+)
 from elections.models import Race
 
 from .models import MockVote
@@ -25,13 +33,7 @@ def _get_race_by_pk(pk) -> Race:
     return get_object_or_404(Race, pk=pk)
 
 
-def _get_uid(request) -> str | None:
-    """Return a stable uid string for either Firebase or Django Token auth."""
-    if isinstance(request.auth, dict):
-        return request.auth.get('uid')
-    if request.user and request.user.is_authenticated:
-        return f'user:{request.user.pk}'
-    return None
+_get_uid = get_request_uid
 
 
 def _is_authenticated(request) -> bool:
@@ -47,6 +49,8 @@ class PkVoteView(APIView):
     authentication_classes = [FirebaseAuthentication, TokenAuthentication]
     permission_classes = [HasAPIKey]
     api_key_scope = SCOPE_PUBLIC
+    # Listing throttle_classes replaces DEFAULT_THROTTLE_CLASSES, so the per-key throttle is repeated here.
+    throttle_classes = [ApiKeyRateThrottle, VoteUserThrottle, VoteIPThrottle]
 
     def post(self, request, pk):
         uid = _get_uid(request)
@@ -78,6 +82,8 @@ class ExtVoteView(APIView):
     authentication_classes = [FirebaseAuthentication, TokenAuthentication]
     permission_classes = [HasAPIKey]
     api_key_scope = SCOPE_PUBLIC
+    # Listing throttle_classes replaces DEFAULT_THROTTLE_CLASSES, so the per-key throttle is repeated here.
+    throttle_classes = [ApiKeyRateThrottle, VoteUserThrottle, VoteIPThrottle]
 
     def post(self, request, external_id):
         uid = _get_uid(request)
@@ -109,6 +115,8 @@ class CommunityRaceListCreateView(APIView):
     authentication_classes = [FirebaseAuthentication, TokenAuthentication]
     permission_classes = [HasAPIKey]
     api_key_scope = SCOPE_PUBLIC
+    # Listing throttle_classes replaces DEFAULT_THROTTLE_CLASSES, so the per-key throttle is repeated here.
+    throttle_classes = [ApiKeyRateThrottle, CommunityCreateUserThrottle, CommunityCreateIPThrottle]
 
     def post(self, request):
         uid = _get_uid(request)

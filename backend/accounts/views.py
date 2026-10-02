@@ -7,6 +7,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from api.throttling import LoginIPThrottle, LoginUsernameThrottle, RegisterIPThrottle
+
 from .models import UserProfile, generate_username
 from .serializers import UserProfileSerializer, UserSerializer
 
@@ -20,10 +22,19 @@ def _auth_response(user, profile):
     }
 
 
+def _non_object_body(request):
+    if isinstance(request.data, dict):
+        return None
+    return Response({'non_field_errors': ['Expected a JSON object.']}, status=400)
+
+
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [RegisterIPThrottle]
 
     def post(self, request):
+        if (error := _non_object_body(request)) is not None:
+            return error
         username = (request.data.get('username') or '').strip() or generate_username()
         password = request.data.get('password', '')
 
@@ -51,8 +62,11 @@ class RegisterView(APIView):
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [LoginIPThrottle, LoginUsernameThrottle]
 
     def post(self, request):
+        if (error := _non_object_body(request)) is not None:
+            return error
         username = request.data.get('username', '')
         password = request.data.get('password', '')
         user = authenticate(request, username=username, password=password)

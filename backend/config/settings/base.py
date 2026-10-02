@@ -229,14 +229,24 @@ if REDIS_URL:
         'default': {
             'BACKEND': 'django.core.cache.backends.redis.RedisCache',
             'LOCATION': REDIS_URL,
-        }
+        },
+        # Rate-limit counters (api.throttling). Separate alias so it can be swapped or cleared on its own.
+        'throttle': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': env('THROTTLE_CACHE_URL', default=REDIS_URL),
+            'KEY_PREFIX': 'throttle',
+        },
     }
 else:
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
             'LOCATION': 'civicmirror-api-local',
-        }
+        },
+        'throttle': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'civicmirror-api-throttle',
+        },
     }
 
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=REDIS_URL or 'redis://127.0.0.1:6379/0')
@@ -316,6 +326,25 @@ SPECTACULAR_SETTINGS = {
 CIVICMIRROR_API_KEY = env('CIVICMIRROR_API_KEY', default='')
 # Default per-key rate for ApiKey records without their own throttle_rate. Blank or 'none' disables.
 CIVICMIRROR_API_KEY_DEFAULT_RATE = env('CIVICMIRROR_API_KEY_DEFAULT_RATE', default='1000/hour')
+
+# Public-participation rate limits (#202). Override any scope with THROTTLE_RATE_<SCOPE>, e.g.
+# THROTTLE_RATE_REGISTER_IP=10/hour. Blank or 'none' disables that scope.
+_DEFAULT_THROTTLE_RATES = {
+    'register_ip': '5/hour',
+    'login_ip': '30/hour',
+    'login_username': '20/hour',
+    'vote_user': '120/hour',
+    'vote_ip': '600/hour',
+    'community_create_user': '10/day',
+    'community_create_ip': '30/day',
+}
+CIVICMIRROR_THROTTLE_RATES = {
+    scope: env(f'THROTTLE_RATE_{scope.upper()}', default=rate) for scope, rate in _DEFAULT_THROTTLE_RATES.items()
+}
+# Where the real client IP comes from (request.META key). Production: Cloudflare -> tunnel -> nginx -> API.
+CIVICMIRROR_CLIENT_IP_HEADER = env('CIVICMIRROR_CLIENT_IP_HEADER', default='HTTP_CF_CONNECTING_IP')
+# Optional fallback: trust X-Forwarded-For, taking the Nth entry from the right. 0 disables.
+CIVICMIRROR_CLIENT_IP_XFF_PROXIES = env.int('CIVICMIRROR_CLIENT_IP_XFF_PROXIES', default=0)
 INTERNAL_TASK_TOKEN = env('INTERNAL_TASK_TOKEN', default='')
 SCHEDULER_OIDC_AUDIENCE = env('SCHEDULER_OIDC_AUDIENCE', default='')
 SCHEDULER_SA_EMAIL = env('SCHEDULER_SA_EMAIL', default='')
