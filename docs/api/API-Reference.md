@@ -728,7 +728,7 @@ Update any of `age_range`, `country`, `us_state`, `gender`, `saved_zipcode`. Req
 
 ## Internal Task Triggers
 
-> Auth: Cloud Scheduler OIDC token (production) or `X-Internal-Token` header (local dev), via `require_internal_task_token`. All are `POST` only.
+> Auth: `Authorization: Bearer <INTERNAL_TASK_TOKEN>` (the shared secret the `civicmirror-scheduler` container's `trigger.sh` sends), checked by `require_internal_task_token`. A Google OIDC JWT is also accepted when `SCHEDULER_OIDC_AUDIENCE` is configured, for compatibility with an external scheduler. Service API keys don't work here. All are `POST` only. The production schedule is the scheduler container's crontab.
 
 Each trigger acquires a per-task idempotency lock (keyed to the current schedule window) before enqueuing a Celery task, and releases it when the task terminally succeeds or fails. If the lock is already held, the endpoint returns `202 {"status": "already_running"}` instead of enqueuing a duplicate run.
 
@@ -788,7 +788,7 @@ Success responses:
 ## OpenAPI Schema
 
 ```
-GET /api/schema/          → OpenAPI 3 YAML (no key required)
+GET /api/schema/          → OpenAPI 3 YAML, generated from the live code (no key required)
 GET /api/docs/            → Swagger UI (DEBUG mode only)
 ```
 

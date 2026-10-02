@@ -1,3 +1,8 @@
+# ⚠️ HISTORICAL DESIGN DRAFT (May 2026). Does NOT describe the live API.
+# It predates the implementation: it lists endpoints that don't exist (/officials, /districts/{id}/boundary,
+# /elections/{id}/results), a server URL the API never used, and query-string API keys.
+# The live OpenAPI spec is generated from the code at GET /api/schema/ (no key required);
+# the maintained human reference is docs/api/API-Reference.md.
 openapi: 3.0.3
 
 info:
