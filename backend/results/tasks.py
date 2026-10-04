@@ -10,6 +10,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
+from elections.geography import infer_geography_scope
 from results.adapters import list_supported_states
 from results.adapters.registry import get_adapter
 
@@ -245,7 +246,9 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
                 race_type=race_type,
                 office_title=office_title,
                 jurisdiction=election.state or '',
-                geography_scope='statewide',
+                # Results feeds only give a contest name; infer the scope from it ('' when unknown)
+                # instead of the old hard-coded 'statewide'.
+                geography_scope=infer_geography_scope(office_title),
                 certification_status=Race.CertificationStatus.RESULTS_PENDING,
                 source=Race.Source.RESULTS_ADAPTER,
                 race_status=Race.RaceStatus.ACTIVE,

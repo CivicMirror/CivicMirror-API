@@ -36,6 +36,8 @@ The original shared key (`CIVICMIRROR_API_KEY`) was **retired** (#201). Every cl
 
 **MCP access (coming soon):** service API keys will also grant access to the hosted CivicMirror MCP server once it's available (#200). The same key, access level, rate limit, and revocation will apply, so no separate credential is needed. Until then, key holders can run the open-source local MCP server (`mcp_server/`) with their key.
 
+**Bulk downloads:** use list filters with `page_size` (max 500) rather than one request per object. For example, `/candidates/?election=<id>` returns an election's candidates without a request per race.
+
 **Rate limits:** each service key is rate-limited (default `1000/hour`, configurable per key). Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header. Keys shared by every visitor (the FrontEnd's) are configured without a per-key limit; public writes are limited per user and per IP instead.
 
 **Revoked or expired keys** return `403` on the next request.
@@ -207,7 +209,7 @@ List races (summary shape — no nested candidates). Numeric-only `{id}` lookups
 | `race_status` | string | `draft` · `pending_review` · `active` · `cancelled` · `archived` |
 | `certification_status` | string | `upcoming` · `results_pending` · `results_certified` · `partial_results` |
 | `state` | string (2-char) | Filter by election's state |
-| `geography_scope` | string (case-insensitive) | e.g. `statewide`, `congressional`, `county` |
+| `geography_scope` | string (case-insensitive) | Where the race is elected; see **`geography_scope` values** below |
 | `jurisdiction_level` | string | Filter by the related election's `jurisdiction_level`: `national` · `state` · `local` |
 | `source` | string | `civic_api` · `openelections` · `medsl` · `community` · `results_adapter` · plus one value per state integration (e.g. `oh_sos`, `va_elect`, `ny_boe`, ...) |
 
@@ -235,6 +237,12 @@ List races (summary shape — no nested candidates). Numeric-only `{id}` lookups
   ]
 }
 ```
+
+---
+
+**`geography_scope` values.** Canonical: `federal` (U.S. President, Senate, House), `statewide` (elected by the whole state), `district` (state legislative, judicial, or other sub-state district), `countywide`, `local` (municipal, township, school board, special district). **Blank means unknown.** It's left empty rather than guessed. Races created from results feeds infer the scope from the office title. Some sources still use their own values (e.g. `citywide`, `state_legislative_district`). Filter with `?geography_scope=` on `/races/` or `/candidates/`.
+
+> Before 2026-10-04, races created from results feeds (about 22k, mostly NC, IA, NM, GA, PA) were all labeled `statewide`, including county and city contests. They have been re-labeled.
 
 ---
 
@@ -351,10 +359,15 @@ List candidates across all races.
 
 | Param | Type | Description |
 |---|---|---|
-| `race` | integer | Filter by race ID |
+| `race` | integer | Candidates in one race |
+| `election` | integer | **Every candidate in an election, in one paginated list.** Use this instead of one request per race. |
+| `state` | string (2-letter, case-insensitive) | e.g. `?state=NC` |
+| `geography_scope` | string | Filter by the race's `geography_scope` (see Races) |
 | `party` | string (case-insensitive contains) | e.g. `?party=democrat` |
 | `incumbent` | boolean | `?incumbent=true` |
 | `candidate_status` | string | `running` · `withdrawn` · `disqualified` · `write_in` |
+
+> **Bulk pulls:** `GET /api/v1/candidates/?election=<id>&page_size=500` returns an election's candidates in a few pages. Fetching `/candidates/?race=<id>` for every race in a large election (NC has more than 1,000 races per election) will exhaust the default 1,000 requests/hour key limit.
 
 **Ordering fields:** `name`, `party`
 **Search fields:** `name`, `party`

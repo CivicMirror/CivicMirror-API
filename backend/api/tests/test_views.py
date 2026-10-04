@@ -457,3 +457,24 @@ def test_lookup_requires_auth(make_api_key):
     c = Client()
     response = c.get('/api/v1/lookup/?zip=70801')
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_candidates_filter_by_election_and_state(client):
+    """Bulk pulls: /candidates/?election=<id> returns every candidate in an election (no per-race calls)."""
+    e1 = Election.objects.create(source_id='bulk-1', name='E1', election_date='2026-11-03',
+                                 jurisdiction_level='state', state='NC', status='upcoming')
+    e2 = Election.objects.create(source_id='bulk-2', name='E2', election_date='2026-11-03',
+                                 jurisdiction_level='state', state='VA', status='upcoming')
+    for election, prefix, scope in ((e1, 'nc', 'local'), (e1, 'nc2', 'statewide'), (e2, 'va', 'local')):
+        race = Race.objects.create(election=election, race_type='candidate', office_title=f'{prefix} office',
+                                   jurisdiction=election.state, geography_scope=scope, source='civic_api',
+                                   canonical_key=f'bulk:{prefix}')
+        Candidate.objects.create(race=race, name=f'{prefix} candidate')
+
+    by_election = client.get(f'/api/v1/candidates/?election={e1.pk}').json()
+    assert by_election['count'] == 2
+    assert {c['name'] for c in by_election['results']} == {'nc candidate', 'nc2 candidate'}
+    assert client.get('/api/v1/candidates/?state=va').json()['count'] == 1
+    scoped = client.get(f'/api/v1/candidates/?election={e1.pk}&geography_scope=statewide').json()
+    assert [c['name'] for c in scoped['results']] == ['nc2 candidate']

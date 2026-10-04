@@ -3,6 +3,8 @@ from rest_framework import serializers
 from elections.models import Candidate, DistrictRecord, Election, ElectionCycle, MeasureOption, Race
 from results.models import OfficialResult
 
+from .filters import GEOGRAPHY_SCOPE_HELP
+
 
 class ElectionCycleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -62,6 +64,7 @@ class RaceListSerializer(serializers.ModelSerializer):
             'vote_method', 'ocd_division_id', 'source', 'last_synced_at',
             'party', 'normalized_party',
         ]
+        extra_kwargs = {'geography_scope': {'help_text': GEOGRAPHY_SCOPE_HELP}}
 
 
 class RaceDetailSerializer(serializers.ModelSerializer):
@@ -81,6 +84,7 @@ class RaceDetailSerializer(serializers.ModelSerializer):
             'source', 'last_synced_at', 'candidates', 'measure_options',
             'sources', 'field_provenance',
         ]
+        extra_kwargs = {'geography_scope': {'help_text': GEOGRAPHY_SCOPE_HELP}}
 
 
 class DistrictRecordSerializer(serializers.ModelSerializer):

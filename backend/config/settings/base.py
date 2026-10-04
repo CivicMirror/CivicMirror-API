@@ -317,6 +317,10 @@ SPECTACULAR_SETTINGS = {
         'organizations; `read` keys can call every GET endpoint.\n\n'
         '**Rate limits:** per key (default 1000 requests/hour); exceeding it returns `429` with '
         '`Retry-After`.\n\n'
+        '**Bulk downloads:** avoid one request per race. Use list filters with `page_size` up to 500, '
+        'e.g. `GET /api/v1/candidates/?election=<id>&page_size=500` returns every candidate in an '
+        'election, and `GET /api/v1/races/?election=<id>&geography_scope=statewide` limits races '
+        'by scope.\n\n'
         'Full reference, including access levels and how to request a key: '
         '[API-Reference.md](https://github.com/CivicMirror/CivicMirror-API/blob/main/docs/api/API-Reference.md)'
     ),
