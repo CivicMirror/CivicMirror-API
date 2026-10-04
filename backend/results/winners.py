@@ -18,6 +18,10 @@ Skips (outcome strings, used by the backfill report):
   skipped_primary_unpartitioned  consolidated primary (race.party blank) with a candidate whose
                                  party is unknown, so the per-party nomination can't be computed
   skipped_tie                    tie at the last winning seat
+  skipped_ambiguous_contest      race bootstrapped from a results feed whose title doesn't identify a
+                                 unique contest. County/local offices like "SHERIFF (DEM)" merge
+                                 several counties' contests into one race (NC), so only federal,
+                                 statewide and numbered-district scopes are derived for those races.
   skipped_unknown_seats          the number of seats isn't known. Most sources never record it
                                  (bootstrapped races default to single-seat; MA/TN hard-code 1),
                                  so only offices that are inherently one seat per contest (Governor,
@@ -34,6 +38,8 @@ from dataclasses import dataclass, field
 DERIVED_MARKER = "winners_derived"
 TOP_TWO_PRIMARY_STATES = frozenset({"CA", "WA", "AK", "LA"})
 PRIMARY_TYPES = frozenset({"primary", "primary_runoff"})
+# Scopes whose title identifies one contest even for races bootstrapped from results feeds.
+UNIQUE_CONTEST_SCOPES = frozenset({"federal", "statewide", "district"})
 
 # Offices that elect exactly one person per contest.
 _SINGLE_SEAT_RE = re.compile(
@@ -114,6 +120,8 @@ def derive_winners(race, rows=None) -> Derivation:
     else:
         groups[""] = totals
 
+    if race.source == Race.Source.RESULTS_ADAPTER and race.geography_scope not in UNIQUE_CONTEST_SCOPES:
+        return Derivation("skipped_ambiguous_contest")
     if race.vote_method != race.VoteMethod.MULTI_SEAT and not is_single_seat_office(race.office_title):
         return Derivation("skipped_unknown_seats")
     seats = _seats(race)

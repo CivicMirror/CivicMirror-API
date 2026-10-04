@@ -214,3 +214,20 @@ def test_board_race_without_recorded_seats_is_skipped():
     _row(multi, "B", 20)
     _row(multi, "C", 10)
     assert derive_winners(multi).outcome == "derived"
+
+
+@pytest.mark.django_db
+def test_bootstrapped_county_office_is_ambiguous_but_district_is_derived():
+    sheriff = _race(_election(state="NC"), title="SHERIFF (DEM)")
+    Race.objects.filter(pk=sheriff.pk).update(source="results_adapter", geography_scope="countywide")
+    sheriff.refresh_from_db()
+    _row(sheriff, "A", 30)
+    _row(sheriff, "B", 20)
+    assert derive_winners(sheriff).outcome == "skipped_ambiguous_contest"
+
+    house = _race(_election(state="NC"), title="NC HOUSE OF REPRESENTATIVES DISTRICT 059 (REP)")
+    Race.objects.filter(pk=house.pk).update(source="results_adapter", geography_scope="district")
+    house.refresh_from_db()
+    _row(house, "A", 30)
+    _row(house, "B", 20)
+    assert derive_winners(house).outcome == "derived"
