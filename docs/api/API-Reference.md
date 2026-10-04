@@ -361,6 +361,7 @@ It does **not** mark a winner, and leaves `null`, for:
 - races with no contest-total row
 - unofficial totals
 - top-two/top-four primaries (CA, WA, AK, LA)
+- races where the number of seats isn't known. Most sources don't record it, so winners are derived only for offices that are inherently one seat per contest (e.g. Governor, U.S./state legislative districts, Sheriff, a numbered judicial seat), or races the source marks multi-seat. Boards, councils, commissions and at-large contests are skipped.
 - consolidated primaries where a candidate's party is unknown
 
 Derived winners are re-computed when corrected results arrive.

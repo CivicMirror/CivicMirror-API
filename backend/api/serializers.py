@@ -98,7 +98,7 @@ class RaceDetailSerializer(serializers.ModelSerializer):
     measure_options = MeasureOptionSerializer(many=True, read_only=True)
     sources = serializers.ListField(source="contributing_sources", read_only=True)
     results_url = serializers.SerializerMethodField(
-        help_text='Official results for this race: GET /api/v1/races/{id}/results/.',
+        help_text='Path to this race\'s official results: /api/v1/races/{id}/results/.',
     )
     winners = serializers.SerializerMethodField(
         help_text='Candidates marked winner in the official results (empty until determined).',
@@ -120,9 +120,8 @@ class RaceDetailSerializer(serializers.ModelSerializer):
 
 
     def get_results_url(self, obj):
-        path = f'/api/v1/races/{obj.pk}/results/'
-        request = self.context.get('request')
-        return request.build_absolute_uri(path) if request else path
+        # Relative: behind Cloudflare -> tunnel -> nginx the request scheme reads as http.
+        return f'/api/v1/races/{obj.pk}/results/'
 
     def get_winners(self, obj):
         rows = getattr(obj, 'winner_rows', None)

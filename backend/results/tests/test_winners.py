@@ -14,11 +14,11 @@ def _election(etype="general", state="MA"):
                                    status="results_certified")
 
 
-def _race(election, party="", seats=None, rtype="candidate"):
+def _race(election, party="", seats=None, rtype="candidate", title="State Representative District 3"):
     kw = {}
     if seats:
         kw.update(vote_method=Race.VoteMethod.MULTI_SEAT, max_selections=seats)
-    return Race.objects.create(election=election, race_type=rtype, office_title="Office", jurisdiction="X",
+    return Race.objects.create(election=election, race_type=rtype, office_title=title, jurisdiction="X",
                                geography_scope="district", source="civic_api", canonical_key=f"wr:{next(_n)}",
                                certification_status="results_certified", party=party, **kw)
 
@@ -180,3 +180,37 @@ def test_ingest_hook_respects_setting(settings):
     assert _winners(race) == []
     apply_derivation(race, derive_winners(race))
     assert _winners(race) == ["A"]
+
+
+@pytest.mark.parametrize("title,single", [
+    ("State Representative", True),
+    ("NC HOUSE OF REPRESENTATIVES DISTRICT 059 (REP)", True),
+    ("United States House of Representatives District 1", True),
+    ("Governor", True),
+    ("GRAHAM COUNTY SHERIFF", True),
+    ("NC DISTRICT COURT JUDGE DISTRICT 20 SEAT 01", True),
+    ("State Senate", True),
+    ("BURKE COUNTY BOARD OF EDUCATION AT-LARGE", False),
+    ("ALAMANCE COUNTY BOARD OF COMMISSIONERS", False),
+    ("CITY OF FAYETTEVILLE CITY COUNCIL DISTRICT 02", False),
+    ("Governor's Council", False),
+    ("NC DISTRICT COURT JUDGE DISTRICT 10", False),
+    ("SOIL AND WATER CONSERVATION DISTRICT SUPERVISOR", False),
+    ("TOWN OF BEULAVILLE COMMISSIONER", False),
+])
+def test_single_seat_office_classification(title, single):
+    from results.winners import is_single_seat_office
+    assert is_single_seat_office(title) is single
+
+
+@pytest.mark.django_db
+def test_board_race_without_recorded_seats_is_skipped():
+    race = _race(_election(), title="ALAMANCE COUNTY BOARD OF COMMISSIONERS")
+    _row(race, "A", 30)
+    _row(race, "B", 20)
+    assert derive_winners(race).outcome == "skipped_unknown_seats"
+    multi = _race(_election(), title="ALAMANCE COUNTY BOARD OF COMMISSIONERS", seats=2)
+    _row(multi, "A", 30)
+    _row(multi, "B", 20)
+    _row(multi, "C", 10)
+    assert derive_winners(multi).outcome == "derived"
