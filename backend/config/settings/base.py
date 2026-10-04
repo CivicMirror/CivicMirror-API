@@ -365,6 +365,10 @@ CIVICMIRROR_CLIENT_IP_XFF_PROXIES = env.int('CIVICMIRROR_CLIENT_IP_XFF_PROXIES',
 
 # Cloudflare Turnstile on POST /api/auth/register/ (#202). Blank secret = verification disabled.
 TURNSTILE_SECRET_KEY = env('TURNSTILE_SECRET_KEY', default='')
+
+# Derive is_winner for certified results when the adapter didn't set it (results/winners.py).
+# Off until the backfill report has been reviewed; enable with DERIVE_WINNERS_ENABLED=true.
+DERIVE_WINNERS_ENABLED = env.bool('DERIVE_WINNERS_ENABLED', default=False)
 TURNSTILE_EXPECTED_ACTION = env('TURNSTILE_EXPECTED_ACTION', default='register')
 INTERNAL_TASK_TOKEN = env('INTERNAL_TASK_TOKEN', default='')
 SCHEDULER_OIDC_AUDIENCE = env('SCHEDULER_OIDC_AUDIENCE', default='')

@@ -251,8 +251,9 @@ def _parse_election_csv(
       Data rows: "Abington",,"","4,714","4,639",...
       Final row: "TOTALS",,"","2,126,518",...
 
-    We emit one ResultRow per candidate per town. The TOTALS row (statewide aggregate)
-    is included with jurisdiction_fragment="STATEWIDE". Tally labels (All Others, Blanks,
+    We emit one ResultRow per candidate per town. The TOTALS row (the contest-wide aggregate,
+    which is a district total for district races) uses jurisdiction_fragment="", the project-wide
+    convention for the aggregate row that /races/{id}/results/ prefers. Tally labels (All Others, Blanks,
     Total Votes Cast) are emitted as is_write_in_aggregate=True / option_label rows.
 
     contest_code/party_code, when passed by fetch_results/_fetch_split for a
@@ -292,7 +293,7 @@ def _parse_election_csv(
 
         town = data_row[0].strip()
         is_totals = town.upper() == "TOTALS"
-        jurisdiction_fragment = "STATEWIDE" if is_totals else town
+        jurisdiction_fragment = "" if is_totals else town
 
         for cand in candidates:
             col_idx = cand["col_idx"]

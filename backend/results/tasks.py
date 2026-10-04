@@ -6,6 +6,7 @@ import logging
 import re
 
 from celery import shared_task
+from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
@@ -13,6 +14,7 @@ from django.utils import timezone
 from elections.geography import infer_geography_scope
 from results.adapters import list_supported_states
 from results.adapters.registry import get_adapter
+from results.winners import derive_and_apply
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +91,9 @@ def ingest_official_results(self, state: str, election_id: int):
 
     for race in races:
         _process_race_results(race, result, state)
+        if getattr(settings, 'DERIVE_WINNERS_ENABLED', False):
+            race.refresh_from_db(fields=['certification_status', 'source_metadata'])
+            derive_and_apply(race)
 
     # Adapters with their own (finer-grained, e.g. per-endpoint) version cache
     # stage pending writes during fetch_results() and expose commit_versions()

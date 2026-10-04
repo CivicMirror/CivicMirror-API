@@ -300,7 +300,7 @@ def test_parse_election_csv_totals_jurisdiction():
     from results.adapters.ma import _parse_election_csv
 
     rows = _parse_election_csv(CSV_BYTES, "http://test.url/")
-    totals_rows = [r for r in rows if r.jurisdiction_fragment == "STATEWIDE"]
+    totals_rows = [r for r in rows if r.jurisdiction_fragment == ""]
     assert len(totals_rows) > 0
 
 
@@ -381,10 +381,10 @@ def test_split_primary_results_route_to_correct_race_end_to_end():
     _process_race_results(rep_race, result, "MA")
 
     dem_result = OfficialResult.objects.get(
-        race=dem_race, candidate=dem_candidate, jurisdiction_fragment="STATEWIDE",
+        race=dem_race, candidate=dem_candidate, jurisdiction_fragment="",
     )
     rep_result = OfficialResult.objects.get(
-        race=rep_race, candidate=rep_candidate, jurisdiction_fragment="STATEWIDE",
+        race=rep_race, candidate=rep_candidate, jurisdiction_fragment="",
     )
     assert dem_result.vote_count == 2194
     assert rep_result.vote_count == 568

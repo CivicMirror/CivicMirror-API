@@ -1,6 +1,6 @@
 import logging
 
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.decorators import action
@@ -47,6 +47,15 @@ def _public_race_queryset(races):
     )
 
 
+def _winner_rows_prefetch():
+    """Prefetch winner result rows for RaceDetailSerializer.winners (avoids a query per race in lists)."""
+    return Prefetch(
+        'official_results',
+        queryset=OfficialResult.objects.filter(is_winner=True, candidate__isnull=False).select_related('candidate'),
+        to_attr='winner_rows',
+    )
+
+
 class ElectionViewSet(ReadOnlyModelViewSet):
     serializer_class = ElectionSerializer
     permission_classes = [HasAPIKey]
@@ -66,7 +75,7 @@ class ElectionViewSet(ReadOnlyModelViewSet):
         election = self.get_object()
         qs = (
             _public_race_queryset(election.races)
-            .prefetch_related('candidates', 'measure_options')
+            .prefetch_related('candidates', 'measure_options', _winner_rows_prefetch())
         )
         page = self.paginate_queryset(qs)
         if page is not None:
@@ -87,7 +96,7 @@ class RaceViewSet(ReadOnlyModelViewSet):
     def get_queryset(self):
         qs = Race.objects.select_related('election')
         if self.action in ('retrieve', 'candidates', 'results'):
-            qs = qs.prefetch_related('candidates', 'measure_options')
+            qs = qs.prefetch_related('candidates', 'measure_options', _winner_rows_prefetch())
         return qs
 
     def get_serializer_class(self):
@@ -111,7 +120,7 @@ class RaceViewSet(ReadOnlyModelViewSet):
         # consumes this endpoint as an array — paginating it returned
         # {count,next,previous,results} which the client could not read.
         race = self.get_object()
-        qs = race.official_results.all()
+        qs = race.official_results.select_related('candidate', 'measure_option')
         # Some adapters (HI, WA, TX, PA) additionally persist a per-precinct/
         # county breakdown alongside the statewide total, using the same
         # jurisdiction_fragment='' natural key for the aggregate row. When an
@@ -136,7 +145,7 @@ class BallotMeasureViewSet(ReadOnlyModelViewSet):
     def get_queryset(self):
         qs = Race.objects.filter(race_type=Race.RaceType.MEASURE).select_related('election')
         if self.action == 'retrieve':
-            qs = qs.prefetch_related('candidates', 'measure_options')
+            qs = qs.prefetch_related('candidates', 'measure_options', _winner_rows_prefetch())
         return qs
 
     def get_serializer_class(self):
@@ -215,7 +224,7 @@ class LookupView(APIView):
         for election in elections_qs:
             races = (
                 _public_race_queryset(election.races)
-                .prefetch_related('candidates', 'measure_options')
+                .prefetch_related('candidates', 'measure_options', _winner_rows_prefetch())
             )
             results.append({
                 'election': ElectionSerializer(election, context={'request': request}).data,

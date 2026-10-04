@@ -301,6 +301,10 @@ Retrieve a single race with full detail including nested candidates and measure 
 
 > **Note:** `incumbent` is reliably populated for state legislators sourced from OpenStates (all 50 states). `party`, `website_url`, and `contact_phone` are also now populated from OpenStates as of v1.1.5.
 
+
+Race detail also includes:
+- `results_url`: link to `/races/{id}/results/`.
+- `winners`: `[{"candidate_id", "name"}]` for candidates marked `is_winner` in the official results. Empty until determined.
 ---
 
 ### `GET /api/v1/races/{id}/candidates/`
@@ -311,7 +315,9 @@ Candidates for a specific race. Returns a plain array of `CandidateSerializer` o
 
 ### `GET /api/v1/races/{id}/results/`
 
-Official results for a specific race. Returns a plain array — **not** paginated (bounded by the race's candidate/option count; the frontend `.map()`s this response directly, so it must stay an array, not `{count,next,previous,results}`).
+Official results for a specific race. Returns a plain array, **not** paginated. It's bounded by the race's candidate/option count, and the frontend `.map()`s this response directly, so it must stay an array, not `{count,next,previous,results}`. Race detail links here via `results_url`.
+
+**Which rows are returned:** when the race has a contest-total row (`jurisdiction_fragment: ""`), only the total rows are returned, one per candidate/option. Otherwise all sub-jurisdiction rows (county/town/precinct) are returned. Since 2026-10-04, Massachusetts totals use `""` like every other state; they were previously `"STATEWIDE"`, even for district races.
 
 **Response shape:**
 ```json
@@ -320,22 +326,46 @@ Official results for a specific race. Returns a plain array — **not** paginate
     "id": 1,
     "race": 5,
     "candidate": 12,
+    "candidate_name": "Lisa M. Field",
+    "candidate_party": "Democratic",
     "measure_option": null,
-    "vote_count": 142500,
-    "vote_pct": "52.30",
-    "result_type": "unofficial",
+    "option_label": null,
+    "vote_count": 2575,
+    "vote_pct": null,
+    "result_type": "official",
     "is_winner": true,
     "round_number": null,
     "jurisdiction_fragment": "",
     "is_write_in_aggregate": false,
-    "certified_at": null,
-    "source_url": "https://results.enr.clarityelections.com/WV/..."
+    "certified_at": "2025-06-20T00:00:00Z",
+    "source_url": "https://electionstats.state.ma.us/elections/download/171342/precincts_include:0/"
   }
 ]
 ```
 
-> **Note:** `result_type` will be `"unofficial"` until an admin explicitly marks results as certified.
-> For ballot measures: `candidate` is `null`, `measure_option` is an integer ID.
+| Field | Notes |
+|---|---|
+| `candidate_name`, `candidate_party` | Null on write-in aggregate rows and ballot-measure rows |
+| `option_label` | Ballot-measure option (e.g. `Yes`/`No`); null on candidate rows |
+| `jurisdiction_fragment` | Sub-jurisdiction the row covers; `""` = the contest total |
+| `is_winner` | `true`/`false` when known; **`null` when not determined** |
+
+**How `is_winner` is set:** some adapters (e.g. OH, VA, VT, NY, CA, WA, MD, ME, AR, Clarity states) report winners from the source, and those values are never overwritten. Otherwise the API derives winners for **certified official** results from the contest-total rows:
+- the top vote-getter, or the top *N* for multi-seat races;
+- in consolidated primaries (both parties' candidates in one race), one winner **per party**.
+
+It does **not** mark a winner, and leaves `null`, for:
+- ties at the last winning seat
+- ballot measures
+- ranked-choice rounds
+- races with no contest-total row
+- unofficial totals
+- top-two/top-four primaries (CA, WA, AK, LA)
+- consolidated primaries where a candidate's party is unknown
+
+Derived winners are re-computed when corrected results arrive.
+
+> For ballot measures: `candidate` is `null`, `measure_option` is an integer ID, and `option_label` gives its text.
 
 ---
 
