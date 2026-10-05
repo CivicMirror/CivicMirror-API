@@ -11,6 +11,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
+from aggregation.identity import normalize_party
 from elections.geography import infer_geography_scope
 from results.adapters import list_supported_states
 from results.adapters.registry import get_adapter
@@ -139,7 +140,10 @@ def _identity_keys(source: dict) -> tuple[str, ...]:
     # unrelated ingest matching, so it must not be pulled into row filtering.
     contest_code = str(source.get("contest_code") or "").strip()
     if contest_code:
-        return ("contest_code", "party_code")
+        keys = ["contest_code", "contest_type", "party_code"]
+        if str(source.get("contest_type") or "").strip().upper() == "C":
+            keys.append("county")
+        return tuple(keys)
     return ("contest_variant",)
 
 
@@ -261,6 +265,23 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
                     **identity,
                 },
             )
+            vote_for = {
+                str((row.raw or {}).get("vote_for") or "").strip()
+                for row in rows
+                if str((row.raw or {}).get("vote_for") or "").strip()
+            }
+            positive_vote_for = {int(value) for value in vote_for if value.isdigit() and int(value) > 0}
+            if (len(vote_for) == 1 and len(positive_vote_for) == 1
+                    and not any((row.raw or {}).get("vote_for_conflict") for row in rows)):
+                seats = next(iter(positive_vote_for))
+                race.source_metadata["source_vote_for"] = seats
+                if seats > 1:
+                    race.vote_method = Race.VoteMethod.MULTI_SEAT
+                    race.max_selections = seats
+                race.save(update_fields=["source_metadata", "vote_method", "max_selections"])
+            elif vote_for:
+                race.source_metadata["source_vote_for_unresolved"] = sorted(vote_for)
+                race.save(update_fields=["source_metadata"])
             created_races.append(race)
             logger.info(
                 "_bootstrap_races_from_results: created %s race %s ('%s') for election %s",
@@ -274,12 +295,21 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
                     if not name or name in names_seen:
                         continue
                     names_seen.add(name)
+                    candidate_rows = [candidate_row for candidate_row in rows if (candidate_row.candidate_name or '').strip() == name]
+                    party_values = {str((candidate_row.raw or {}).get("party_code") or "").strip()
+                                    for candidate_row in candidate_rows if (candidate_row.raw or {}).get("party_code")}
+                    normalized = normalize_party(next(iter(party_values))) if len(party_values) == 1 else ""
                     Candidate.objects.create(
                         race=race,
                         name=name,
+                        party=normalized,
+                        normalized_party=normalized,
+                        field_provenance=(
+                            {"party": f"results_adapter:{state}:party_metadata"} if normalized else {}
+                        ),
                         candidate_status=(
                             Candidate.CandidateStatus.WRITE_IN
-                            if row.is_write_in_aggregate
+                            if any(candidate_row.is_write_in_aggregate for candidate_row in candidate_rows)
                             else Candidate.CandidateStatus.RUNNING
                         ),
                     )
