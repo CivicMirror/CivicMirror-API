@@ -1,0 +1,781 @@
+from datetime import date
+
+import pytest
+from django.contrib import messages
+from django.contrib.admin.sites import AdminSite
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.test import RequestFactory
+from django.urls import reverse
+from django.utils import timezone
+
+from cm2_core.models import SourceArtifact
+from cm2_elections.models import Candidacy, Contest, Election, Jurisdiction, Office, Person
+from cm2_results.models import ContestResult, ResultChoice
+from cm2_review.admin import IdentityReviewCaseAdmin
+from cm2_review.models import IdentityReviewCase, IdentityReviewSuggestion
+from cm2_review.serializers import IdentityReviewCaseSerializer
+
+
+@pytest.fixture
+def fuzzy_result_choice(db):
+    results_artifact = SourceArtifact.objects.create(
+        source_system="nc_sbe",
+        source_type=SourceArtifact.SourceType.RESULTS,
+        url="https://example.test/nc/admin-results.zip",
+        retrieved_at=timezone.now(),
+        content_sha256="f" * 64,
+        parser_version="nc-results-v1",
+        election_date=date(2026, 3, 3),
+    )
+    jurisdiction = Jurisdiction.objects.create(
+        name="Adminville",
+        classification="municipality",
+        state="NC",
+        record_status="verified",
+    )
+    office = Office.objects.create(jurisdiction=jurisdiction, canonical_name="Mayor", role="mayor")
+    election = Election.objects.create(
+        name="2026 Town of Adminville Election",
+        election_date=date(2026, 3, 3),
+        election_type="municipal",
+        lifecycle_status="active",
+    )
+    contest = Contest.objects.create(election=election, office=office, vote_for=1)
+    contest_result = ContestResult.objects.create(
+        contest=contest,
+        status=ContestResult.Status.UNOFFICIAL,
+        source_artifact=results_artifact,
+        total_votes=10,
+    )
+    return ResultChoice.objects.create(
+        contest_result=contest_result,
+        source_label="Pat Lee",
+        normalized_label="pat lee",
+        choice_type=ResultChoice.ChoiceType.CANDIDATE,
+        resolution_status=ResultChoice.ResolutionStatus.UNRESOLVED,
+        vote_total=4,
+        source_artifact=results_artifact,
+        source_choice_key="adminville-mayor:pat-lee",
+    )
+
+
+def _admin_request(rf, user, post_data=None):
+    request = rf.post("/admin/cm2_review/identityreviewcase/", data=post_data or {})
+    request.user = user
+    request.session = {}
+    request._messages = FallbackStorage(request)
+    return request
+
+
+def _admin_get_request(rf, user):
+    request = rf.get("/admin/cm2_review/identityreviewcase/")
+    request.user = user
+    request.session = {}
+    request._messages = FallbackStorage(request)
+    return request
+
+
+@pytest.fixture
+def model_admin():
+    return IdentityReviewCaseAdmin(IdentityReviewCase, AdminSite())
+
+
+@pytest.mark.django_db
+def test_evidence_comparison_shows_protected_evidence_to_reviewer(source_record, provisional_person, model_admin):
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-evidence",
+        source_record=source_record,
+        provisional_person=provisional_person,
+        has_private_evidence=True,
+    )
+
+    html = model_admin.evidence_comparison(review)
+
+    assert "123 Private Lane" in html
+    assert "private@example.test" in html
+
+
+@pytest.mark.django_db
+def test_evidence_comparison_shows_side_by_side_fuzzy_match_cards(
+    source_record,
+    provisional_person,
+    source_artifact,
+    model_admin,
+):
+    spelled_differently = Person.objects.create(
+        canonical_name="Deidra Freeman",
+        given_name="Deidra",
+        family_name="Freeman",
+        source_artifact=source_artifact,
+    )
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-fuzzy-comparison",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=spelled_differently,
+        rank=1,
+        score="0.8200",
+    )
+
+    html = model_admin.evidence_comparison(review)
+
+    # Side-by-side headers for both records.
+    assert "New person found" in html
+    assert "Existing possible match" in html
+    # The differently-spelled given name is flagged as a diff, not silently shown as a match.
+    assert "DeDreana" in html
+    assert "Deidra" in html
+    # Middle name is absent on the candidate person record, so it should read as missing.
+    assert "Missing" in html
+    # Per-suggestion action buttons let a reviewer resolve straight from the comparison card.
+    assert "Link existing to Deidra Freeman" in html
+    assert "Merge people into Deidra Freeman" in html
+    # Both sides trace back to the artifact that sourced them, linked into its admin page.
+    assert "nc_sbe" in html
+    assert reverse("admin:cm2_core_sourceartifact_change", args=[source_artifact.pk]) in html
+
+
+@pytest.mark.django_db
+def test_evidence_comparison_shows_unknown_source_when_person_has_none(
+    source_record,
+    provisional_person,
+    model_admin,
+):
+    """A pre-existing person ingested before source tracking (or created without a
+    source_artifact) should read as an explicit unknown, not silently blank."""
+    no_source_person = Person.objects.create(canonical_name="No Source Person")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-fuzzy-no-source",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=no_source_person,
+        rank=1,
+        score="0.9000",
+    )
+
+    html = model_admin.evidence_comparison(review)
+
+    assert "Unknown source" in html
+
+
+@pytest.mark.django_db
+def test_evidence_comparison_shows_write_in_candidate_cards(fuzzy_result_choice, model_admin):
+    candidate_person = Person.objects.create(canonical_name="Pat Lee", family_name="Lee")
+    contest = fuzzy_result_choice.contest_result.contest
+    Candidacy.objects.create(person=candidate_person, contest=contest, ballot_name="Pat Lee", party_candidate="REP")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-write-in-comparison",
+        result_choice=fuzzy_result_choice,
+        supporting_evidence={"source_label": fuzzy_result_choice.source_label},
+    )
+    IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=candidate_person,
+        rank=1,
+        score="1.0000",
+        supporting_evidence={"ballot_name": "Pat Lee"},
+    )
+
+    html = model_admin.evidence_comparison(review)
+
+    assert "Pat Lee" in html
+    assert "Link write-in to Pat Lee" in html
+    # There's no provisional person to merge for a write-in case, so no merge action is offered.
+    assert "Merge people into" not in html
+
+
+@pytest.mark.django_db
+def test_evidence_comparison_falls_back_to_table_for_write_in_case_without_suggestions(
+    fuzzy_result_choice, model_admin
+):
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.UNRESOLVED_RESULT_CHOICE,
+        deduplication_key="admin-write-in-no-suggestions",
+        result_choice=fuzzy_result_choice,
+        supporting_evidence={"source_label": fuzzy_result_choice.source_label},
+    )
+
+    html = model_admin.evidence_comparison(review)
+
+    assert "Supporting evidence" in html
+
+
+@pytest.mark.django_db
+def test_link_write_in_suggestion_view_links_result_choice_to_target(fuzzy_result_choice, model_admin, django_user_model):
+    reviewer = django_user_model.objects.create_user(username="write-in-card-reviewer", is_staff=True)
+    candidate_person = Person.objects.create(canonical_name="Pat Lee", family_name="Lee")
+    contest = fuzzy_result_choice.contest_result.contest
+    Candidacy.objects.create(person=candidate_person, contest=contest, ballot_name="Pat Lee", party_candidate="REP")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-write-in-link-view",
+        result_choice=fuzzy_result_choice,
+    )
+    suggestion = IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=candidate_person,
+        rank=1,
+        score="1.0000",
+    )
+    rf = RequestFactory()
+    request = _admin_get_request(rf, reviewer)
+
+    model_admin.link_existing_suggestion(request, review.pk, suggestion.pk)
+
+    fuzzy_result_choice.refresh_from_db()
+    review.refresh_from_db()
+    assert fuzzy_result_choice.resolution_status == ResultChoice.ResolutionStatus.MATCHED
+    assert fuzzy_result_choice.candidacy.person == candidate_person
+    assert review.status == IdentityReviewCase.Status.APPROVED
+
+
+@pytest.mark.django_db
+def test_merge_people_suggestion_view_merges_provisional_into_target(
+    source_record,
+    provisional_person,
+    source_artifact,
+    django_user_model,
+    model_admin,
+):
+    target = Person.objects.create(canonical_name="William Randy Burton", source_artifact=source_artifact)
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-card-merge",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    suggestion = IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=target,
+        rank=1,
+        score="0.8700",
+    )
+    reviewer = django_user_model.objects.create_user(username="admin-card-merge-reviewer")
+    rf = RequestFactory()
+    request = _admin_get_request(rf, reviewer)
+
+    model_admin.merge_people_suggestion(request, str(review.pk), str(suggestion.pk))
+
+    review.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert review.resolution_action == IdentityReviewCase.ResolutionAction.MERGE_PEOPLE
+    assert provisional_person.merged_into == target
+
+
+@pytest.mark.django_db
+def test_link_existing_suggestion_view_links_provisional_to_target(
+    source_record,
+    provisional_person,
+    source_artifact,
+    django_user_model,
+    model_admin,
+):
+    target = Person.objects.create(canonical_name="Dedreana Freeman", source_artifact=source_artifact)
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-card-link",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    suggestion = IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=target,
+        rank=1,
+        score="0.9500",
+    )
+    reviewer = django_user_model.objects.create_user(username="admin-card-link-reviewer")
+    rf = RequestFactory()
+    request = _admin_get_request(rf, reviewer)
+
+    model_admin.link_existing_suggestion(request, str(review.pk), str(suggestion.pk))
+
+    review.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert review.resolution_action == IdentityReviewCase.ResolutionAction.LINK_EXISTING
+    assert provisional_person.merged_into == target
+
+
+@pytest.mark.django_db
+def test_merge_people_suggestion_view_rejects_already_resolved_case(
+    source_record,
+    provisional_person,
+    source_artifact,
+    django_user_model,
+    model_admin,
+):
+    target = Person.objects.create(canonical_name="William Randy Burton", source_artifact=source_artifact)
+    reviewer = django_user_model.objects.create_user(username="admin-card-resolved-reviewer")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-card-already-resolved",
+        source_record=source_record,
+        provisional_person=provisional_person,
+        status=IdentityReviewCase.Status.APPROVED,
+        resolution_action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
+        reviewed_by=reviewer,
+        reviewed_at=timezone.now(),
+    )
+    suggestion = IdentityReviewSuggestion.objects.create(
+        review_case=review,
+        suggested_person=target,
+        rank=1,
+        score="0.8700",
+    )
+    rf = RequestFactory()
+    request = _admin_get_request(rf, reviewer)
+
+    model_admin.merge_people_suggestion(request, str(review.pk), str(suggestion.pk))
+
+    review.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert review.resolution_action == IdentityReviewCase.ResolutionAction.CONFIRM_NEW
+    assert provisional_person.merged_into is None
+
+
+@pytest.mark.django_db
+def test_public_serializer_still_redacts_despite_admin_visibility(source_record, provisional_person, model_admin):
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-vs-public",
+        source_record=source_record,
+        provisional_person=provisional_person,
+        has_private_evidence=True,
+        supporting_evidence={"phone": "919-555-0100"},
+    )
+
+    admin_html = model_admin.evidence_comparison(review)
+    public_output = IdentityReviewCaseSerializer(review).data
+
+    assert "123 Private Lane" in admin_html
+    assert public_output["supporting_evidence"] == {"redacted": True}
+
+
+@pytest.mark.django_db
+def test_link_existing_cases_action_links_to_target_person(
+    source_record,
+    provisional_person,
+    source_artifact,
+    django_user_model,
+    model_admin,
+):
+    existing = Person.objects.create(canonical_name="Dedreana Freeman", source_artifact=source_artifact)
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-link",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    reviewer = django_user_model.objects.create_user(username="admin-link-reviewer")
+    rf = RequestFactory()
+    request = _admin_request(rf, reviewer, {"target_person_public_id": existing.public_id})
+
+    model_admin.link_existing_cases(request, IdentityReviewCase.objects.filter(pk=review.pk))
+
+    review.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert review.resolution_action == IdentityReviewCase.ResolutionAction.LINK_EXISTING
+    assert provisional_person.merged_into == existing
+
+
+@pytest.mark.django_db
+def test_link_existing_cases_action_reports_error_without_target(
+    source_record,
+    provisional_person,
+    django_user_model,
+    model_admin,
+):
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-link-missing-target",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    reviewer = django_user_model.objects.create_user(username="admin-link-reviewer-2")
+    rf = RequestFactory()
+    request = _admin_request(rf, reviewer)
+
+    model_admin.link_existing_cases(request, IdentityReviewCase.objects.filter(pk=review.pk))
+
+    review.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.OPEN
+
+
+@pytest.mark.django_db
+def test_supersede_cases_action_marks_case_superseded(
+    source_record,
+    provisional_person,
+    django_user_model,
+    model_admin,
+):
+    old_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-supersede-old",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    new_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-supersede-new",
+        provisional_person=provisional_person,
+    )
+    actor = django_user_model.objects.create_user(username="admin-supersede-actor")
+    rf = RequestFactory()
+    request = _admin_request(rf, actor, {"target_case_public_id": new_case.public_id})
+
+    model_admin.supersede_cases(request, IdentityReviewCase.objects.filter(pk=old_case.pk))
+
+    old_case.refresh_from_db()
+    assert old_case.status == IdentityReviewCase.Status.SUPERSEDED
+    assert old_case.superseded_by == new_case
+
+
+@pytest.mark.django_db
+def test_supersede_cases_action_reports_partial_failure_without_raising(
+    source_record,
+    provisional_person,
+    django_user_model,
+    model_admin,
+):
+    """One already-terminal case in the selection must not abort the whole batch."""
+    open_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-supersede-partial-open",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    actor = django_user_model.objects.create_user(username="admin-supersede-partial-actor")
+    already_approved_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-supersede-partial-approved",
+        provisional_person=provisional_person,
+        status=IdentityReviewCase.Status.APPROVED,
+        resolution_action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
+        reviewed_by=actor,
+        reviewed_at=timezone.now(),
+    )
+    new_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-supersede-partial-target",
+        provisional_person=provisional_person,
+    )
+    rf = RequestFactory()
+    request = _admin_request(rf, actor, {"target_case_public_id": new_case.public_id})
+
+    model_admin.supersede_cases(
+        request,
+        IdentityReviewCase.objects.filter(pk__in=[open_case.pk, already_approved_case.pk]),
+    )
+
+    open_case.refresh_from_db()
+    already_approved_case.refresh_from_db()
+    assert open_case.status == IdentityReviewCase.Status.SUPERSEDED
+    assert already_approved_case.status == IdentityReviewCase.Status.APPROVED
+
+    stored_messages = list(request._messages)
+    assert len(stored_messages) == 1
+    assert stored_messages[0].level == messages.WARNING
+    assert "could not be superseded" in str(stored_messages[0])
+
+
+@pytest.mark.django_db
+def test_reject_cases_action_disputes_provisional_person(
+    source_record,
+    provisional_person,
+    django_user_model,
+    model_admin,
+):
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-reject",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    reviewer = django_user_model.objects.create_user(username="admin-reject-reviewer")
+    rf = RequestFactory()
+    request = _admin_request(rf, reviewer)
+
+    model_admin.reject_cases(request, IdentityReviewCase.objects.filter(pk=review.pk))
+
+    review.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.REJECTED
+    assert provisional_person.identity_state == Person.IdentityState.DISPUTED
+
+
+@pytest.mark.django_db
+def test_add_note_to_cases_action_appends_note_and_audits(
+    source_record,
+    provisional_person,
+    django_user_model,
+    model_admin,
+):
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-add-note",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    reviewer = django_user_model.objects.create_user(username="admin-note-reviewer")
+    rf = RequestFactory()
+    request = _admin_request(rf, reviewer, {"note": "Flagging for a second look."})
+
+    model_admin.add_note_to_cases(request, IdentityReviewCase.objects.filter(pk=review.pk))
+
+    review.refresh_from_db()
+    assert "Flagging for a second look." in review.notes
+
+
+def test_mutable_workflow_fields_are_readonly_on_admin_change_form(model_admin):
+    """Status/resolution/audit-adjacent fields must only be mutable via workflow.py, never the raw change form."""
+    readonly = model_admin.readonly_fields
+    for field_name in (
+        "status",
+        "resolution_action",
+        "reviewed_by",
+        "reviewed_at",
+        "superseded_by",
+        "notes",
+        "case_type",
+        "has_private_evidence",
+    ):
+        assert field_name in readonly, f"{field_name} must be readonly so admin saves cannot bypass transition_review_case"
+
+
+@pytest.mark.django_db
+def test_confirm_new_action_reaches_deferred_cases(
+    source_record,
+    provisional_person,
+    django_user_model,
+    model_admin,
+):
+    reviewer = django_user_model.objects.create_user(username="admin-confirm-deferred-reviewer")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-confirm-deferred",
+        source_record=source_record,
+        provisional_person=provisional_person,
+        status=IdentityReviewCase.Status.DEFERRED,
+        resolution_action=IdentityReviewCase.ResolutionAction.DEFER,
+        reviewed_by=reviewer,
+        reviewed_at=timezone.now(),
+    )
+    rf = RequestFactory()
+    request = _admin_request(rf, reviewer)
+
+    model_admin.confirm_new(request, IdentityReviewCase.objects.filter(pk=review.pk))
+
+    review.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert review.resolution_action == IdentityReviewCase.ResolutionAction.CONFIRM_NEW
+    assert provisional_person.identity_state == Person.IdentityState.RESOLVED
+
+
+@pytest.mark.django_db
+def test_confirm_new_action_reports_skipped_cases(
+    source_record,
+    provisional_person,
+    django_user_model,
+    model_admin,
+):
+    reviewer = django_user_model.objects.create_user(username="admin-confirm-skip-reviewer")
+    open_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-confirm-skip-open",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    approved_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="admin-confirm-skip-approved",
+        provisional_person=provisional_person,
+        status=IdentityReviewCase.Status.APPROVED,
+        resolution_action=IdentityReviewCase.ResolutionAction.CONFIRM_NEW,
+        reviewed_by=reviewer,
+        reviewed_at=timezone.now(),
+    )
+    rf = RequestFactory()
+    request = _admin_request(rf, reviewer)
+
+    model_admin.confirm_new(request, IdentityReviewCase.objects.filter(pk__in=[open_case.pk, approved_case.pk]))
+
+    open_case.refresh_from_db()
+    approved_case.refresh_from_db()
+    assert open_case.status == IdentityReviewCase.Status.APPROVED
+    assert approved_case.status == IdentityReviewCase.Status.APPROVED
+    assert approved_case.resolution_action == IdentityReviewCase.ResolutionAction.CONFIRM_NEW
+
+    stored_messages = list(request._messages)
+    assert len(stored_messages) == 1
+    assert "1 skipped (not open or deferred)" in str(stored_messages[0])
+
+
+@pytest.mark.django_db
+def test_link_existing_cases_action_reaches_deferred_cases(
+    source_record,
+    provisional_person,
+    source_artifact,
+    django_user_model,
+    model_admin,
+):
+    existing = Person.objects.create(canonical_name="Dedreana Freeman", source_artifact=source_artifact)
+    reviewer = django_user_model.objects.create_user(username="admin-link-deferred-reviewer")
+    review = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH,
+        deduplication_key="admin-link-deferred",
+        source_record=source_record,
+        provisional_person=provisional_person,
+        status=IdentityReviewCase.Status.DEFERRED,
+        resolution_action=IdentityReviewCase.ResolutionAction.DEFER,
+        reviewed_by=reviewer,
+        reviewed_at=timezone.now(),
+    )
+    rf = RequestFactory()
+    request = _admin_request(rf, reviewer, {"target_person_public_id": existing.public_id})
+
+    model_admin.link_existing_cases(request, IdentityReviewCase.objects.filter(pk=review.pk))
+
+    review.refresh_from_db()
+    provisional_person.refresh_from_db()
+    assert review.status == IdentityReviewCase.Status.APPROVED
+    assert provisional_person.merged_into == existing
+
+
+@pytest.mark.django_db
+def test_supply_missing_date_row_get_opens_dialog_without_transitioning(admin_client):
+    """A real reviewer click is a GET (htmx) that opens the dialog; it must not mutate the case."""
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026-dialog-open",
+        supporting_evidence={"office": "Mayoral"},
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
+
+    response = admin_client.get(url)
+
+    review_case.refresh_from_db()
+    assert response.status_code == 200
+    assert b"election_date" in response.content
+    assert review_case.status == IdentityReviewCase.Status.OPEN
+
+
+@pytest.mark.django_db
+def test_supply_missing_date_row_approves_case_with_supplied_date(admin_client):
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026",
+        supporting_evidence={"office": "Mayoral"},
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
+
+    # Mirrors the dialog form's real POST body: the hidden _form_submitted flag the
+    # unfold dialog template always renders, plus the validated field itself.
+    response = admin_client.post(url, {"election_date": "2026-11-03", "_form_submitted": "True"})
+
+    review_case.refresh_from_db()
+    assert response.status_code == 302
+    assert review_case.status == IdentityReviewCase.Status.APPROVED
+    assert review_case.resolution_data == {"election_date": "2026-11-03"}
+
+
+@pytest.mark.django_db
+def test_supply_missing_date_row_rejects_bad_date_format(admin_client):
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026",
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
+
+    response = admin_client.post(url, {"election_date": "not-a-date", "_form_submitted": "True"})
+
+    review_case.refresh_from_db()
+    assert response.status_code == 200
+    assert review_case.status == IdentityReviewCase.Status.OPEN
+
+
+@pytest.mark.django_db
+def test_supply_missing_date_row_rejects_wrong_case_type(admin_client, source_record, provisional_person):
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.PERSON_IDENTITY,
+        deduplication_key="wrong-case-type",
+        source_record=source_record,
+        provisional_person=provisional_person,
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
+
+    admin_client.post(url, {"election_date": "2026-11-03", "_form_submitted": "True"})
+
+    review_case.refresh_from_db()
+    assert review_case.status == IdentityReviewCase.Status.OPEN
+
+
+@pytest.mark.django_db
+def test_supply_missing_date_row_reopens_a_deferred_case(admin_client, django_user_model):
+    """
+    A case previously deferred (e.g. by defer_failed_promotion after a failed
+    downstream promotion) must not be a dead end: re-supplying the date
+    should still work, same as for an OPEN case.
+    """
+    reviewer = django_user_model.objects.create_user(username="admin-supply-date-deferred-reviewer")
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026-deferred",
+        status=IdentityReviewCase.Status.DEFERRED,
+        resolution_action=IdentityReviewCase.ResolutionAction.DEFER,
+        reviewed_by=reviewer,
+        reviewed_at=timezone.now(),
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_supply_missing_date_row", args=[review_case.pk])
+
+    response = admin_client.post(url, {"election_date": "2026-11-03", "_form_submitted": "True"})
+
+    review_case.refresh_from_db()
+    assert response.status_code == 302
+    assert review_case.status == IdentityReviewCase.Status.APPROVED
+    assert review_case.resolution_data == {"election_date": "2026-11-03"}
+
+
+@pytest.mark.django_db
+def test_confirm_new_row_rejects_incomplete_election_data_case(admin_client):
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026-confirm-new",
+        supporting_evidence={"office": "Mayoral"},
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_confirm_new_row", args=[review_case.pk])
+
+    admin_client.post(url)
+
+    review_case.refresh_from_db()
+    assert review_case.status == IdentityReviewCase.Status.OPEN
+    assert review_case.resolution_action == ""
+
+
+@pytest.mark.django_db
+def test_reject_case_row_rejects_incomplete_election_data_case(admin_client):
+    review_case = IdentityReviewCase.objects.create(
+        case_type=IdentityReviewCase.CaseType.INCOMPLETE_ELECTION_DATA,
+        deduplication_key="incomplete_election:ma:everett-mayoral:2026-reject",
+        supporting_evidence={"office": "Mayoral"},
+    )
+    url = reverse("admin:cm2_review_identityreviewcase_reject_case_row", args=[review_case.pk])
+
+    admin_client.post(url)
+
+    review_case.refresh_from_db()
+    assert review_case.status == IdentityReviewCase.Status.OPEN
+    assert review_case.resolution_action == ""
