@@ -14,7 +14,7 @@ from django.utils import timezone
 from elections.geography import infer_geography_scope
 from results.adapters import list_supported_states
 from results.adapters.registry import get_adapter
-from results.winners import derive_and_apply
+from results.winners import clear_derived_winners, derive_and_apply
 
 logger = logging.getLogger(__name__)
 
@@ -91,9 +91,6 @@ def ingest_official_results(self, state: str, election_id: int):
 
     for race in races:
         _process_race_results(race, result, state)
-        if getattr(settings, 'DERIVE_WINNERS_ENABLED', False):
-            race.refresh_from_db(fields=['certification_status', 'source_metadata'])
-            derive_and_apply(race)
 
     # Adapters with their own (finer-grained, e.g. per-endpoint) version cache
     # stage pending writes during fetch_results() and expose commit_versions()
@@ -350,7 +347,19 @@ def _result_source_url(row, adapter_result, race) -> str:
     return url
 
 
+@transaction.atomic
 def _process_race_results(race, adapter_result, state: str):
+    """Serialize a race's import, source takeover, and optional derivation as one write."""
+    from elections.models import Race
+
+    locked_race = Race.objects.select_for_update(of=('self',)).select_related('election').get(pk=race.pk)
+    _store_race_results(locked_race, adapter_result, state)
+    if getattr(settings, 'DERIVE_WINNERS_ENABLED', False):
+        derive_and_apply(locked_race)
+    race.refresh_from_db()
+
+
+def _store_race_results(race, adapter_result, state: str):
     from elections.models import Candidate, MeasureOption, Race
     from results.models import OfficialResult
 
@@ -461,6 +470,11 @@ def _process_race_results(race, adapter_result, state: str):
         else:
             any_partial = True
             continue
+
+        if row.is_winner is not None:
+            # Only a matched incoming source flag can take ownership. Clear our previous
+            # flags BEFORE persisting it, so skip/recount cleanup cannot erase source data.
+            clear_derived_winners(race)
 
         with transaction.atomic():
             OfficialResult.objects.update_or_create(
