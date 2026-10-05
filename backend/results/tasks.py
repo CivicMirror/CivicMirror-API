@@ -293,6 +293,13 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
                     labels_seen.add(label)
                     MeasureOption.objects.create(race=race, option_label=label)
 
+            if race_type == Race.RaceType.CANDIDATE:
+                from results.parties import apply_party_plan, plan_party_updates
+
+                candidates = list(race.candidates.all())
+                plan = plan_party_updates(race, candidates, rows, adapter_result.source_url)
+                apply_party_plan(race, candidates, plan)
+
     logger.info(
         "_bootstrap_races_from_results: bootstrapped %d races for election %s (%s)",
         len(created_races), election.pk, state,
@@ -495,6 +502,13 @@ def _store_race_results(race, adapter_result, state: str):
                 },
             )
         matched_rows.append(row)
+
+    if race.race_type == Race.RaceType.CANDIDATE and matched_rows:
+        from results.parties import apply_party_plan, plan_party_updates
+
+        candidates = list(race.candidates.all())
+        party_plan = plan_party_updates(race, candidates, matched_rows, adapter_result.source_url)
+        apply_party_plan(race, candidates, party_plan)
 
     # --- Update race certification status ------------------------------------
     if adapter_result.mapping_confidence == 'full' and not any_partial and matched_rows:
