@@ -108,6 +108,40 @@ def test_aggregate_rows_skips_rows_without_contest_or_choice():
     assert _aggregate_rows(raw) == []
 
 
+def test_aggregate_rows_qualifies_county_contests_but_keeps_statewide_contests_together():
+    raw = [
+        {"Contest Name": "SHERIFF", "Contest Type": "C", "Contest Group ID": "1", "County": "ALAMANCE",
+         "Choice": "A", "Choice Party": "DEM", "Vote For": "1", "Total Votes": "10"},
+        {"Contest Name": "SHERIFF", "Contest Type": "C", "Contest Group ID": "1", "County": "ORANGE",
+         "Choice": "A", "Choice Party": "DEM", "Vote For": "1", "Total Votes": "20"},
+        {"Contest Name": "GOVERNOR", "Contest Type": "S", "Contest Group ID": "2", "County": "ALAMANCE",
+         "Choice": "A", "Choice Party": "DEM", "Vote For": "1", "Total Votes": "30"},
+        {"Contest Name": "GOVERNOR", "Contest Type": "S", "Contest Group ID": "2", "County": "ORANGE",
+         "Choice": "A", "Choice Party": "DEM", "Vote For": "1", "Total Votes": "40"},
+    ]
+    rows = _aggregate_rows(raw)
+    sheriff = [row for row in rows if row.office_title == "SHERIFF"]
+    governor = [row for row in rows if row.office_title == "GOVERNOR"]
+    assert {(row.raw["county"], row.vote_count) for row in sheriff} == {("ALAMANCE", 10), ("ORANGE", 20)}
+    assert len(governor) == 1
+    assert governor[0].vote_count == 70
+    assert governor[0].raw["county"] == ""
+
+
+def test_aggregate_rows_preserves_party_and_seat_conflicts():
+    raw = [
+        {"Contest Name": "BOARD", "Contest Type": "C", "Contest Group ID": "8", "County": "WAKE",
+         "Choice": "A", "Choice Party": "DEM", "Vote For": "2", "Total Votes": "10"},
+        {"Contest Name": "BOARD", "Contest Type": "C", "Contest Group ID": "8", "County": "WAKE",
+         "Choice": "A", "Choice Party": "REP", "Vote For": "0", "Total Votes": "20"},
+    ]
+    row = _aggregate_rows(raw)[0]
+    assert row.raw["party_code"] == ""
+    assert row.raw["party_conflict"] == ["DEM", "REP"]
+    assert row.raw["vote_for"] == ""
+    assert row.raw["vote_for_conflict"] == ["0", "2"]
+
+
 def test_aggregate_rows_treats_nul_only_choice_as_blank():
     raw = [
         {"Contest Name": "TOWN COUNCIL", "Choice": "\x00", "Total Votes": "12", "Contest Type": "C"},

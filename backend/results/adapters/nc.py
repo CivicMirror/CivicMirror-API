@@ -215,10 +215,11 @@ def _aggregate_rows(raw_rows: list[dict]) -> list[ResultRow]:
     Groups by (Contest Name, Contest Type, Choice) and sums Total Votes.
     Each aggregated group becomes one ResultRow with result_type="official".
     """
-    # key: (contest_name, choice) → accumulated vote_count
-    totals: dict[tuple[str, str], int] = defaultdict(int)
-    # key: (contest_name, choice) → first-seen contest_type (S or C)
-    contest_types: dict[tuple[str, str], str] = {}
+    # Statewide/federal contests are shared across counties. County contests
+    # need the county plus the source contest group ID so same-name local races
+    # cannot be merged before bootstrap has a chance to qualify their identity.
+    totals: dict[tuple[str, str, str, str, str], int] = defaultdict(int)
+    metadata: dict[tuple[str, str, str, str, str], dict[str, set[str]]] = {}
 
     for row in raw_rows:
         contest_name = _clean_text(row.get("Contest Name") or "")
@@ -231,14 +232,23 @@ def _aggregate_rows(raw_rows: list[dict]) -> list[ResultRow]:
         except (ValueError, TypeError):
             votes = 0
 
-        key = (contest_name, choice)
+        contest_type = (row.get("Contest Type") or "").strip().upper()
+        county = _clean_text(row.get("County") or "") if contest_type == "C" else ""
+        contest_code = _clean_text(row.get("Contest Group ID") or "")
+        key = (contest_name, contest_type, contest_code, county, choice)
         totals[key] += votes
-        if key not in contest_types:
-            contest_types[key] = (row.get("Contest Type") or "").strip().upper()
+        values = metadata.setdefault(key, {"party_code": set(), "vote_for": set()})
+        party = _clean_text(row.get("Choice Party") or "")
+        vote_for = _clean_text(row.get("Vote For") or "")
+        if party:
+            values["party_code"].add(party)
+        if vote_for:
+            values["vote_for"].add(vote_for)
 
     result_rows: list[ResultRow] = []
-    for (contest_name, choice), vote_count in totals.items():
+    for (contest_name, contest_type, contest_code, county, choice), vote_count in totals.items():
         write_in = is_write_in(choice)
+        source_meta = metadata[(contest_name, contest_type, contest_code, county, choice)]
         result_rows.append(ResultRow(
             office_title=contest_name,
             candidate_name=choice if not write_in else None,
@@ -249,7 +259,13 @@ def _aggregate_rows(raw_rows: list[dict]) -> list[ResultRow]:
             result_type="official",
             is_write_in_aggregate=write_in,
             raw={
-                "contest_type": contest_types.get((contest_name, choice), ""),
+                "contest_type": contest_type,
+                "contest_code": contest_code,
+                "county": county,
+                "party_code": next(iter(source_meta["party_code"]), "") if len(source_meta["party_code"]) == 1 else "",
+                "party_conflict": sorted(source_meta["party_code"]) if len(source_meta["party_code"]) > 1 else [],
+                "vote_for": next(iter(source_meta["vote_for"]), "") if len(source_meta["vote_for"]) == 1 else "",
+                "vote_for_conflict": sorted(source_meta["vote_for"]) if len(source_meta["vote_for"]) > 1 else [],
                 "source": "nc_sbe",
             },
         ))

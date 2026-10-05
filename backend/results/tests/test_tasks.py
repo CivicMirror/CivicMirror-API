@@ -699,6 +699,29 @@ def test_bootstrap_creates_candidate_race():
 
 
 @pytest.mark.django_db
+def test_bootstrap_qualifies_nc_county_identity_and_source_seats():
+    from results.adapters.base import AdapterResult, ResultRow
+    from results.tasks import _bootstrap_races_from_results
+
+    election = make_election(state="NC")
+    rows = [
+        ResultRow("A", None, 10, None, None, "official", office_title="SHERIFF", raw={
+            "contest_type": "C", "contest_code": "1", "county": "ALAMANCE", "party_code": "DEM", "vote_for": "2",
+        }),
+        ResultRow("B", None, 20, None, None, "official", office_title="SHERIFF", raw={
+            "contest_type": "C", "contest_code": "1", "county": "ORANGE", "party_code": "DEM", "vote_for": "2",
+        }),
+    ]
+    races = _bootstrap_races_from_results(election, AdapterResult(rows, "", "full"), "NC")
+    assert len(races) == 2
+    assert {(race.source_metadata["contest_code"], race.source_metadata["county"]) for race in races} == {
+        ("1", "ALAMANCE"), ("1", "ORANGE")
+    }
+    assert all(race.vote_method == Race.VoteMethod.MULTI_SEAT and race.max_selections == 2 for race in races)
+    assert all(race.candidates.get().normalized_party == "DEM" for race in races)
+
+
+@pytest.mark.django_db
 def test_bootstrap_detects_measure_race_from_title():
     election = make_election()
     rows = [
