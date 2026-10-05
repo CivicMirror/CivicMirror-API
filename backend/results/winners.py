@@ -191,6 +191,8 @@ def derive_winners(race, rows=None) -> Derivation:
         return Derivation("skipped_election_classification")
     groups: dict[str, list] = {}
     if election.election_type in PRIMARY_TYPES:
+        if (race.source_metadata or {}).get("results_party_unresolved"):
+            return Derivation("skipped_primary_unpartitioned")
         if election.state in TOP_TWO_PRIMARY_STATES:
             return Derivation("skipped_top_two_primary")
         race_party = _party(race)

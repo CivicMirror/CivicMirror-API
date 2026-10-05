@@ -35,6 +35,7 @@ from django.core.cache import cache
 from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 
+from aggregation.identity import normalize_party
 from integrations.pa_sos.mappers import normalize_contest_name
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
@@ -306,6 +307,7 @@ def _add_aggregate(aggregates: OrderedDict[tuple[str, str, str], ResultRow], row
             jurisdiction_fragment="",
             raw={
                 "pa_aggregate": "statewide",
+                "party": normalize_party(row.raw.get("party", "")),
                 "election_day_votes": row.raw.get("election_day_votes", 0),
                 "mail_votes": row.raw.get("mail_votes", 0),
                 "provisional_votes": row.raw.get("provisional_votes", 0),
@@ -317,6 +319,15 @@ def _add_aggregate(aggregates: OrderedDict[tuple[str, str, str], ResultRow], row
     existing.raw["election_day_votes"] += row.raw.get("election_day_votes", 0)
     existing.raw["mail_votes"] += row.raw.get("mail_votes", 0)
     existing.raw["provisional_votes"] += row.raw.get("provisional_votes", 0)
+    parties = {
+        normalize_party(value) for value in [existing.raw.get("party", ""), row.raw.get("party", ""),
+                                            *existing.raw.get("party_conflict", [])] if value
+    }
+    if len(parties) > 1:
+        existing.raw.pop("party", None)
+        existing.raw["party_conflict"] = sorted(parties)
+    elif parties:
+        existing.raw["party"] = next(iter(parties))
 
 
 def _cache_key(election_id: int) -> str:

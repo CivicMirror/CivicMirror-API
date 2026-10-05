@@ -84,6 +84,21 @@ def test_parse_report_csv_adds_statewide_aggregate_rows():
     )
     assert statewide.vote_count == 6223
     assert statewide.raw["pa_aggregate"] == "statewide"
+    assert statewide.raw["party"] == "DEM"
+
+
+def test_pa_aggregate_party_conflicts_are_retained_without_changing_vote_sums():
+    from results.adapters.base import ResultRow
+    from results.adapters.pa import _add_aggregate
+
+    aggregates = {}
+    for party, votes in [("Dem", 10), ("Democratic", 20), ("Republican", 30), ("DEM", 40)]:
+        _add_aggregate(aggregates, ResultRow("A", None, votes, None, None, "official",
+                                           office_title="Governor", raw={"party": party}))
+    total = next(iter(aggregates.values()))
+    assert total.vote_count == 100
+    assert total.raw.get("party", "") == ""
+    assert total.raw["party_conflict"] == ["DEM", "REP"]
 
 
 def test_parse_report_csv_yes_no_votes_as_measure_options():
