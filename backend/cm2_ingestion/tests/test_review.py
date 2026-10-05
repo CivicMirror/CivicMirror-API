@@ -1,5 +1,6 @@
-import pytest
 from datetime import date
+
+import pytest
 
 from cm2_elections.models import Candidacy, Contest, Election
 from cm2_ingestion.contracts import ContractValidationError, ElectionRecord, validate_pre_election_batch

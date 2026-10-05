@@ -59,7 +59,7 @@ def test_nc_fixture_ingests_complete_private_safe_normalized_dataset():
         "people": 10,
         "source_records": 12,
         "candidacies": 10,
-        "reviews": 10,
+        "reviews": 1,
         "sync_logs": 1,
         "reports": 1,
     }
@@ -69,6 +69,11 @@ def test_nc_fixture_ingests_complete_private_safe_normalized_dataset():
     assert candidate_artifact.processing_status == SourceArtifact.ProcessingStatus.APPLIED
     assert Election.objects.filter(source_artifact=discovery_artifact).count() == 2
     assert Election.objects.filter(source_artifact=candidate_artifact).count() == 1
+    # New people with no existing match are auto-resolved; only the one real near-match is queued for review.
+    assert list(IdentityReviewCase.objects.values_list("case_type", flat=True)) == [
+        IdentityReviewCase.CaseType.FUZZY_PERSON_MATCH
+    ]
+    assert report.sync_log.aggregate_counts["people_auto_resolved"] == 9
     assert report.sync_log.aggregate_counts["notices_csv_only_election"] == 1
     assert report.sync_log.aggregate_counts["notices_measure_excluded"] == 1
     assert {notice["code"] for notice in report.details["notices"]} == {
@@ -139,7 +144,7 @@ def test_changed_private_evidence_creates_successor_records_but_reuses_people():
     assert Person.objects.count() == 10
     assert Candidacy.objects.count() == 10
     assert PersonSourceRecord.objects.count() == 24
-    assert IdentityReviewCase.objects.count() == 10
+    assert IdentityReviewCase.objects.count() == 1
     assert SyncLog.objects.count() == 2
     assert ReconciliationReport.objects.count() == 2
 
