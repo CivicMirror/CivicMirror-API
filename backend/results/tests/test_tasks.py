@@ -722,6 +722,26 @@ def test_bootstrap_qualifies_nc_county_identity_and_source_seats():
 
 
 @pytest.mark.django_db
+def test_bootstrap_does_not_infer_seats_from_zero_or_conflicting_vote_for():
+    from results.adapters.base import AdapterResult, ResultRow
+    from results.tasks import _bootstrap_races_from_results
+
+    election = make_election(state="NC")
+    rows = [
+        ResultRow("A", None, 10, None, None, "official", office_title="BOARD", raw={
+            "contest_type": "C", "contest_code": "8", "county": "WAKE", "vote_for": "2",
+        }),
+        ResultRow("B", None, 9, None, None, "official", office_title="BOARD", raw={
+            "contest_type": "C", "contest_code": "8", "county": "WAKE", "vote_for": "0",
+        }),
+    ]
+    race = _bootstrap_races_from_results(election, AdapterResult(rows, "", "full"), "NC")[0]
+    assert race.vote_method == Race.VoteMethod.SINGLE_CHOICE
+    assert race.max_selections == 1
+    assert race.source_metadata["source_vote_for_unresolved"] == ["0", "2"]
+
+
+@pytest.mark.django_db
 def test_bootstrap_detects_measure_race_from_title():
     election = make_election()
     rows = [

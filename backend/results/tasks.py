@@ -271,7 +271,8 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
                 if str((row.raw or {}).get("vote_for") or "").strip()
             }
             positive_vote_for = {int(value) for value in vote_for if value.isdigit() and int(value) > 0}
-            if len(positive_vote_for) == 1 and not any((row.raw or {}).get("vote_for_conflict") for row in rows):
+            if (len(vote_for) == 1 and len(positive_vote_for) == 1
+                    and not any((row.raw or {}).get("vote_for_conflict") for row in rows)):
                 seats = next(iter(positive_vote_for))
                 race.source_metadata["source_vote_for"] = seats
                 if seats > 1:
