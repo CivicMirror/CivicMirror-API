@@ -1,5 +1,7 @@
 Django>=5.2,<6.0
-django-unfold
+# Pinned: unfold ships admin widget/media changes in minor releases, which have broken
+# the cm2_review admin tests before. Bump deliberately, with the v2 job green.
+django-unfold>=0.110,<0.111
 djangorestframework
 django-environ
 drf-spectacular
