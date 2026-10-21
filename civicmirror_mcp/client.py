@@ -8,12 +8,35 @@ from urllib.parse import urljoin
 
 import requests
 
+from .schemas import (
+    UNREPORTED,
+    CompareSourcesOutput,
+    GetResultsOutput,
+    ListAdaptersOutput,
+    Race,
+    RaceResults,
+    ResultRow,
+    SourceComparison,
+)
+
+UNREPORTED_SOURCE_KEY = "source:unreported"
+"""Key used when the API itself reported no source for a record (never a guessed name)."""
+
 
 class CivicMirrorAPIError(RuntimeError):
     """Raised when CivicMirror API data cannot satisfy an MCP query."""
 
 
 class CivicMirrorAPIClient:
+    """
+    Read-only HTTP client for the CivicMirror DRF API.
+
+    Every request is an HTTP ``GET``; this class exposes no write path (see
+    ``mcp_server/tests/test_readonly_regression.py``). It adapts API payloads into
+    the typed contracts in ``civicmirror_mcp.schemas`` and never substitutes a
+    placeholder for metadata the API did not report.
+    """
+
     def __init__(
         self,
         base_url: str | None = None,
@@ -70,55 +93,120 @@ class CivicMirrorAPIClient:
 
         return items
 
-    def get_results(self, ocd_id: str, election_date: str, contest: str | None = None) -> dict[str, Any]:
-        races = self._find_races(ocd_id=ocd_id, election_date=election_date, contest=contest)
-        return {
-            "ocd_id": ocd_id,
-            "election_date": election_date,
-            "contest": contest,
-            "race_count": len(races),
-            "races": [self._race_with_results(race) for race in races],
-        }
+    # -- Tools ---------------------------------------------------------------
 
-    def list_adapters(self, state: str | None = None) -> dict[str, Any]:
+    def get_results(self, ocd_id: str, election_date: str, contest: str | None = None) -> GetResultsOutput:
+        races = self._find_races(ocd_id=ocd_id, election_date=election_date, contest=contest)
+        race_results = [self._race_with_results(race, election_date=election_date) for race in races]
+
+        notes: list[str] = []
+        if not race_results:
+            notes.append(
+                f"No CivicMirror race matched ocd_id={ocd_id!r} on {election_date}"
+                + (f" for contest {contest!r}." if contest else ".")
+                + " This means CivicMirror holds no such record, not that no election occurred."
+            )
+        notes.extend(self._coverage_notes(race_results))
+
+        return GetResultsOutput(
+            ocd_id=ocd_id,
+            election_date=election_date,
+            contest=contest,
+            race_count=len(race_results),
+            races=race_results,
+            notes=notes,
+        )
+
+    def list_adapters(self, state: str | None = None) -> ListAdaptersOutput:
         payload = self.request("/coverage/sync-status/")
+        if not isinstance(payload, dict):
+            raise CivicMirrorAPIError("Unexpected /coverage/sync-status/ response shape")
+
         state_code = state.upper() if state else None
 
-        adapter_states = payload.get("adapter_states", [])
-        by_state = payload.get("by_state", {})
-        coverage_tiers = payload.get("coverage_tiers", {})
+        adapter_states = payload.get("adapter_states") or []
+        by_state = payload.get("by_state") or {}
+        coverage_tiers = payload.get("coverage_tiers") or {}
 
+        notes: list[str] = []
         if state_code:
-            adapter_states = [candidate for candidate in adapter_states if candidate.upper() == state_code]
+            adapter_states = [candidate for candidate in adapter_states if str(candidate).upper() == state_code]
             by_state = {state_code: by_state.get(state_code, {})}
             coverage_tiers = {state_code: coverage_tiers[state_code]} if state_code in coverage_tiers else {}
+            if not adapter_states:
+                notes.append(f"No results adapter is registered for {state_code}.")
 
-        return {
-            "as_of": payload.get("as_of"),
-            "adapter_states": adapter_states,
-            "by_state": by_state,
-            "coverage_tiers": coverage_tiers,
-        }
+        if payload.get("as_of") is None:
+            notes.append("The API did not report an as_of timestamp, so this snapshot's freshness is unknown.")
+
+        return ListAdaptersOutput(
+            as_of=payload.get("as_of"),
+            state=state_code,
+            adapter_states=[str(item) for item in adapter_states],
+            by_state=by_state,
+            coverage_tiers=coverage_tiers,
+            notes=notes,
+        )
 
     def compare_sources(
         self,
         ocd_id: str,
         contest: str,
         election_date: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> CompareSourcesOutput:
         races = self._find_races(ocd_id=ocd_id, election_date=election_date, contest=contest)
-        race_payloads = [self._race_with_results(race) for race in races]
-        by_source = {self._source_name(payload["race"]): payload for payload in race_payloads}
+        race_results = [self._race_with_results(race, election_date=election_date) for race in races]
+
+        by_source: dict[str, RaceResults] = {}
+        unreported = 0
+        for payload in race_results:
+            source = payload.race.source
+            key = source if source is not None else UNREPORTED_SOURCE_KEY
+            if source is None:
+                unreported += 1
+
+            existing = by_source.get(key)
+            if existing is not None:
+                # Two distinct contests from one source would be compared against each other's
+                # candidates, manufacturing phantom agreement or conflict. Refuse instead.
+                raise CivicMirrorAPIError(
+                    f"contest={contest!r} in {ocd_id} matched more than one race from source {key!r}: "
+                    f"{existing.race.office_title!r} (race {existing.race.id}) and "
+                    f"{payload.race.office_title!r} (race {payload.race.id}). "
+                    "Narrow `contest` to a single office, or pass `election_date`, so the comparison "
+                    "is between sources for one contest."
+                )
+            by_source[key] = payload
+
         comparisons = self._compare_source_results(by_source)
 
-        return {
-            "ocd_id": ocd_id,
-            "contest": contest,
-            "election_date": election_date,
-            "source_count": len(by_source),
-            "sources": by_source,
-            "comparisons": comparisons,
-        }
+        notes: list[str] = []
+        if len(by_source) < 2:
+            notes.append(
+                f"Only {len(by_source)} source record(s) found for contest {contest!r} in {ocd_id}; "
+                "cross-source comparison needs at least two."
+            )
+        if unreported:
+            notes.append(
+                f"{unreported} record(s) had no source reported by the API and are keyed as "
+                f"{UNREPORTED_SOURCE_KEY!r} rather than given a guessed source name."
+            )
+        notes.extend(self._uncomparable_notes(by_source))
+        notes.extend(self._coverage_notes(list(by_source.values())))
+
+        return CompareSourcesOutput(
+            ocd_id=ocd_id,
+            contest=contest,
+            election_date=election_date,
+            source_count=len(by_source),
+            sources=by_source,
+            unreported_source_count=unreported,
+            comparisons=comparisons,
+            conflict_count=sum(1 for row in comparisons if row.conflict),
+            notes=notes,
+        )
+
+    # -- Internals -----------------------------------------------------------
 
     def _find_races(
         self,
@@ -146,17 +234,26 @@ class CivicMirrorAPIClient:
             )
         ]
 
-    def _race_with_results(self, race: dict[str, Any]) -> dict[str, Any]:
+    def _race_with_results(self, race: dict[str, Any], election_date: str | None = None) -> RaceResults:
         race_id = race.get("id")
         if race_id is None:
             raise CivicMirrorAPIError("Race payload is missing id")
 
         detail = {**race, **self.request(f"/races/{race_id}/")}
-        results = self.request(f"/races/{race_id}/results/")
-        return {
-            "race": detail,
-            "results": results,
-        }
+        raw_results = self.request(f"/races/{race_id}/results/")
+        if not isinstance(raw_results, list):
+            raise CivicMirrorAPIError(f"Unexpected /races/{race_id}/results/ response shape")
+
+        race_model = Race.from_api(detail, election_date=election_date)
+        rows = [ResultRow.from_api(row, label=self._row_label(row)) for row in raw_results]
+
+        return RaceResults(
+            race=race_model,
+            results=rows,
+            result_count=len(rows),
+            contest_total_rows=sum(1 for row in rows if row.jurisdiction_fragment in ("", None)),
+            sub_jurisdiction_rows=sum(1 for row in rows if row.jurisdiction_fragment not in ("", None)),
+        )
 
     def _url(self, path_or_url: str) -> str:
         if path_or_url.startswith(("http://", "https://")):
@@ -171,57 +268,100 @@ class CivicMirrorAPIClient:
         return match.group(1).upper()
 
     @staticmethod
-    def _source_name(race: dict[str, Any]) -> str:
-        return str(race.get("source") or "unknown")
+    def _row_label(row: dict[str, Any]) -> str | None:
+        """
+        Label a result row for cross-source comparison, or ``None`` when the API named nothing.
+
+        A synthetic label (e.g. a row id) would not match across sources, so an unnamed row is
+        reported as unlabelled instead of being given an invented identity.
+        """
+        for key in ("candidate_name", "option_label", "jurisdiction_fragment"):
+            value = row.get(key)
+            if value not in (None, ""):
+                return str(value)
+        return UNREPORTED
 
     @classmethod
-    def _compare_source_results(cls, sources: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    def _compare_source_results(cls, sources: dict[str, RaceResults]) -> list[SourceComparison]:
         if len(sources) < 2:
             return []
 
-        source_names = list(sources)
+        source_names = sorted(sources)  # deterministic baseline regardless of API ordering
         baseline_name = source_names[0]
-        baseline_rows = cls._results_by_name(sources[baseline_name])
-        comparisons: list[dict[str, Any]] = []
+        baseline_rows = cls._results_by_label(sources[baseline_name])
+        comparisons: list[SourceComparison] = []
 
         for source_name in source_names[1:]:
-            source_rows = cls._results_by_name(sources[source_name])
+            source_rows = cls._results_by_label(sources[source_name])
             for label in sorted(set(baseline_rows) | set(source_rows)):
-                baseline = baseline_rows.get(label, {})
-                candidate = source_rows.get(label, {})
-                comparisons.append({
-                    "candidate_or_option": label,
-                    "baseline_source": baseline_name,
-                    "comparison_source": source_name,
-                    "baseline_vote_count": baseline.get("vote_count"),
-                    "comparison_vote_count": candidate.get("vote_count"),
-                    "vote_count_delta": cls._delta(candidate.get("vote_count"), baseline.get("vote_count")),
-                    "baseline_vote_pct": baseline.get("vote_pct"),
-                    "comparison_vote_pct": candidate.get("vote_pct"),
-                    "vote_pct_delta": cls._delta(candidate.get("vote_pct"), baseline.get("vote_pct")),
-                })
+                baseline = baseline_rows.get(label)
+                candidate = source_rows.get(label)
+                baseline_count = baseline.vote_count if baseline else None
+                candidate_count = candidate.vote_count if candidate else None
+                comparisons.append(SourceComparison(
+                    label=label,
+                    baseline_source=baseline_name,
+                    comparison_source=source_name,
+                    baseline_present=baseline is not None,
+                    comparison_present=candidate is not None,
+                    baseline_vote_count=baseline_count,
+                    comparison_vote_count=candidate_count,
+                    vote_count_delta=cls._delta(candidate_count, baseline_count),
+                    baseline_vote_pct=baseline.vote_pct if baseline else None,
+                    comparison_vote_pct=candidate.vote_pct if candidate else None,
+                    vote_pct_delta=cls._delta(
+                        candidate.vote_pct if candidate else None,
+                        baseline.vote_pct if baseline else None,
+                    ),
+                    baseline_result_type=baseline.result_type if baseline else None,
+                    comparison_result_type=candidate.result_type if candidate else None,
+                    baseline_certified_at=baseline.certified_at if baseline else None,
+                    comparison_certified_at=candidate.certified_at if candidate else None,
+                    conflict=(
+                        baseline_count is not None
+                        and candidate_count is not None
+                        and baseline_count != candidate_count
+                    ),
+                ))
 
         return comparisons
 
-    @classmethod
-    def _results_by_name(cls, race_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        race = race_payload.get("race", {})
-        candidate_names = {candidate.get("id"): candidate.get("name") for candidate in race.get("candidates", [])}
-        option_names = {
-            option.get("id"): option.get("option_label")
-            for option in race.get("measure_options", [])
-        }
+    @staticmethod
+    def _results_by_label(race_results: RaceResults) -> dict[str, ResultRow]:
+        return {row.label: row for row in race_results.results if row.label is not None}
 
-        rows = {}
-        for row in race_payload.get("results", []):
-            label = (
-                candidate_names.get(row.get("candidate"))
-                or option_names.get(row.get("measure_option"))
-                or row.get("jurisdiction_fragment")
-                or f"result:{row.get('id', 'unknown')}"
-            )
-            rows[str(label)] = row
-        return rows
+    @staticmethod
+    def _uncomparable_notes(sources: dict[str, RaceResults]) -> list[str]:
+        notes = []
+        for key, payload in sources.items():
+            unlabelled = sum(1 for row in payload.results if row.label is None)
+            if unlabelled:
+                notes.append(
+                    f"Source {key!r}: {unlabelled} result row(s) carried no candidate, option, or "
+                    "sub-jurisdiction name and were excluded from comparisons."
+                )
+        return notes
+
+    @staticmethod
+    def _coverage_notes(race_results: list[RaceResults]) -> list[str]:
+        notes = []
+        for payload in race_results:
+            race = payload.race
+            label = race.office_title or f"race {race.id}"
+            if race.source is None:
+                notes.append(f"{label}: the API reported no source for this record.")
+            if race.last_synced_at is None:
+                notes.append(f"{label}: the API reported no last_synced_at, so record freshness is unknown.")
+            if race.certification_status is None:
+                notes.append(f"{label}: the API reported no certification_status.")
+            if payload.result_count == 0:
+                notes.append(f"{label}: CivicMirror holds no official result rows for this race yet.")
+            elif payload.contest_total_rows == 0:
+                notes.append(
+                    f"{label}: all {payload.result_count} result row(s) are sub-jurisdiction splits; "
+                    "no contest-total row is present, so totals are partial."
+                )
+        return notes
 
     @staticmethod
     def _delta(left: Any, right: Any) -> int | float | None:
