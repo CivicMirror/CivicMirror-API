@@ -85,7 +85,9 @@ def ingest_official_results(self, state: str, election_id: int):
         Race.objects.filter(election=election).update(certification_status=certification_status)
         return
 
-    races = list(Race.objects.filter(election=election).select_related('election'))
+    races = list(Race.objects.filter(election=election).exclude(
+        source_metadata__has_key='nc_superseded_by'
+    ).select_related('election'))
     if not races:
         races = _bootstrap_races_from_results(election, result, state)
 
@@ -133,6 +135,8 @@ def _is_measure_race(office_title: str) -> bool:
 
 
 def _identity_keys(source: dict) -> tuple[str, ...]:
+    if source.get("nc_contest_key"):
+        return ("nc_contest_key",)
     # contest_variant is a standalone identity for adapters with no
     # contest_code (e.g. HI). When contest_code is present, other adapters
     # (e.g. MD) may still carry a contest_variant in Race.source_metadata for
@@ -237,6 +241,10 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
 
         created_races = []
         for key, rows in rows_by_race.items():
+            if (state == "NC" and any((row.raw or {}).get('nc_contest_key') for row in rows)
+                    and not all((row.raw or {}).get('nc_identity_verified') for row in rows)):
+                logger.warning("NC unresolved local electorate held without bootstrap: %s", key)
+                continue
             office_title = title_by_key[key]
             identity = dict(key[1])
             race_type = (
@@ -292,6 +300,11 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
                         continue
                     labels_seen.add(label)
                     MeasureOption.objects.create(race=race, option_label=label)
+
+            if state == "NC":
+                from results.nc_identity import apply_metadata
+
+                apply_metadata(race, rows, adapter_result.source_url)
 
     logger.info(
         "_bootstrap_races_from_results: bootstrapped %d races for election %s (%s)",
@@ -363,6 +376,20 @@ def _store_race_results(race, adapter_result, state: str):
     from elections.models import Candidate, MeasureOption, Race
     from results.models import OfficialResult
 
+    if (race.source_metadata or {}).get('nc_superseded_by'):
+        return
+    if state == "NC":
+        from results.nc_identity import adopt_filing_identity
+
+        adopt_filing_identity(race, adapter_result)
+
+    # Corrected NC rows must never flow back into unqualified merged legacy
+    # races. Existing data needs the explicit reviewed repair first.
+    if (state == "NC" and any((r.raw or {}).get("nc_contest_key") for r in adapter_result.rows)
+            and not (race.source_metadata or {}).get("nc_contest_key")):
+        logger.warning("NC race %s needs contest identity repair before results ingest", race.pk)
+        return
+
     # --- Filter rows to this race by source identity or office_title ---------
     race_identity = _race_source_identity(race)
     if race_identity:
@@ -416,6 +443,10 @@ def _store_race_results(race, adapter_result, state: str):
             return
     elif filtered_rows is None:
         filtered_rows = list(adapter_result.rows)
+
+    if state == "NC" and any((row.raw or {}).get('nc_vote_errors') for row in filtered_rows):
+        logger.warning("NC race %s source contains invalid votes; keeping previous totals", race.pk)
+        return
 
     # --- Coerce candidate_name → option_label for measure races ---------------
     # Clarity uses CH[] for both candidate and ballot measure choices.
@@ -476,6 +507,15 @@ def _store_race_results(race, adapter_result, state: str):
             # flags BEFORE persisting it, so skip/recount cleanup cannot erase source data.
             clear_derived_winners(race)
 
+        source_flag = row.is_winner
+        if state == "NC" and source_flag is None and not (race.source_metadata or {}).get('winners_derived'):
+            previous = OfficialResult.objects.filter(
+                race=race, candidate=candidate, measure_option=measure_option,
+                round_number=row.round_number, jurisdiction_fragment=row.jurisdiction_fragment,
+            ).first()
+            if previous is not None:
+                source_flag = previous.is_winner
+
         with transaction.atomic():
             OfficialResult.objects.update_or_create(
                 race=race,
@@ -486,7 +526,7 @@ def _store_race_results(race, adapter_result, state: str):
                 defaults={
                     'vote_count': row.vote_count,
                     'vote_pct': row.vote_pct,
-                    'is_winner': row.is_winner,
+                    'is_winner': source_flag,
                     'result_type': row.result_type,
                     'is_write_in_aggregate': row.is_write_in_aggregate,
                     'source_url': _result_source_url(row, adapter_result, race),
@@ -495,6 +535,11 @@ def _store_race_results(race, adapter_result, state: str):
                 },
             )
         matched_rows.append(row)
+
+    if state == "NC" and matched_rows:
+        from results.nc_identity import apply_metadata
+
+        apply_metadata(race, filtered_rows, adapter_result.source_url)
 
     # --- Update race certification status ------------------------------------
     if adapter_result.mapping_confidence == 'full' and not any_partial and matched_rows:

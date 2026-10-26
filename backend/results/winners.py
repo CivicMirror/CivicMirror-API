@@ -165,6 +165,8 @@ def derive_winners(race, rows=None) -> Derivation:
     from elections.models import Race
     from results.models import OfficialResult
 
+    if (race.source_metadata or {}).get('nc_superseded_by'):
+        return Derivation("skipped_superseded")
     if race.race_type != Race.RaceType.CANDIDATE:
         return Derivation("skipped_measure")
     if race.certification_status != Race.CertificationStatus.RESULTS_CERTIFIED:
@@ -187,7 +189,7 @@ def derive_winners(race, rows=None) -> Derivation:
         return Derivation("skipped_zero_votes")
 
     election = race.election
-    if election.state == "NC" and election.election_type not in {"general", *PRIMARY_TYPES}:
+    if election.state == "NC" and (election.needs_review or election.election_type not in {"general", *PRIMARY_TYPES}):
         return Derivation("skipped_election_classification")
     groups: dict[str, list] = {}
     if election.election_type in PRIMARY_TYPES:
@@ -211,9 +213,20 @@ def derive_winners(race, rows=None) -> Derivation:
     else:
         groups[""] = totals
 
-    if race.source == Race.Source.RESULTS_ADAPTER and race.geography_scope not in UNIQUE_CONTEST_SCOPES:
+    meta = race.source_metadata or {}
+    nc_identified = election.state == "NC" and meta.get("nc_contest_key")
+    if nc_identified:
+        if not meta.get("nc_identity_verified"):
+            return Derivation("skipped_ambiguous_contest")
+        if meta.get("results_party_unresolved") and election.election_type in PRIMARY_TYPES:
+            return Derivation("skipped_primary_unpartitioned")
+        if "source_vote_for_unresolved" in meta:
+            return Derivation("skipped_unknown_seats")
+    if (race.source == Race.Source.RESULTS_ADAPTER and race.geography_scope not in UNIQUE_CONTEST_SCOPES
+            and not nc_identified):
         return Derivation("skipped_ambiguous_contest")
     if (race.vote_method != race.VoteMethod.MULTI_SEAT
+            and not (nc_identified and meta.get("source_vote_for") == 1)
             and not is_single_seat_office(race.office_title) and not _ma_council_district(race)):
         return Derivation("skipped_unknown_seats")
     seats = _seats(race)
