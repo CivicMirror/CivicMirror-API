@@ -1,6 +1,6 @@
 import logging
 
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.decorators import action
@@ -67,7 +67,7 @@ class ElectionViewSet(ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return Election.objects.select_related('election_cycle').annotate(
-            race_count=Count('races')
+            race_count=Count('races', filter=~Q(races__source_metadata__has_key='nc_superseded_by'))
         )
 
     @action(detail=True, url_path='races', url_name='races')
@@ -94,7 +94,7 @@ class RaceViewSet(ReadOnlyModelViewSet):
     lookup_value_regex = r'\d+'
 
     def get_queryset(self):
-        qs = Race.objects.select_related('election')
+        qs = Race.objects.exclude(source_metadata__has_key='nc_superseded_by').select_related('election')
         if self.action in ('retrieve', 'candidates', 'results'):
             qs = qs.prefetch_related('candidates', 'measure_options', _winner_rows_prefetch())
         return qs
@@ -143,7 +143,9 @@ class BallotMeasureViewSet(ReadOnlyModelViewSet):
     ordering = ['office_title']
 
     def get_queryset(self):
-        qs = Race.objects.filter(race_type=Race.RaceType.MEASURE).select_related('election')
+        qs = Race.objects.filter(race_type=Race.RaceType.MEASURE).exclude(
+            source_metadata__has_key='nc_superseded_by'
+        ).select_related('election')
         if self.action == 'retrieve':
             qs = qs.prefetch_related('candidates', 'measure_options', _winner_rows_prefetch())
         return qs
@@ -164,7 +166,7 @@ class CandidateViewSet(ReadOnlyModelViewSet):
     ordering = ['name']
 
     def get_queryset(self):
-        return Candidate.objects.select_related('race__election')
+        return Candidate.objects.exclude(race__source_metadata__has_key='nc_superseded_by').select_related('race__election')
 
 
 class DistrictViewSet(ReadOnlyModelViewSet):
@@ -211,7 +213,7 @@ class LookupView(APIView):
             Election.objects
             .filter(state=state)
             .exclude(status=Election.Status.ARCHIVED)
-            .annotate(race_count=Count('races'))
+            .annotate(race_count=Count('races', filter=~Q(races__source_metadata__has_key='nc_superseded_by')))
         )
 
         if election_id:
