@@ -107,9 +107,23 @@ def build_repair_plan(election, adapter_result: AdapterResult, race_ids: list[in
     candidates = {c.pk: c for race in races for c in race.candidates.all()}
     race_map = {str(race.pk): [key for key, rows in source.items() if _matches(race, rows)] for race in races}
     if race_ids is not None:
-        selected = set(race_ids)
-        if not selected or selected - {r.pk for r in races}:
-            raise RepairConflict("Scope must name existing, non-superseded races in this NC election")
+        all_races = {race.pk: race for race in Race.objects.filter(election=election)}
+        selected, visited, pending = set(), set(), list(race_ids)
+        while pending:
+            pk = pending.pop()
+            if pk in visited:
+                continue
+            visited.add(pk)
+            prior = all_races.get(pk)
+            if prior is None:
+                raise RepairConflict("Scope must name existing races in this NC election")
+            replacements = (prior.source_metadata or {}).get(SUPERSEDED)
+            if replacements:
+                pending.extend(replacements)
+            else:
+                selected.add(pk)
+        if not selected:
+            raise RepairConflict("Scope has no canonical races; inspect retirement links")
         keys = set()
         while True:
             keys.update(key for pk in selected for key in race_map[str(pk)])

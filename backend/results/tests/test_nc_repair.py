@@ -316,3 +316,18 @@ def test_command_rejects_wrong_election_source(e, tmp_path, monkeypatch):
             report=str(tmp_path / "report.json"),
             source_file=str(source),
         )
+
+
+@pytest.mark.django_db
+def test_scoped_repair_can_be_repeated_using_retired_race_id(e, duplicate):
+    from results.nc_repair import apply_repair_plan, build_repair_plan
+
+    legacy, filing, a, b, result = duplicate
+    plan = build_repair_plan(e, result, race_ids=[legacy.pk])
+    apply_repair_plan(e, result, plan["fingerprint"], race_ids=[legacy.pk])
+    before = list(OfficialResult.objects.values())
+    again = build_repair_plan(e, result, race_ids=[legacy.pk])
+    assert not again["conflicts"]
+    assert list(again["race_mapping"]) == [str(filing.pk)]
+    apply_repair_plan(e, result, again["fingerprint"], race_ids=[legacy.pk])
+    assert list(OfficialResult.objects.values()) == before
