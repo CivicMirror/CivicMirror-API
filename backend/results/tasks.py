@@ -11,6 +11,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
+from aggregation.identity import name_match_key
 from elections.geography import infer_geography_scope
 from results.adapters import list_supported_states
 from results.adapters.registry import get_adapter
@@ -134,6 +135,12 @@ def _is_measure_race(office_title: str) -> bool:
     return any(kw in normalized for kw in _MEASURE_TITLE_KEYWORDS)
 
 
+def _is_measure_contest(office_title: str, choice_names) -> bool:
+    """Classify generic NC ballot questions from the complete source choice set."""
+    labels = {str(name or '').strip().upper() for name in choice_names if str(name or '').strip()}
+    return _is_measure_race(office_title) or labels in ({'YES', 'NO'}, {'FOR', 'AGAINST'})
+
+
 def _identity_keys(source: dict) -> tuple[str, ...]:
     if source.get("nc_contest_key"):
         return ("nc_contest_key",)
@@ -247,10 +254,12 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
                 continue
             office_title = title_by_key[key]
             identity = dict(key[1])
-            race_type = (
-                Race.RaceType.MEASURE if _is_measure_race(office_title)
-                else Race.RaceType.CANDIDATE
-            )
+            is_measure = _is_measure_race(office_title)
+            if state == "NC":
+                is_measure = _is_measure_contest(
+                    office_title, (row.option_label or row.candidate_name for row in rows)
+                )
+            race_type = Race.RaceType.MEASURE if is_measure else Race.RaceType.CANDIDATE
             race = Race.objects.create(
                 election=election,
                 race_type=race_type,
@@ -392,6 +401,7 @@ def _store_race_results(race, adapter_result, state: str):
 
     # --- Filter rows to this race by source identity or office_title ---------
     race_identity = _race_source_identity(race)
+    nc_identity_matched = state == "NC" and bool(race_identity)
     if race_identity:
         filtered_rows = [
             r for r in adapter_result.rows
@@ -463,7 +473,7 @@ def _store_race_results(race, adapter_result, state: str):
     matched_rows = []
     any_partial = False
 
-    for row in filtered_rows:
+    for row_index, row in enumerate(filtered_rows):
         candidate = None
         measure_option = None
 
@@ -473,10 +483,21 @@ def _store_race_results(race, adapter_result, state: str):
         elif row.candidate_name:
             if race.race_type != Race.RaceType.CANDIDATE:
                 continue
-            candidate = (
-                Candidate.objects.filter(race=race, name=row.candidate_name).first()
-                or Candidate.objects.filter(race=race, name__iexact=row.candidate_name).first()
-            )
+            if nc_identity_matched:
+                normalized = name_match_key(row.candidate_name)
+                candidates = [
+                    item for item in Candidate.objects.filter(race=race)
+                    if name_match_key(item.name) == normalized
+                ]
+                candidate = candidates[0] if len(candidates) == 1 else None
+                if candidate and candidate.name != row.candidate_name:
+                    row = dataclasses.replace(row, candidate_name=candidate.name)
+                    filtered_rows[row_index] = row
+            else:
+                candidate = (
+                    Candidate.objects.filter(race=race, name=row.candidate_name).first()
+                    or Candidate.objects.filter(race=race, name__iexact=row.candidate_name).first()
+                )
             if not candidate:
                 logger.warning(
                     "_process_race_results: no candidate match for '%s' in race %s (%s)",

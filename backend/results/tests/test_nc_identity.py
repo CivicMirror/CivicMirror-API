@@ -5,7 +5,9 @@ import pytest
 from elections.models import Candidate, Election, Race
 from results.adapters.base import AdapterResult
 from results.adapters.nc import _aggregate_rows
+from results.models import OfficialResult
 from results.tasks import _bootstrap_races_from_results, _process_race_results
+from results.winners import derive_winners
 
 
 def raw(county="ALAMANCE", title="SHERIFF", code="1", choice="Alice", party="DEM", seats="1", votes=10, kind="C"):
@@ -83,6 +85,71 @@ def test_bootstrap_persists_contest_without_splitting_general_parties():
     assert race.source_metadata["source_vote_for"] == 1
     assert race.source_metadata["nc_contest_key"] == result.rows[0].raw["nc_contest_key"]
     assert not race.party
+
+
+@pytest.mark.django_db
+def test_bootstrap_types_generic_named_for_against_contest_as_measure():
+    e = election()
+    result = AdapterResult(
+        _aggregate_rows(
+            [
+                raw(title="DUPLIN COUNTY UNFORTIFIED WINE ELECTION", choice="FOR", party=""),
+                raw(title="DUPLIN COUNTY UNFORTIFIED WINE ELECTION", choice="AGAINST", party=""),
+            ]
+        ),
+        "https://example.org/nc.zip",
+        "full",
+    )
+
+    races = _bootstrap_races_from_results(e, result, "NC")
+
+    assert len(races) == 1
+    assert races[0].race_type == Race.RaceType.MEASURE
+    assert set(races[0].measure_options.values_list("option_label", flat=True)) == {"FOR", "AGAINST"}
+    assert races[0].candidates.count() == 0
+    _process_race_results(races[0], result, "NC")
+    assert OfficialResult.objects.filter(race=races[0], measure_option__isnull=False).count() == 2
+    races[0].certification_status = Race.CertificationStatus.RESULTS_CERTIFIED
+    assert derive_winners(races[0]).outcome == "skipped_measure"
+
+
+@pytest.mark.django_db
+def test_nc_ingest_matches_repaired_candidate_by_normalized_name():
+    e = election()
+    result = AdapterResult(
+        _aggregate_rows([raw(title="STATE SENATE DISTRICT 01", choice="T. Lee Horne, III")]),
+        "https://example.org/nc.zip",
+        "full",
+    )
+    race = Race.objects.create(
+        election=e,
+        race_type=Race.RaceType.CANDIDATE,
+        office_title="STATE SENATE DISTRICT 01",
+        jurisdiction="NC",
+        geography_scope="district",
+        source=Race.Source.NC_SBE,
+        certification_status=Race.CertificationStatus.RESULTS_CERTIFIED,
+        source_metadata={"nc_contest_key": result.rows[0].raw["nc_contest_key"]},
+    )
+    candidate = Candidate.objects.create(race=race, name="T. Lee Horne III")
+    corrected = AdapterResult(
+        _aggregate_rows([raw(title="STATE SENATE DISTRICT 01", choice="T. Lee Horne III", votes=11)]),
+        "https://example.org/nc.zip",
+        "full",
+    )
+
+    _process_race_results(race, result, "NC")
+    first = OfficialResult.objects.get(race=race)
+    _process_race_results(race, corrected, "NC")
+
+    saved = OfficialResult.objects.get(race=race)
+    assert saved.candidate_id == candidate.pk
+    assert saved.pk == first.pk
+    assert saved.vote_count == 11
+    candidate.refresh_from_db()
+    assert candidate.party == "DEM"
+    race.refresh_from_db()
+    assert race.certification_status == Race.CertificationStatus.RESULTS_CERTIFIED
 
 
 @pytest.mark.django_db

@@ -22,7 +22,7 @@ from ops.models import SourceRecord
 from results.adapters.base import AdapterResult, ResultRow
 from results.models import OfficialResult
 from results.nc_identity import IDENTITY_KEY, apply_metadata, contest_party, title_base
-from results.tasks import _is_measure_race, _store_race_results
+from results.tasks import _is_measure_contest, _store_race_results
 from results.winners import clear_derived_winners
 
 SUPERSEDED = "nc_superseded_by"
@@ -144,8 +144,8 @@ def build_repair_plan(election, adapter_result: AdapterResult, race_ids: list[in
     for key, rows in sorted(source.items()):
         members = [race for race in races if key in race_map[str(race.pk)]]
         single = [race for race in members if len(race_map[str(race.pk)]) == 1]
-        labels = {_row_name(row).upper() for row in rows if not row.is_write_in_aggregate}
-        measure = _is_measure_race(rows[0].office_title) or bool(labels and labels <= {"YES", "NO", "FOR", "AGAINST"})
+        labels = [_row_name(row) for row in rows if not row.is_write_in_aggregate]
+        measure = _is_measure_contest(rows[0].office_title, labels)
         expected_type = Race.RaceType.MEASURE if measure else Race.RaceType.CANDIDATE
         canonical = min(
             (r for r in single if r.race_type == expected_type),
