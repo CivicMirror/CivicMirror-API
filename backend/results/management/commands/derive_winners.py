@@ -38,12 +38,17 @@ class Command(BaseCommand):
         samples = defaultdict(list)
         winner_rows = 0
         for race in races.iterator(chunk_size=500):
-            rows = list(race.official_results.all())
-            derivation = derive_winners(race, rows)
-            outcomes[derivation.outcome] += 1
-            if not options["dry_run"]:
+            if options["dry_run"]:
+                rows = list(race.official_results.all())
+                derivation = derive_winners(race, rows)
+            else:
                 with transaction.atomic():
+                    # An import may have changed source flags since the outer query's prefetch.
+                    race = Race.objects.select_for_update(of=("self",)).select_related("election").get(pk=race.pk)
+                    rows = list(race.official_results.select_related("candidate"))
+                    derivation = derive_winners(race, rows)
                     apply_derivation(race, derivation)  # also clears stale derived flags on skips
+            outcomes[derivation.outcome] += 1
             by_state[race.election.state][derivation.outcome] += 1
             if derivation.outcome == "derived":
                 winner_rows += len(derivation.winner_row_ids)
