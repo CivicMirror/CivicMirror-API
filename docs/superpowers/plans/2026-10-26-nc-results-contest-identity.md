@@ -140,3 +140,9 @@
 - [ ] Run focused adapter/bootstrap/matching/repair/API tests and full backend checks required by CI; run repair transaction tests against PostgreSQL.
 - [ ] Run the winner dry-run and attach before/after skip counts and remaining reasons.
 - [ ] Only after review, execute the documented repair in the target environment, verify API output and DB integrity, then update #214/#223 with evidence and close only when their acceptance criteria are met.
+
+## Execution status (2026-10-27)
+
+Tasks 1–5 are implemented and validated. Task 6's API regression coverage, winner dry run, and real-data rehearsal are complete in a disposable PostgreSQL snapshot. The rehearsal consolidated race `21825` into canonical race `49844`, retained governor race `21734`, preserved all 171 source-record links, and verified repeat application and served API responses. Production was not modified; the live apply remains pending review of a concrete production dry-run report, as required by the approved rollout plan.
+
+Final local validation: 2,350 backend tests passed and 1 skipped; Ruff and `manage.py check` passed. `makemigrations --check --dry-run` still reports the pre-existing `Race.source` choices drift (`hi_olvr` is present in the model but missing from migration state); this work adds no model fields or migrations.
