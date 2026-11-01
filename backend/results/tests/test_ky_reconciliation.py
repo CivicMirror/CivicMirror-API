@@ -117,6 +117,7 @@ def test_shared_task_dispatches_ky_without_generic_title_matching(election, snap
     report = ingest_official_results('KY', election.pk)
     assert report['accepted_rows'] == OfficialResult.objects.count()
     assert report['held_rows'] > 0
+    assert 'contests' not in report  # full review belongs in DB/report, not every Celery result
 
 
 def test_state_scope_constitutional_amendment_and_numbered_prosecutor_are_verified(snapshot):

@@ -34,7 +34,10 @@ def ingest_official_results(self, state: str, election_id: int):
     if state == 'KY':
         from results.ky_reconciliation import run_ky_ingestion
         try:
-            return run_ky_ingestion(election_id)
+            report = run_ky_ingestion(election_id)
+            # Keep the complete review in election metadata/CLI reports. At a
+            # two-minute cadence, returning it would retain gigabytes in Redis.
+            return {key: value for key, value in report.items() if key != 'contests'}
         except Exception as exc:
             logger.exception('KY ingestion failed election=%s; preserving prior results', election_id)
             raise self.retry(exc=exc, countdown=120)

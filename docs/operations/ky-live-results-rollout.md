@@ -34,6 +34,8 @@ rows are accounted for as accepted or held, and metadata contests without rows
 are listed separately. Review entries include source IDs, jurisdiction and
 reporting evidence, candidate names, competing races, and reasons. The latest
 applied report is also retained in election `source_metadata.ky_results_review`.
+Celery returns a compact coverage summary so repeated polls do not retain the
+complete review in Redis.
 Pilot reports distinguish proposed coverage from the number of contests actually
 applied. Use the same reviewed snapshot for preview and pilot when reproducing a
 capture; a live apply revalidates the freshly downloaded source.
