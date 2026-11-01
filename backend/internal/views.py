@@ -1,3 +1,4 @@
+import json
 import logging
 
 from django.core.cache import cache
@@ -37,7 +38,7 @@ from integrations.ut_elections.tasks import sync_ut_elections, sync_ut_races
 from integrations.va_elect.tasks import sync_va_elections
 from integrations.vt_sos.tasks import sync_vt_elections
 from integrations.wa_votewa.tasks import sync_wa_elections
-from results.tasks import poll_pending_results, poll_upcoming_results
+from results.tasks import poll_ky_results, poll_pending_results, poll_upcoming_results
 
 from .auth import require_internal_task_token
 from .task_locks import TASK_LOCKS, current_window, lock_key
@@ -60,7 +61,7 @@ def _acquire_lock(task_name: str):
     return acquired, key
 
 
-def _trigger(task_name, celery_task, request):
+def _trigger(task_name, celery_task, request, task_kwargs=None):
     """
     Shared trigger body: acquire the lock, enqueue, and arrange for the lock to
     be released when the task terminally finishes (success or failure) via
@@ -73,6 +74,7 @@ def _trigger(task_name, celery_task, request):
 
     try:
         task = celery_task.apply_async(
+            **({"kwargs": task_kwargs} if task_kwargs else {}),
             link=release_task_lock.si(key),
             link_error=release_task_lock.si(key),
         )
@@ -390,3 +392,24 @@ def sync_al_fcpa_trigger(request):
 @require_internal_task_token
 def sync_vt_sos_trigger(request):
     return _trigger("sync_vt_sos", sync_vt_elections, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def poll_ky_results_trigger(request):
+    from elections.models import Election
+
+    try:
+        payload = json.loads(request.body) if request.body else {}
+        election_id = payload.get('election_id')
+        if election_id is not None:
+            if isinstance(election_id, bool) or not str(election_id).isdigit():
+                raise ValueError
+            election_id = int(election_id)
+            if not Election.objects.filter(pk=election_id, state='KY').exists():
+                return JsonResponse({'error': 'Kentucky election not found'}, status=404)
+    except (ValueError, TypeError, AttributeError):
+        return JsonResponse({'error': 'Expected a JSON object with optional integer election_id'}, status=400)
+    return _trigger("poll_ky_results", poll_ky_results, request,
+                    task_kwargs={'election_id': election_id} if election_id is not None else None)

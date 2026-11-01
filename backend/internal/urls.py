@@ -3,6 +3,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path("tasks/poll-ky-results/", views.poll_ky_results_trigger, name="internal-poll-ky-results"),
     path("tasks/sync-elections/", views.sync_elections_trigger, name="internal-sync-elections"),
     path("tasks/poll-results/", views.poll_results_trigger, name="internal-poll-results"),
     path("tasks/poll-upcoming-results/", views.poll_upcoming_results_trigger, name="internal-poll-upcoming-results"),
