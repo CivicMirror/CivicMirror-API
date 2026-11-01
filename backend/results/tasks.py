@@ -31,6 +31,14 @@ def ingest_official_results(self, state: str, election_id: int):
     """
     from elections.models import Election, Race
 
+    if state == 'KY':
+        from results.ky_reconciliation import run_ky_ingestion
+        try:
+            return run_ky_ingestion(election_id)
+        except Exception as exc:
+            logger.exception('KY ingestion failed election=%s; preserving prior results', election_id)
+            raise self.retry(exc=exc, countdown=120)
+
     adapter_class = get_adapter(state)
     if not adapter_class:
         logger.warning("ingest_official_results: no adapter for state %s; skipping", state)
@@ -669,3 +677,25 @@ def poll_upcoming_results(self):
 
     logger.info("poll_upcoming_results: queued %d elections", queued)
     return {"queued": queued}
+
+
+@shared_task
+def poll_ky_results(election_id=None):
+    """KY-only two-minute polling window, with an explicit pre-election smoke path."""
+    from zoneinfo import ZoneInfo
+
+    from elections.models import Election
+
+    elections = Election.objects.filter(state='KY')
+    if election_id is not None:
+        elections = elections.filter(pk=election_id)
+    else:
+        today = timezone.now().astimezone(ZoneInfo('America/New_York')).date()
+        elections = elections.filter(election_date__in=[today, today - datetime.timedelta(days=1)]).exclude(
+            status__in=Election.TERMINAL_STATUSES,
+        )
+    ids = list(elections.values_list('pk', flat=True))
+    for pk in ids:
+        ingest_official_results.delay('KY', pk)
+    logger.info('poll_ky_results queued=%s explicit=%s', len(ids), election_id is not None)
+    return {'queued': ids}
