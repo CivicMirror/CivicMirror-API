@@ -23,11 +23,9 @@ import datetime
 
 
 def election_type_from_date(d: datetime.date) -> str:
-    if d.month == 11:
-        return "general"
-    if d.month in (3, 5):
-        return "primary"
-    return "special"
+    from .classification import regular_phase
+
+    return regular_phase(d) or 'other'
 
 
 def election_name(d: datetime.date) -> str:
@@ -36,6 +34,7 @@ def election_name(d: datetime.date) -> str:
         "general": "General Election",
         "primary": "Primary Election",
         "special": "Special Election",
+        "other": "Election (classification pending)",
     }[etype]
     return f"{d.year} North Carolina {label} ({d.strftime('%B %-d')})"
 

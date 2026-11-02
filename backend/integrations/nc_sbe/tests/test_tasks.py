@@ -73,7 +73,8 @@ def test_sync_nc_elections_skips_pre_2010():
         ]
         result = sync_nc_elections.apply()
 
-    assert Election.objects.filter(state="NC").count() == 1
+    assert not Election.objects.filter(state='NC',election_date__year__lt=2010).exists()
+    assert Election.objects.filter(state='NC',election_date=datetime.date(2024,11,5)).exists()
     assert result.result["skipped"] == 1
 
 
@@ -85,10 +86,11 @@ def test_sync_nc_elections_is_idempotent():
     with patch("integrations.nc_sbe.tasks.NcSbeClient") as MockClient:
         MockClient.return_value.list_election_date_strs.return_value = _DATE_STRS
         sync_nc_elections.apply()
+        initial = list(Election.objects.order_by('pk').values_list('pk','canonical_key'))
         sync_nc_elections.apply()
 
     # Running twice should not duplicate records
-    assert Election.objects.filter(state="NC").count() == len(_DATE_STRS)
+    assert list(Election.objects.order_by('pk').values_list('pk','canonical_key')) == initial
 
 
 @pytest.mark.django_db

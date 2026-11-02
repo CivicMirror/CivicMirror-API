@@ -116,6 +116,8 @@ def _nomination_check(race, rows, groups, seats) -> str | None:
     Below-threshold NC plurality is not evidence that a second primary was waived.
     """
     election = race.election
+    if election.state == 'NC' and race.pk in (election.source_metadata or {}).get('nc_classification_held_race_ids',[]):
+        return Derivation('skipped_election_classification')
     state = election.state
     day = date.fromisoformat(str(election.election_date))
     unsupported = "skipped_unsupported_nomination_rule"

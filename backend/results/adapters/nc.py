@@ -63,6 +63,14 @@ class NorthCarolinaAdapter(StateResultsAdapter):
     VERSION_CACHE_TIMEOUT = _CACHE_TTL
 
     def version_cache_key(self, election_id: int) -> str:
+        from elections.models import Election
+        from integrations.nc_sbe.event_identity import CLASSIFICATION, routing_version
+
+        election = getattr(self, '_election', None)
+        if election is None or election.pk != election_id:
+            election = Election.objects.filter(pk=election_id).first()
+        if election and CLASSIFICATION in (election.source_metadata or {}):
+            return f'nc_sbe:etag:v3:{election_id}:{routing_version(election)}'
         return f"nc_sbe:etag:v2:{election_id}"
 
     def fetch_results(self, election_date, election_id: int) -> AdapterResult:
@@ -80,6 +88,7 @@ class NorthCarolinaAdapter(StateResultsAdapter):
             )
 
         meta = election.source_metadata or {}
+        self._election = election
         # Allow override via source_metadata; fall back to date-derived URL.
         source_url = (meta.get("results_url") or "").strip()
         if not source_url:
@@ -146,7 +155,9 @@ class NorthCarolinaAdapter(StateResultsAdapter):
                 notes=notes,
             )
 
-        rows = _aggregate_rows(raw_rows)
+        from integrations.nc_sbe.event_identity import filter_result_rows
+
+        rows = filter_result_rows(election, _aggregate_rows(raw_rows))
         for row in rows:
             row.raw['source_version'] = etag or ''
 

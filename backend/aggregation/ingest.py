@@ -14,6 +14,7 @@ record into ``created``.
 import logging
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from elections.models import Candidate, Election, ElectionSourceLink, Race
@@ -94,7 +95,19 @@ def ingest_election(*, source, source_id, identity, fields):
 
     contest_group = identity.get("contest_group", "")
     key = election_canonical_key(state, election_type, election_date, jurisdiction_level, contest_group)
-    election = Election.objects.select_for_update().filter(canonical_key=key).first()
+    lookup = Q(canonical_key=key)
+    if state == 'NC':
+        lookup |= Q(state='NC',source_metadata__nc_event_key=key)
+    election = Election.objects.select_for_update().filter(lookup).first()
+    if state == 'NC' and source != 'nc_sbe' and election is None:
+        # A low-evidence date/type payload cannot reconstruct a retired bucket
+        # beside classified same-day events. A source-qualified crosswalk is
+        # required instead of choosing an arbitrary sibling.
+        classified = Election.objects.filter(state='NC',election_date=election_date).filter(
+            source_metadata__has_key='nc_classification'
+        )
+        if classified.exists():
+            raise ValueError('NC election scope is unresolved; source-qualified event identity is required')
     created = election is None
     if election is None:
         # Migrated sources leave Election.source_id NULL; the per-source id is
