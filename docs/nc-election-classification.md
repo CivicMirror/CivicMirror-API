@@ -2,6 +2,8 @@
 
 NC classification preserves jurisdiction, phase, special context and evidence confidence separately. `Election.election_type` remains the compatibility projection: primary/primary-runoff phases retain those types, an ordinary municipal general projects to `municipal`, and a special general projects to `special`. The API's `classification` field exposes the independent dimensions and `confirmed`, `inferred` or `held` evidence status.
 
+See the [November 2 validation record](nc-election-classification-validation-2026-11-02.md) for automated checks, complete snapshot accounting and repeated-ingestion evidence.
+
 Regular state dates use exact historical primary dates and the applicable regular calendar. Bare ENRS folders no longer make every non-March/May/November date a special election. Known special/second-primary/rerun exceptions are scoped to their contests. `UNEXPIRED` in an official contest title or an explicit TRUE filing flag permits inferred special context; no marker does not prove an election is regular. Missing/conflicting jurisdiction or phase remains held.
 
 ## Municipal defaults and later dates
