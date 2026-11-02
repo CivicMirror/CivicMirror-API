@@ -438,3 +438,6 @@ LOGGING = {
         'api.access': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
     },
 }
+
+# Kentucky uses FlareSolverr's /v1 browser credentials, independently of CF_SOLVER /solve.
+KY_FLARESOLVERR_URL = env('KY_FLARESOLVERR_URL', default='')

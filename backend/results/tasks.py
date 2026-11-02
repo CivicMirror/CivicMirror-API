@@ -11,7 +11,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
-from aggregation.identity import normalize_party
+from aggregation.identity import name_match_key
 from elections.geography import infer_geography_scope
 from results.adapters import list_supported_states
 from results.adapters.registry import get_adapter
@@ -30,6 +30,17 @@ def ingest_official_results(self, state: str, election_id: int):
     MeasureOption rows from the result data before processing results.
     """
     from elections.models import Election, Race
+
+    if state == 'KY':
+        from results.ky_reconciliation import run_ky_ingestion
+        try:
+            report = run_ky_ingestion(election_id)
+            # Keep the complete review in election metadata/CLI reports. At a
+            # two-minute cadence, returning it would retain gigabytes in Redis.
+            return {key: value for key, value in report.items() if key != 'contests'}
+        except Exception as exc:
+            logger.exception('KY ingestion failed election=%s; preserving prior results', election_id)
+            raise self.retry(exc=exc, countdown=120)
 
     adapter_class = get_adapter(state)
     if not adapter_class:
@@ -86,7 +97,9 @@ def ingest_official_results(self, state: str, election_id: int):
         Race.objects.filter(election=election).update(certification_status=certification_status)
         return
 
-    races = list(Race.objects.filter(election=election).select_related('election'))
+    races = list(Race.objects.filter(election=election).exclude(
+        source_metadata__has_key='nc_superseded_by'
+    ).select_related('election'))
     if not races:
         races = _bootstrap_races_from_results(election, result, state)
 
@@ -133,17 +146,22 @@ def _is_measure_race(office_title: str) -> bool:
     return any(kw in normalized for kw in _MEASURE_TITLE_KEYWORDS)
 
 
+def _is_measure_contest(office_title: str, choice_names) -> bool:
+    """Classify generic NC ballot questions from the complete source choice set."""
+    labels = {str(name or '').strip().upper() for name in choice_names if str(name or '').strip()}
+    return _is_measure_race(office_title) or labels in ({'YES', 'NO'}, {'FOR', 'AGAINST'})
+
+
 def _identity_keys(source: dict) -> tuple[str, ...]:
+    if source.get("nc_contest_key"):
+        return ("nc_contest_key",)
     # contest_variant is a standalone identity for adapters with no
     # contest_code (e.g. HI). When contest_code is present, other adapters
     # (e.g. MD) may still carry a contest_variant in Race.source_metadata for
     # unrelated ingest matching, so it must not be pulled into row filtering.
     contest_code = str(source.get("contest_code") or "").strip()
     if contest_code:
-        keys = ["contest_code", "contest_type", "party_code"]
-        if str(source.get("contest_type") or "").strip().upper() == "C":
-            keys.append("county")
-        return tuple(keys)
+        return ("contest_code", "party_code")
     return ("contest_variant",)
 
 
@@ -241,12 +259,18 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
 
         created_races = []
         for key, rows in rows_by_race.items():
+            if (state == "NC" and any((row.raw or {}).get('nc_contest_key') for row in rows)
+                    and not all((row.raw or {}).get('nc_identity_verified') for row in rows)):
+                logger.warning("NC unresolved local electorate held without bootstrap: %s", key)
+                continue
             office_title = title_by_key[key]
             identity = dict(key[1])
-            race_type = (
-                Race.RaceType.MEASURE if _is_measure_race(office_title)
-                else Race.RaceType.CANDIDATE
-            )
+            is_measure = _is_measure_race(office_title)
+            if state == "NC":
+                is_measure = _is_measure_contest(
+                    office_title, (row.option_label or row.candidate_name for row in rows)
+                )
+            race_type = Race.RaceType.MEASURE if is_measure else Race.RaceType.CANDIDATE
             race = Race.objects.create(
                 election=election,
                 race_type=race_type,
@@ -265,23 +289,6 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
                     **identity,
                 },
             )
-            vote_for = {
-                str((row.raw or {}).get("vote_for") or "").strip()
-                for row in rows
-                if str((row.raw or {}).get("vote_for") or "").strip()
-            }
-            positive_vote_for = {int(value) for value in vote_for if value.isdigit() and int(value) > 0}
-            if (len(vote_for) == 1 and len(positive_vote_for) == 1
-                    and not any((row.raw or {}).get("vote_for_conflict") for row in rows)):
-                seats = next(iter(positive_vote_for))
-                race.source_metadata["source_vote_for"] = seats
-                if seats > 1:
-                    race.vote_method = Race.VoteMethod.MULTI_SEAT
-                    race.max_selections = seats
-                race.save(update_fields=["source_metadata", "vote_method", "max_selections"])
-            elif vote_for:
-                race.source_metadata["source_vote_for_unresolved"] = sorted(vote_for)
-                race.save(update_fields=["source_metadata"])
             created_races.append(race)
             logger.info(
                 "_bootstrap_races_from_results: created %s race %s ('%s') for election %s",
@@ -295,21 +302,12 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
                     if not name or name in names_seen:
                         continue
                     names_seen.add(name)
-                    candidate_rows = [candidate_row for candidate_row in rows if (candidate_row.candidate_name or '').strip() == name]
-                    party_values = {str((candidate_row.raw or {}).get("party_code") or "").strip()
-                                    for candidate_row in candidate_rows if (candidate_row.raw or {}).get("party_code")}
-                    normalized = normalize_party(next(iter(party_values))) if len(party_values) == 1 else ""
                     Candidate.objects.create(
                         race=race,
                         name=name,
-                        party=normalized,
-                        normalized_party=normalized,
-                        field_provenance=(
-                            {"party": f"results_adapter:{state}:party_metadata"} if normalized else {}
-                        ),
                         candidate_status=(
                             Candidate.CandidateStatus.WRITE_IN
-                            if any(candidate_row.is_write_in_aggregate for candidate_row in candidate_rows)
+                            if row.is_write_in_aggregate
                             else Candidate.CandidateStatus.RUNNING
                         ),
                     )
@@ -323,12 +321,10 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
                     labels_seen.add(label)
                     MeasureOption.objects.create(race=race, option_label=label)
 
-            if race_type == Race.RaceType.CANDIDATE:
-                from results.parties import apply_party_plan, plan_party_updates
+            if state == "NC":
+                from results.nc_identity import apply_metadata
 
-                candidates = list(race.candidates.all())
-                plan = plan_party_updates(race, candidates, rows, adapter_result.source_url)
-                apply_party_plan(race, candidates, plan)
+                apply_metadata(race, rows, adapter_result.source_url)
 
     logger.info(
         "_bootstrap_races_from_results: bootstrapped %d races for election %s (%s)",
@@ -400,8 +396,23 @@ def _store_race_results(race, adapter_result, state: str):
     from elections.models import Candidate, MeasureOption, Race
     from results.models import OfficialResult
 
+    if (race.source_metadata or {}).get('nc_superseded_by'):
+        return
+    if state == "NC":
+        from results.nc_identity import adopt_filing_identity
+
+        adopt_filing_identity(race, adapter_result)
+
+    # Corrected NC rows must never flow back into unqualified merged legacy
+    # races. Existing data needs the explicit reviewed repair first.
+    if (state == "NC" and any((r.raw or {}).get("nc_contest_key") for r in adapter_result.rows)
+            and not (race.source_metadata or {}).get("nc_contest_key")):
+        logger.warning("NC race %s needs contest identity repair before results ingest", race.pk)
+        return
+
     # --- Filter rows to this race by source identity or office_title ---------
     race_identity = _race_source_identity(race)
+    nc_identity_matched = state == "NC" and bool(race_identity)
     if race_identity:
         filtered_rows = [
             r for r in adapter_result.rows
@@ -454,6 +465,10 @@ def _store_race_results(race, adapter_result, state: str):
     elif filtered_rows is None:
         filtered_rows = list(adapter_result.rows)
 
+    if state == "NC" and any((row.raw or {}).get('nc_vote_errors') for row in filtered_rows):
+        logger.warning("NC race %s source contains invalid votes; keeping previous totals", race.pk)
+        return
+
     # --- Coerce candidate_name → option_label for measure races ---------------
     # Clarity uses CH[] for both candidate and ballot measure choices.
     # When the matched race is a MEASURE, treat candidate_name as option_label.
@@ -469,7 +484,7 @@ def _store_race_results(race, adapter_result, state: str):
     matched_rows = []
     any_partial = False
 
-    for row in filtered_rows:
+    for row_index, row in enumerate(filtered_rows):
         candidate = None
         measure_option = None
 
@@ -479,10 +494,21 @@ def _store_race_results(race, adapter_result, state: str):
         elif row.candidate_name:
             if race.race_type != Race.RaceType.CANDIDATE:
                 continue
-            candidate = (
-                Candidate.objects.filter(race=race, name=row.candidate_name).first()
-                or Candidate.objects.filter(race=race, name__iexact=row.candidate_name).first()
-            )
+            if nc_identity_matched:
+                normalized = name_match_key(row.candidate_name)
+                candidates = [
+                    item for item in Candidate.objects.filter(race=race)
+                    if name_match_key(item.name) == normalized
+                ]
+                candidate = candidates[0] if len(candidates) == 1 else None
+                if candidate and candidate.name != row.candidate_name:
+                    row = dataclasses.replace(row, candidate_name=candidate.name)
+                    filtered_rows[row_index] = row
+            else:
+                candidate = (
+                    Candidate.objects.filter(race=race, name=row.candidate_name).first()
+                    or Candidate.objects.filter(race=race, name__iexact=row.candidate_name).first()
+                )
             if not candidate:
                 logger.warning(
                     "_process_race_results: no candidate match for '%s' in race %s (%s)",
@@ -513,6 +539,15 @@ def _store_race_results(race, adapter_result, state: str):
             # flags BEFORE persisting it, so skip/recount cleanup cannot erase source data.
             clear_derived_winners(race)
 
+        source_flag = row.is_winner
+        if state == "NC" and source_flag is None and not (race.source_metadata or {}).get('winners_derived'):
+            previous = OfficialResult.objects.filter(
+                race=race, candidate=candidate, measure_option=measure_option,
+                round_number=row.round_number, jurisdiction_fragment=row.jurisdiction_fragment,
+            ).first()
+            if previous is not None:
+                source_flag = previous.is_winner
+
         with transaction.atomic():
             OfficialResult.objects.update_or_create(
                 race=race,
@@ -523,7 +558,7 @@ def _store_race_results(race, adapter_result, state: str):
                 defaults={
                     'vote_count': row.vote_count,
                     'vote_pct': row.vote_pct,
-                    'is_winner': row.is_winner,
+                    'is_winner': source_flag,
                     'result_type': row.result_type,
                     'is_write_in_aggregate': row.is_write_in_aggregate,
                     'source_url': _result_source_url(row, adapter_result, race),
@@ -533,12 +568,10 @@ def _store_race_results(race, adapter_result, state: str):
             )
         matched_rows.append(row)
 
-    if race.race_type == Race.RaceType.CANDIDATE and matched_rows:
-        from results.parties import apply_party_plan, plan_party_updates
+    if state == "NC" and matched_rows:
+        from results.nc_identity import apply_metadata
 
-        candidates = list(race.candidates.all())
-        party_plan = plan_party_updates(race, candidates, matched_rows, adapter_result.source_url)
-        apply_party_plan(race, candidates, party_plan)
+        apply_metadata(race, filtered_rows, adapter_result.source_url)
 
     # --- Update race certification status ------------------------------------
     if adapter_result.mapping_confidence == 'full' and not any_partial and matched_rows:
@@ -647,3 +680,25 @@ def poll_upcoming_results(self):
 
     logger.info("poll_upcoming_results: queued %d elections", queued)
     return {"queued": queued}
+
+
+@shared_task
+def poll_ky_results(election_id=None):
+    """KY-only two-minute polling window, with an explicit pre-election smoke path."""
+    from zoneinfo import ZoneInfo
+
+    from elections.models import Election
+
+    elections = Election.objects.filter(state='KY')
+    if election_id is not None:
+        elections = elections.filter(pk=election_id)
+    else:
+        today = timezone.now().astimezone(ZoneInfo('America/New_York')).date()
+        elections = elections.filter(election_date__in=[today, today - datetime.timedelta(days=1)]).exclude(
+            status__in=Election.TERMINAL_STATUSES,
+        )
+    ids = list(elections.values_list('pk', flat=True))
+    for pk in ids:
+        ingest_official_results.delay('KY', pk)
+    logger.info('poll_ky_results queued=%s explicit=%s', len(ids), election_id is not None)
+    return {'queued': ids}

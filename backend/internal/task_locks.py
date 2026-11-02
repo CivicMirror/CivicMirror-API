@@ -23,12 +23,14 @@ LOCK_PREFIX = "task_lock:"
 WINDOW_HOURLY = "hourly"
 WINDOW_SIX_HOURLY = "six_hourly"
 WINDOW_DAILY = "daily"
+WINDOW_TWO_MINUTES = "two_minutes"
 
 _HOUR = 60 * 60
 
 # task lock name -> (window granularity, lock TTL in seconds)
 # TTLs sit just under the schedule interval so the next window re-acquires cleanly.
 TASK_LOCKS: dict[str, tuple[str, int]] = {
+    "poll_ky_results":      (WINDOW_TWO_MINUTES, 115),
     "sync_elections":       (WINDOW_HOURLY,     55 * 60),
     "poll_sc_enr":          (WINDOW_HOURLY,     55 * 60),
     "sync_sc_enr_results":  (WINDOW_HOURLY,     55 * 60),
@@ -78,6 +80,8 @@ TASK_LOCKS: dict[str, tuple[str, int]] = {
 def current_window(window_type: str, now=None) -> str:
     """Return the lock-window token for the *current* time (used when acquiring)."""
     now = now or timezone.now()
+    if window_type == WINDOW_TWO_MINUTES:
+        return f"{now.strftime('%Y-%m-%dT%H')}:{(now.minute // 2) * 2:02d}"
     if window_type == WINDOW_HOURLY:
         return now.strftime("%Y-%m-%dT%H")
     if window_type == WINDOW_SIX_HOURLY:
@@ -94,6 +98,8 @@ def windows_for_date(window_type: str, date_str: str) -> list[str]:
     clearing). A stuck hourly/six-hourly lock could sit in any bucket of the
     day, so we enumerate all of them.
     """
+    if window_type == WINDOW_TWO_MINUTES:
+        return [f"{date_str}T{hour:02d}:{minute:02d}" for hour in range(24) for minute in range(0, 60, 2)]
     if window_type == WINDOW_HOURLY:
         return [f"{date_str}T{hour:02d}" for hour in range(24)]
     if window_type == WINDOW_SIX_HOURLY:

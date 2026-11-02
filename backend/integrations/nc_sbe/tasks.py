@@ -31,7 +31,8 @@ from celery import shared_task
 from celery.exceptions import Retry
 from django.utils import timezone
 
-from elections.models import Election
+from aggregation.identity import name_match_key, race_canonical_key
+from elections.models import Election, Race
 from ops.models import SyncLog
 
 from .client import NcSbeClient, _results_zip_url, parse_candidate_listing_csv
@@ -229,6 +230,16 @@ def sync_nc_candidates(self):
                     vote_for=int((first.get("vote_for") or "1").strip() or 1),
                     term=first.get("term") or "",
                 )
+                # A later filing refresh must retain the reviewed results identity
+                # and sourced seat count on the same canonical race.
+                key = race_canonical_key(election.canonical_key or f"e{election.pk}",
+                                         identity['office_title'], identity.get('ocd_division_id', ''),
+                                         identity['race_type'], identity.get('contest_variant', ''))
+                existing = Race.objects.filter(canonical_key=key).first()
+                if existing and (existing.source_metadata or {}).get('nc_contest_key'):
+                    fields['source_metadata'] = {**existing.source_metadata, **fields['source_metadata']}
+                    fields.pop('max_selections', None)
+                    fields.pop('vote_method', None)
                 race, race_created = ingest.ingest_race(
                     election=election, source=_SOURCE, identity=identity, fields=fields,
                 )
@@ -239,10 +250,17 @@ def sync_nc_candidates(self):
                     name = (row.get("name_on_ballot") or "").strip()
                     if not name:
                         continue
+                    candidate_fields = map_candidate(row)
+                    existing_candidate = next((c for c in race.candidates.all()
+                                               if name_match_key(c.name) == name_match_key(name)), None)
+                    if existing_candidate:
+                        candidate_fields['source_metadata'] = {
+                            **existing_candidate.source_metadata, **candidate_fields['source_metadata'],
+                        }
                     ingest.ingest_candidate(
                         race=race, source=_SOURCE, name=name,
                         party=(row.get("party_candidate") or "").strip(),
-                        fields=map_candidate(row),
+                        fields=candidate_fields,
                     )
 
         logger.info(

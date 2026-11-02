@@ -1,2 +1,2 @@
-mcp>=1.10
+mcp>=1.10,<2  # FastMCP lives at mcp.server.fastmcp in 1.x; 2.x moved it (see #196)
 requests

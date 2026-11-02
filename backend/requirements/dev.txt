@@ -7,3 +7,6 @@ faker
 ipython
 ruff==0.15.14
 pre-commit
+# MCP SDK: required by api/tests/test_mcp_stdio_integration.py. Pinned to 1.x --
+# FastMCP moved out of mcp.server.fastmcp in 2.x (see mcp_server/requirements.txt).
+mcp>=1.10,<2

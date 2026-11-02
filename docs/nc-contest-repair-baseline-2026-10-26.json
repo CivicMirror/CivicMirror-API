@@ -1,0 +1,479 @@
+{
+  "captured": "2026-10-26",
+  "production_access": "read only; rehearsal in isolated PostgreSQL",
+  "baseline_nc_races": 18639,
+  "source_record_links": 171,
+  "mock_votes": 0,
+  "qualified_merged_races": 82,
+  "elections_with_qualified_merges": 5,
+  "unresolved_race_splits": 451,
+  "elections": [
+    {
+      "id": 1960,
+      "date": "2014-05-06",
+      "existing_races": 283,
+      "source_contests": 453,
+      "merged_races": 38,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 74,
+      "conflicts": {
+        "vote_mismatch": 1
+      }
+    },
+    {
+      "id": 1961,
+      "date": "2014-07-15",
+      "existing_races": 16,
+      "source_contests": 19,
+      "merged_races": 4,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 3,
+      "conflicts": {}
+    },
+    {
+      "id": 1962,
+      "date": "2014-11-04",
+      "existing_races": 1392,
+      "source_contests": 1232,
+      "merged_races": 0,
+      "unresolved_race_splits": 18,
+      "duplicate_groups": 185,
+      "conflicts": {
+        "invalid_source_votes": 3,
+        "unresolved_electorate": 43,
+        "vote_mismatch": 2,
+        "candidate_missing_from_source": 1
+      }
+    },
+    {
+      "id": 1964,
+      "date": "2015-09-15",
+      "existing_races": 10,
+      "source_contests": 10,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 0,
+      "conflicts": {}
+    },
+    {
+      "id": 1965,
+      "date": "2015-10-06",
+      "existing_races": 60,
+      "source_contests": 65,
+      "merged_races": 0,
+      "unresolved_race_splits": 4,
+      "duplicate_groups": 0,
+      "conflicts": {
+        "unresolved_electorate": 9
+      }
+    },
+    {
+      "id": 1966,
+      "date": "2015-11-03",
+      "existing_races": 1135,
+      "source_contests": 1176,
+      "merged_races": 0,
+      "unresolved_race_splits": 41,
+      "duplicate_groups": 0,
+      "conflicts": {
+        "unresolved_electorate": 82
+      }
+    },
+    {
+      "id": 1967,
+      "date": "2016-03-15",
+      "existing_races": 367,
+      "source_contests": 364,
+      "merged_races": 35,
+      "unresolved_race_splits": 3,
+      "duplicate_groups": 68,
+      "conflicts": {
+        "unresolved_electorate": 6,
+        "invalid_source_votes": 1,
+        "vote_mismatch": 2,
+        "race_missing_from_source": 13
+      }
+    },
+    {
+      "id": 1968,
+      "date": "2016-06-07",
+      "existing_races": 45,
+      "source_contests": 29,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 16,
+      "conflicts": {}
+    },
+    {
+      "id": 1969,
+      "date": "2016-11-08",
+      "existing_races": 1175,
+      "source_contests": 1079,
+      "merged_races": 4,
+      "unresolved_race_splits": 12,
+      "duplicate_groups": 188,
+      "conflicts": {
+        "unresolved_electorate": 95,
+        "invalid_source_votes": 2,
+        "vote_mismatch": 9
+      }
+    },
+    {
+      "id": 1970,
+      "date": "2017-09-12",
+      "existing_races": 10,
+      "source_contests": 10,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 0,
+      "conflicts": {}
+    },
+    {
+      "id": 1971,
+      "date": "2017-10-10",
+      "existing_races": 79,
+      "source_contests": 93,
+      "merged_races": 0,
+      "unresolved_race_splits": 10,
+      "duplicate_groups": 0,
+      "conflicts": {
+        "unresolved_electorate": 24
+      }
+    },
+    {
+      "id": 1972,
+      "date": "2017-11-07",
+      "existing_races": 1079,
+      "source_contests": 1150,
+      "merged_races": 0,
+      "unresolved_race_splits": 66,
+      "duplicate_groups": 2,
+      "conflicts": {
+        "unresolved_electorate": 137,
+        "vote_mismatch": 25,
+        "duplicate_legacy_result_slot": 10
+      }
+    },
+    {
+      "id": 1973,
+      "date": "2018-05-08",
+      "existing_races": 513,
+      "source_contests": 432,
+      "merged_races": 1,
+      "unresolved_race_splits": 3,
+      "duplicate_groups": 95,
+      "conflicts": {
+        "ambiguous_source_choice_names": 3,
+        "unresolved_electorate": 16,
+        "vote_mismatch": 11,
+        "duplicate_legacy_result_slot": 7
+      }
+    },
+    {
+      "id": 1974,
+      "date": "2018-06-26",
+      "existing_races": 2,
+      "source_contests": 2,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 0,
+      "conflicts": {}
+    },
+    {
+      "id": 1975,
+      "date": "2018-11-06",
+      "existing_races": 1465,
+      "source_contests": 1292,
+      "merged_races": 0,
+      "unresolved_race_splits": 3,
+      "duplicate_groups": 176,
+      "conflicts": {
+        "unresolved_electorate": 6,
+        "candidate_missing_from_source": 14
+      }
+    },
+    {
+      "id": 1976,
+      "date": "2019-04-30",
+      "existing_races": 6,
+      "source_contests": 3,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 3,
+      "conflicts": {}
+    },
+    {
+      "id": 1977,
+      "date": "2019-05-14",
+      "existing_races": 4,
+      "source_contests": 3,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 1,
+      "conflicts": {}
+    },
+    {
+      "id": 1978,
+      "date": "2019-07-09",
+      "existing_races": 2,
+      "source_contests": 1,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 1,
+      "conflicts": {}
+    },
+    {
+      "id": 1979,
+      "date": "2019-09-10",
+      "existing_races": 12,
+      "source_contests": 10,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 2,
+      "conflicts": {}
+    },
+    {
+      "id": 1980,
+      "date": "2019-10-08",
+      "existing_races": 63,
+      "source_contests": 73,
+      "merged_races": 0,
+      "unresolved_race_splits": 6,
+      "duplicate_groups": 0,
+      "conflicts": {
+        "unresolved_electorate": 16
+      }
+    },
+    {
+      "id": 1981,
+      "date": "2019-11-05",
+      "existing_races": 1070,
+      "source_contests": 1144,
+      "merged_races": 0,
+      "unresolved_race_splits": 62,
+      "duplicate_groups": 0,
+      "conflicts": {
+        "unresolved_electorate": 136,
+        "vote_mismatch": 7
+      }
+    },
+    {
+      "id": 1982,
+      "date": "2020-03-03",
+      "existing_races": 472,
+      "source_contests": 397,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 75,
+      "conflicts": {}
+    },
+    {
+      "id": 1983,
+      "date": "2020-06-23",
+      "existing_races": 3,
+      "source_contests": 2,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 1,
+      "conflicts": {}
+    },
+    {
+      "id": 1984,
+      "date": "2020-11-03",
+      "existing_races": 1283,
+      "source_contests": 1101,
+      "merged_races": 0,
+      "unresolved_race_splits": 2,
+      "duplicate_groups": 184,
+      "conflicts": {
+        "unresolved_electorate": 4
+      }
+    },
+    {
+      "id": 1985,
+      "date": "2021-10-05",
+      "existing_races": 13,
+      "source_contests": 13,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 0,
+      "conflicts": {}
+    },
+    {
+      "id": 1986,
+      "date": "2021-11-02",
+      "existing_races": 919,
+      "source_contests": 973,
+      "merged_races": 0,
+      "unresolved_race_splits": 52,
+      "duplicate_groups": 0,
+      "conflicts": {
+        "unresolved_electorate": 106,
+        "vote_mismatch": 3
+      }
+    },
+    {
+      "id": 1987,
+      "date": "2022-05-17",
+      "existing_races": 734,
+      "source_contests": 653,
+      "merged_races": 0,
+      "unresolved_race_splits": 15,
+      "duplicate_groups": 97,
+      "conflicts": {
+        "unresolved_electorate": 31
+      }
+    },
+    {
+      "id": 1988,
+      "date": "2022-07-26",
+      "existing_races": 55,
+      "source_contests": 59,
+      "merged_races": 0,
+      "unresolved_race_splits": 4,
+      "duplicate_groups": 0,
+      "conflicts": {
+        "unresolved_electorate": 8
+      }
+    },
+    {
+      "id": 1989,
+      "date": "2022-11-08",
+      "existing_races": 1477,
+      "source_contests": 1300,
+      "merged_races": 0,
+      "unresolved_race_splits": 8,
+      "duplicate_groups": 185,
+      "conflicts": {
+        "unresolved_electorate": 16
+      }
+    },
+    {
+      "id": 1990,
+      "date": "2022-12-06",
+      "existing_races": 1,
+      "source_contests": 2,
+      "merged_races": 0,
+      "unresolved_race_splits": 1,
+      "duplicate_groups": 0,
+      "conflicts": {
+        "unresolved_electorate": 2
+      }
+    },
+    {
+      "id": 1991,
+      "date": "2023-03-07",
+      "existing_races": 1,
+      "source_contests": 1,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 0,
+      "conflicts": {}
+    },
+    {
+      "id": 1992,
+      "date": "2023-09-12",
+      "existing_races": 7,
+      "source_contests": 7,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 0,
+      "conflicts": {}
+    },
+    {
+      "id": 1993,
+      "date": "2023-10-10",
+      "existing_races": 47,
+      "source_contests": 56,
+      "merged_races": 0,
+      "unresolved_race_splits": 5,
+      "duplicate_groups": 0,
+      "conflicts": {
+        "unresolved_electorate": 14
+      }
+    },
+    {
+      "id": 1994,
+      "date": "2023-11-07",
+      "existing_races": 981,
+      "source_contests": 1053,
+      "merged_races": 0,
+      "unresolved_race_splits": 66,
+      "duplicate_groups": 0,
+      "conflicts": {
+        "unresolved_electorate": 138,
+        "vote_mismatch": 3
+      }
+    },
+    {
+      "id": 1995,
+      "date": "2024-03-05",
+      "existing_races": 401,
+      "source_contests": 344,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 57,
+      "conflicts": {}
+    },
+    {
+      "id": 1996,
+      "date": "2024-05-14",
+      "error": "404 Client Error: Not Found for url: https://s3.amazonaws.com/dl.ncsbe.gov/ENRS/2024_05_14/results_pct_20240514.zip"
+    },
+    {
+      "id": 1997,
+      "date": "2024-11-05",
+      "existing_races": 1400,
+      "source_contests": 1216,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 184,
+      "conflicts": {}
+    },
+    {
+      "id": 1998,
+      "date": "2025-09-09",
+      "existing_races": 10,
+      "source_contests": 10,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 0,
+      "conflicts": {}
+    },
+    {
+      "id": 1999,
+      "date": "2025-10-07",
+      "existing_races": 50,
+      "source_contests": 55,
+      "merged_races": 0,
+      "unresolved_race_splits": 5,
+      "duplicate_groups": 0,
+      "conflicts": {
+        "unresolved_electorate": 10
+      }
+    },
+    {
+      "id": 2000,
+      "date": "2025-11-04",
+      "existing_races": 951,
+      "source_contests": 1018,
+      "merged_races": 0,
+      "unresolved_race_splits": 65,
+      "duplicate_groups": 0,
+      "conflicts": {
+        "unresolved_electorate": 132,
+        "vote_mismatch": 4
+      }
+    },
+    {
+      "id": 1909,
+      "date": "2026-03-03",
+      "existing_races": 553,
+      "source_contests": 472,
+      "merged_races": 0,
+      "unresolved_race_splits": 0,
+      "duplicate_groups": 81,
+      "conflicts": {}
+    }
+  ]
+}

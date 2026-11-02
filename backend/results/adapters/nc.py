@@ -8,7 +8,7 @@ Schema: Tab-delimited .txt file inside ZIP with one precinct-level row per
 
 Data notes:
     - Precinct-level rows are aggregated to contest totals by summing Total Votes
-      across all precincts for each (Contest Name, Choice) pair.
+      across all precincts for each source-qualified contest and choice.
     - NC S3 data represents post-canvass certified results → result_type="official".
     - Contest Type "S" = statewide; "C" = county/city (name includes county/city).
     - Ballot measures (bonds, referendums, amendments) are identified by keywords
@@ -17,7 +17,7 @@ Data notes:
     - Write-ins: "Write-In" in the Choice string → is_write_in_aggregate=True.
 
 Version caching:
-    Cache key: nc_sbe:etag:{election_pk}
+    Cache key: nc_sbe:etag:v2:{election_pk}
     Value:     ETag header from S3 HEAD request (stripped of quotes)
     TTL:       30 days (written by ingest task after successful DB work)
 
@@ -30,14 +30,12 @@ from __future__ import annotations
 import io
 import logging
 import zipfile
-from collections import defaultdict
 from datetime import date, timedelta
 
 import requests
 from django.core.cache import cache
 
 from integrations.nc_sbe.client import NcSbeClient, _results_zip_url, parse_results_tsv
-from integrations.nc_sbe.mappers import is_write_in
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
 from .registry import register
@@ -65,7 +63,7 @@ class NorthCarolinaAdapter(StateResultsAdapter):
     VERSION_CACHE_TIMEOUT = _CACHE_TTL
 
     def version_cache_key(self, election_id: int) -> str:
-        return f"nc_sbe:etag:{election_id}"
+        return f"nc_sbe:etag:v2:{election_id}"
 
     def fetch_results(self, election_date, election_id: int) -> AdapterResult:
         from elections.models import Election
@@ -149,6 +147,8 @@ class NorthCarolinaAdapter(StateResultsAdapter):
             )
 
         rows = _aggregate_rows(raw_rows)
+        for row in rows:
+            row.raw['source_version'] = etag or ''
 
         logger.info(
             "nc_sbe.adapter.fetched election=%d rows=%d etag=%s",
@@ -209,68 +209,9 @@ def _date_str_from_url(url: str) -> str:
 
 
 def _aggregate_rows(raw_rows: list[dict]) -> list[ResultRow]:
-    """
-    Aggregate precinct-level rows to contest totals.
+    from results.nc_identity import aggregate_rows
 
-    Groups by (Contest Name, Contest Type, Choice) and sums Total Votes.
-    Each aggregated group becomes one ResultRow with result_type="official".
-    """
-    # Statewide/federal contests are shared across counties. County contests
-    # need the county plus the source contest group ID so same-name local races
-    # cannot be merged before bootstrap has a chance to qualify their identity.
-    totals: dict[tuple[str, str, str, str, str], int] = defaultdict(int)
-    metadata: dict[tuple[str, str, str, str, str], dict[str, set[str]]] = {}
-
-    for row in raw_rows:
-        contest_name = _clean_text(row.get("Contest Name") or "")
-        choice = _clean_text(row.get("Choice") or "")
-        if not contest_name or not choice:
-            continue
-
-        try:
-            votes = int(row.get("Total Votes") or 0)
-        except (ValueError, TypeError):
-            votes = 0
-
-        contest_type = (row.get("Contest Type") or "").strip().upper()
-        county = _clean_text(row.get("County") or "") if contest_type == "C" else ""
-        contest_code = _clean_text(row.get("Contest Group ID") or "")
-        key = (contest_name, contest_type, contest_code, county, choice)
-        totals[key] += votes
-        values = metadata.setdefault(key, {"party_code": set(), "vote_for": set()})
-        party = _clean_text(row.get("Choice Party") or "")
-        vote_for = _clean_text(row.get("Vote For") or "")
-        if party:
-            values["party_code"].add(party)
-        if vote_for:
-            values["vote_for"].add(vote_for)
-
-    result_rows: list[ResultRow] = []
-    for (contest_name, contest_type, contest_code, county, choice), vote_count in totals.items():
-        write_in = is_write_in(choice)
-        source_meta = metadata[(contest_name, contest_type, contest_code, county, choice)]
-        result_rows.append(ResultRow(
-            office_title=contest_name,
-            candidate_name=choice if not write_in else None,
-            option_label=None,
-            vote_count=vote_count,
-            vote_pct=None,
-            is_winner=None,
-            result_type="official",
-            is_write_in_aggregate=write_in,
-            raw={
-                "contest_type": contest_type,
-                "contest_code": contest_code,
-                "county": county,
-                "party_code": next(iter(source_meta["party_code"]), "") if len(source_meta["party_code"]) == 1 else "",
-                "party_conflict": sorted(source_meta["party_code"]) if len(source_meta["party_code"]) > 1 else [],
-                "vote_for": next(iter(source_meta["vote_for"]), "") if len(source_meta["vote_for"]) == 1 else "",
-                "vote_for_conflict": sorted(source_meta["vote_for"]) if len(source_meta["vote_for"]) > 1 else [],
-                "source": "nc_sbe",
-            },
-        ))
-
-    return result_rows
+    return aggregate_rows(raw_rows)
 
 
 def _clean_text(value: str) -> str:

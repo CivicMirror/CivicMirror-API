@@ -23,6 +23,9 @@ def _clear_seeded_source_precedence(request):
     slate. Tests that need the seed re-apply it explicitly (the seed helper
     is idempotent via ``update_or_create``).
     """
+    if "aggregation" not in settings.INSTALLED_APPS:
+        return
+
     db_in_use = "django_db" in request.keywords or any(
         f in request.fixturenames for f in ("db", "transactional_db")
     )

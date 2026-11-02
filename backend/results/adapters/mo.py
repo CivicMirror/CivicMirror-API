@@ -82,19 +82,12 @@ class MissouriAdapter(StateResultsAdapter):
         from elections.models import Election
 
         try:
-            election = Election.objects.get(pk=election_id)
+            Election.objects.get(pk=election_id)
         except Election.DoesNotExist:
             logger.error("mo_sos.adapter.missing_election pk=%d", election_id)
             return AdapterResult(
                 rows=[], source_url="", mapping_confidence="none",
                 notes=f"Election pk={election_id} not found",
-            )
-
-        if (str(election_date) != "2024-11-05" or str(election.election_date) != "2024-11-05"
-                or election.election_type != "general"):
-            return AdapterResult(
-                rows=[], source_url=_GRAND_TOTALS_URL, mapping_confidence="none",
-                notes="The MO adapter currently supports only the 2024-11-05 general election.",
             )
 
         try:

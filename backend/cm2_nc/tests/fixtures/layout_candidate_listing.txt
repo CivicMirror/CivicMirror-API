@@ -1,0 +1,27 @@
+Candidate listing layout excerpt, effective 2022-01-01.
+
+election_dt             election date
+county_name             county name
+contest_name            contest name
+name_on_ballot          candidate name on ballot
+first_name              candidate first name
+middle_name             candidate middle name
+last_name               candidate last name
+name_suffix_lbl         candidate suffix
+nick_name               candidate nickname
+street_address          mailing or residential street address
+city                    mailing or residential city
+state                   mailing or residential state
+zip_code                mailing or residential ZIP code
+phone                   phone number
+office_phone            office phone number
+business_phone          business phone number
+email                   candidate email address
+candidacy_dt            filing date
+party_contest           contest party
+party_candidate         candidate affiliation
+is_unexpired            TRUE or FALSE
+has_primary             TRUE or FALSE
+is_partisan             TRUE or FALSE
+vote_for                maximum selections
+term                    term length in years

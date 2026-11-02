@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "civicmirror-api": {
+      "command": ".venv-mcp/bin/python",
+      "args": ["-m", "civicmirror_mcp.server"],
+      "env": {
+        "PYTHONPATH": ".",
+        "CIVICMIRROR_API_BASE_URL": "${CIVICMIRROR_API_BASE_URL:-http://127.0.0.1:8000/api/v1}",
+        "CIVICMIRROR_MCP_API_KEY": "${CIVICMIRROR_MCP_API_KEY}"
+      }
+    }
+  }
+}
