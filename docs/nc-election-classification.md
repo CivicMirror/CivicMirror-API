@@ -31,6 +31,8 @@ Regular state calendar events can be discovered before results exist. Current/fu
 
 Legacy records require explicit repair. Existing unkeyed state records retain their `e{pk}` race-key namespace through a virtual event-key alias until repair, avoiding duplicate results-side races. Lower-evidence NC sources cannot recreate an ambiguous bare-key date bucket beside classified events.
 
+Future-dated archives are pre-election evidence and are not persisted as results. Preview reports explicitly list `pre_election_resets` when a source-matched, zero-vote future race was previously certified or archived. Approved application restores those races/events to upcoming/active and marks their existing zero-vote rows unofficial with no certification timestamp. IDs, relationships and vote values stay intact. Nonzero future results or source-set winners require review instead of automatic lifecycle correction.
+
 Retired split parents disappear from ordinary election lists and ZIP lookup but retain detail responses with replacement IDs. Parents with unresolved historical components remain review containers. Held race records, source-set winners, candidate/result IDs and result values are preserved; ordinary ingestion and derivation skip those held components.
 
 ## Preview, rehearsal and application
@@ -45,6 +47,8 @@ python manage.py repair_nc_election_classification --all-nc --apply --approved-r
 For one scope use `--election-id ID` instead of `--all-nc`. `--source-file` and `--filing-file` accept saved official files for a single-Election rehearsal; their bytes participate in the fingerprint. The ordinary path refetches source files. Missing ZIPs are explicit source states and do not authorize replacing results.
 
 Review each supported mapping and hold before apply. The fingerprint covers source contents, implementation/evidence decisions, complete affected database relationships and source links. Apply locks and rebuilds the plan, rejecting changed evidence/state. A report-write failure rolls back that scope. Independent historical identity conflicts stay held instead of being merged as part of classification.
+
+Existing destinations outside a legacy parent's recorded replacements are included in the snapshot and locks. A held destination cannot be unheld by moving another parent's races into it. Candidate refreshes and winner derivation also respect held/tombstoned records.
 
 1. Rehearse against an isolated restored production snapshot with separate cache/broker settings.
 2. Compare candidate/result/option/source-record/mock-vote IDs and values, plus every held/superseded race, before and after.

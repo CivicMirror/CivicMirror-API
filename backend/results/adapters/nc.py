@@ -34,6 +34,7 @@ from datetime import date, timedelta
 
 import requests
 from django.core.cache import cache
+from django.utils import timezone
 
 from integrations.nc_sbe.client import NcSbeClient, _results_zip_url, parse_results_tsv
 
@@ -89,6 +90,9 @@ class NorthCarolinaAdapter(StateResultsAdapter):
 
         meta = election.source_metadata or {}
         self._election = election
+        if election.election_date > timezone.localdate():
+            return AdapterResult(rows=[], source_url='', mapping_confidence='none',
+                                 notes='NC pre-election archive is not election results')
         # Allow override via source_metadata; fall back to date-derived URL.
         source_url = (meta.get("results_url") or "").strip()
         if not source_url:

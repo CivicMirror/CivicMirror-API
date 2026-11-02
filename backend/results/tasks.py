@@ -414,6 +414,8 @@ def _store_race_results(race, adapter_result, state: str):
 
     if (race.source_metadata or {}).get('nc_superseded_by'):
         return
+    if state == 'NC' and race.election.election_date > timezone.localdate():
+        return
     if state == 'NC' and race.pk in (race.election.source_metadata or {}).get('nc_classification_held_race_ids',[]):
         return
     if state == "NC":

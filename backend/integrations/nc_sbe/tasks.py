@@ -37,7 +37,7 @@ from ops.models import SyncLog
 
 from .classification import classify_nc_contest, regular_dates
 from .client import NcSbeClient, _results_zip_url, parse_candidate_listing_csv
-from .event_identity import CLASSIFICATION, discover_filing_events, ensure_event
+from .event_identity import CLASSIFICATION, CONTAINER, RETIRED, discover_filing_events, ensure_event
 from .exceptions import NcSbeRetryableError
 from .mappers import (
     dedupe_candidate_rows,
@@ -235,6 +235,9 @@ def sync_nc_candidates(self):
                     skipped_no_election += 1
                     continue
                 election, _ = ensure_event(d,classification)
+                if any((election.source_metadata or {}).get(k) for k in (CONTAINER, RETIRED)):
+                    skipped_no_election += 1
+                    continue
 
                 identity, fields = map_race_identity(
                     contest_name=contest_name,
@@ -251,6 +254,12 @@ def sync_nc_candidates(self):
                                          identity['office_title'], identity.get('ocd_division_id', ''),
                                          identity['race_type'], identity.get('contest_variant', ''))
                 existing = Race.objects.filter(canonical_key=key).first()
+                if existing and (
+                    existing.pk in (existing.election.source_metadata or {}).get('nc_classification_held_race_ids', [])
+                    or (existing.source_metadata or {}).get('nc_superseded_by')
+                ):
+                    skipped_no_election += 1
+                    continue
                 if existing and (existing.source_metadata or {}).get('nc_contest_key'):
                     fields['source_metadata'] = {**existing.source_metadata, **fields['source_metadata']}
                     fields.pop('max_selections', None)

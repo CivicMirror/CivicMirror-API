@@ -176,3 +176,77 @@ def test_future_municipal_election_is_discovered_from_filings_without_creating_r
     assert event.source_metadata["nc_classification"]["phase"] == "general"
     assert event.source_metadata["nc_classification"]["evidence_status"] == "inferred"
     assert not Race.objects.exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('protection', ['held', 'superseded', 'container', 'retired'])
+def test_candidate_sync_preserves_protected_races_and_candidates(protection):
+    from aggregation.identity import race_canonical_key
+    from elections.models import Candidate
+    from integrations.nc_sbe.event_identity import ensure_event
+    from integrations.nc_sbe.mappers import map_race_identity
+    from integrations.nc_sbe.tasks import sync_nc_candidates
+
+    day = date(2026, 3, 3)
+    title = 'US HOUSE OF REPRESENTATIVES DISTRICT 03'
+    event, _ = ensure_event(day, classify_nc_contest(day, title, party_contest='REP'))
+    identity, _ = map_race_identity(contest_name=title, party_contest='REP', is_partisan=True, vote_for=1, term='2')
+    race = Race.objects.create(election=event, source='nc_sbe', **{k:v for k,v in identity.items() if k != 'contest_variant'},
+        canonical_key=race_canonical_key(event.canonical_key, identity['office_title'], identity.get('ocd_division_id',''),
+                                         identity['race_type'], identity.get('contest_variant','')))
+    Candidate.objects.create(race=race, name='Alice', party='REP', source_metadata={'review': 'preserve'})
+    if protection == 'superseded':
+        race.source_metadata = {'nc_superseded_by': 999}
+        race.save()
+    else:
+        event.source_metadata.update({'nc_classification_held_race_ids': [race.pk]} if protection == 'held' else
+                                     {'nc_classification_' + protection: True})
+        event.save()
+    before = (list(Race.objects.values()), list(Candidate.objects.values()))
+    payload = ('election_dt,contest_name,party_contest,name_on_ballot,party_candidate,is_unexpired,is_partisan,vote_for,term\n'
+               f'03/03/2026,{title},REP,Alice,REP,FALSE,TRUE,1,2\n').encode()
+    with patch('integrations.nc_sbe.tasks.NcSbeClient') as client:
+        client.return_value.list_candidate_filing_csv_key.return_value = 'filings.csv'
+        client.return_value.fetch_candidate_filing_csv.return_value = payload
+        for _ in range(2):
+            sync_nc_candidates.apply().get()
+    assert before == (list(Race.objects.values()), list(Candidate.objects.values()))
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('phase', ['general', 'primary'])
+def test_held_classification_never_derives_winners_for_any_phase(phase):
+    from elections.models import Candidate
+    from results.models import OfficialResult
+    from results.winners import derive_and_apply
+
+    event = Election.objects.create(name='Held NC', state='NC', election_date=date(2024, 11, 5), election_type=phase)
+    race = Race.objects.create(election=event, office_title='US SENATE', race_type='candidate', party='REP',
+                              certification_status='results_certified')
+    for name, votes in [('Alice', 100), ('Bob', 1)]:
+        candidate = Candidate.objects.create(race=race, name=name, party='REP')
+        OfficialResult.objects.create(race=race, candidate=candidate, vote_count=votes, result_type='official')
+    event.source_metadata = {'nc_classification_held_race_ids': [race.pk]}
+    event.save()
+    before = list(OfficialResult.objects.values())
+    assert derive_and_apply(race) == 'skipped_election_classification'
+    assert before == list(OfficialResult.objects.values())
+
+
+@pytest.mark.django_db
+def test_future_nc_results_do_not_create_certified_or_archived_races():
+    from integrations.nc_sbe.event_identity import ensure_event
+    from results.adapters.base import AdapterResult
+    from results.models import OfficialResult
+    from results.tasks import _bootstrap_races_from_results, _process_race_results
+
+    day = date(2098, 11, 4)
+    event, _ = ensure_event(day, classify_nc_contest(day, 'NC GOVERNOR'))
+    rows = _aggregate_rows([raw(title='NC GOVERNOR', kind='S', county='WAKE', votes='0')])
+    result = AdapterResult(rows, 'https://example.org/results.zip', 'full')
+    race = _bootstrap_races_from_results(event, result, 'NC')[0]
+    _process_race_results(race, result, 'NC')
+    race.refresh_from_db()
+    assert race.certification_status != 'results_certified'
+    assert race.race_status != 'archived'
+    assert not OfficialResult.objects.exists()

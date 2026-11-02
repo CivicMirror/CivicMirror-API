@@ -108,6 +108,68 @@ def test_repair_repeat_converges_and_source_record_relationships_survive(mixed):
 
 
 @pytest.mark.django_db
+def test_external_destination_changes_require_fresh_approval(mixed):
+    from integrations.nc_sbe.classification import classify_nc_contest
+    from integrations.nc_sbe.election_repair import (
+        ClassificationConflict,
+        apply_classification_plan,
+        build_classification_plan,
+    )
+    from integrations.nc_sbe.event_identity import ensure_event
+
+    election, _, rows = mixed
+    target, _ = ensure_event(election.election_date, classify_nc_contest(election.election_date, 'SHERIFF', county='WAKE'))
+    report = build_classification_plan(election, [], rows, {'results':'source'})
+    target.source_metadata['review_note'] = 'changed since approval'
+    target.save()
+    with pytest.raises(ClassificationConflict, match='fingerprint'):
+        apply_classification_plan(election, [], rows, {'results':'source'}, report)
+
+
+@pytest.mark.django_db
+def test_external_held_destination_is_not_unheld_by_repair(mixed):
+    from integrations.nc_sbe.classification import classify_nc_contest
+    from integrations.nc_sbe.election_repair import apply_classification_plan, build_classification_plan
+    from integrations.nc_sbe.event_identity import ensure_event
+
+    election, races, rows = mixed
+    target, _ = ensure_event(election.election_date, classify_nc_contest(election.election_date, 'SHERIFF', county='WAKE'))
+    target.source_metadata['nc_classification_container'] = True
+    target.save()
+    before = target.source_metadata.copy()
+    report = build_classification_plan(election, [], rows, {'results':'source'})
+    assert {'race_id': races[1].pk, 'reason': 'target_event_held'} in report['held']
+    apply_classification_plan(election, [], rows, {'results':'source'}, report)
+    target.refresh_from_db()
+    assert target.source_metadata == before
+
+
+@pytest.mark.django_db
+def test_reviewed_future_zero_archive_resets_false_certification_without_changing_votes(mixed):
+    from integrations.nc_sbe.election_repair import apply_classification_plan, build_classification_plan
+
+    election, races, rows = mixed
+    election.election_date = date(2098, 11, 4)
+    election.status = 'results_certified'
+    election.save()
+    Race.objects.filter(election=election).update(certification_status='results_certified', race_status='archived')
+    OfficialResult.objects.filter(race__election=election).update(vote_count=0)
+    for row in rows:
+        row.vote_count = 0
+    report = build_classification_plan(election, [], rows, {'results':'source'})
+    assert report['pre_election_resets']['race_ids'] == [r.pk for r in races]
+    before = list(OfficialResult.objects.order_by('pk').values_list('pk', 'race_id', 'candidate_id', 'vote_count'))
+    apply_classification_plan(election, [], rows, {'results':'source'}, report)
+    assert before == list(OfficialResult.objects.order_by('pk').values_list('pk', 'race_id', 'candidate_id', 'vote_count'))
+    for race in races:
+        race.refresh_from_db()
+        assert race.certification_status == 'upcoming'
+        assert race.race_status == 'active'
+        assert race.election.status == 'upcoming'
+    assert set(OfficialResult.objects.values_list('result_type', flat=True)) == {'unofficial'}
+
+
+@pytest.mark.django_db
 def test_existing_source_mismatch_and_unresolved_electorate_are_held_without_race_changes(mixed):
     from integrations.nc_sbe.election_repair import apply_classification_plan, build_classification_plan
 

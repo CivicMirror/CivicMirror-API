@@ -14,6 +14,7 @@ from pathlib import Path
 
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
 
 from aggregation.identity import name_match_key
 from community.models import MockVote
@@ -133,6 +134,7 @@ def build_classification_plan(election, filing_rows, result_rows, source_hashes)
     for rows in groups.values():
         title_index[(normalized_title(rows[0].office_title), (rows[0].raw or {}).get("party_code", ""))].append(rows)
     targets, moves, held = {}, [], []
+    pre_election = election.election_date > timezone.localdate()
     for race in races:
         if (race.source_metadata or {}).get("nc_superseded_by"):
             continue
@@ -144,6 +146,11 @@ def build_classification_plan(election, filing_rows, result_rows, source_hashes)
             reason = "invalid_source_votes"
         elif not _votes_match(race, matches[0]):
             reason = "existing_source_vote_mismatch"
+        elif pre_election and (
+            any((row.vote_count or 0) != 0 for row in matches[0])
+            or any((r.vote_count or 0) != 0 or r.is_winner is not None for r in race.official_results.all())
+        ):
+            reason = 'future_result_state_requires_review'
         if reason:
             held.append({"race_id": race.pk, "reason": reason})
             continue
@@ -190,8 +197,22 @@ def build_classification_plan(election, filing_rows, result_rows, source_hashes)
     moves = [move for move in moves if move["race_id"] not in collisions]
     # Only targets with an accepted move are materialized.
     targets = {key: value for key, value in targets.items() if any(m["target_key"] == key for m in moves)}
+    # Existing destinations are affected state even when they are not children
+    # of this root. Never clear a separate reviewed hold as a side effect.
+    destinations = list(Election.objects.filter(canonical_key__in=targets).exclude(pk__in=[e.pk for e in scope])
+                        .order_by('pk'))
+    blocked = {e.canonical_key for e in destinations if any((e.source_metadata or {}).get(k) for k in
+              (CONTAINER, RETIRED, 'nc_classification_held_race_ids'))}
+    held.extend({'race_id': m['race_id'], 'reason': 'target_event_held'} for m in moves if m['target_key'] in blocked)
+    moves = [m for m in moves if m['target_key'] not in blocked]
+    targets = {key:value for key,value in targets.items() if key not in blocked}
+    resets = {'race_ids': sorted(m['race_id'] for m in moves) if pre_election else [],
+              'reason': 'published_zero_vote_archive_before_election' if pre_election else ''}
     state = {
         "snapshots": [_snapshot(e) for e in scope],
+        "destination_snapshots": [_snapshot(e) for e in destinations],
+        "destination_source_links": list(ElectionSourceLink.objects.filter(election__in=destinations)
+                                         .order_by('pk').values()),
         "source_links": list(ElectionSourceLink.objects.filter(election__in=scope).order_by("pk").values()),
         "source_hashes": source_hashes,
         "filings": filing_rows,
@@ -200,7 +221,8 @@ def build_classification_plan(election, filing_rows, result_rows, source_hashes)
             name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
             for name in ("classification.py", "event_identity.py", "election_repair.py")
         },
-        "classification_plan": {"targets": targets, "moves": moves, "held": held},
+        "classification_plan": {"targets": targets, "moves": moves, "held": held, 'pre_election_resets': resets},
+        "review_day": timezone.localdate().isoformat(),
     }
     return {
         "election_id": election.pk,
@@ -210,6 +232,8 @@ def build_classification_plan(election, filing_rows, result_rows, source_hashes)
         "fingerprint": _digest(state),
         "source_hashes": source_hashes,
         "targets": targets,
+        "existing_destination_ids": [e.pk for e in destinations],
+        "pre_election_resets": resets,
         "moves": moves,
         "held": held,
         "filing_hints": [dict(title=t, party=p, county=c, is_unexpired=v) for (t, p, c), v in sorted(hints.items())],
@@ -227,9 +251,13 @@ def apply_classification_plan(election, filing_rows, result_rows, source_hashes,
     if approved.get("election_id") != election.pk or not approved.get("dry_run") or approved.get("applied"):
         raise ClassificationConflict("Approved report must be an unapplied preview for the same election")
     scope = list(_scope(election).select_for_update())
-    races = list(Race.objects.select_for_update().filter(election__in=scope))
+    preview = build_classification_plan(election, filing_rows, result_rows, source_hashes)
+    affected = list(Election.objects.select_for_update().filter(
+        pk__in={*[e.pk for e in scope], *preview['existing_destination_ids']}).order_by('pk'))
+    locked_races = list(Race.objects.select_for_update().filter(election__in=affected))
+    races = [r for r in locked_races if r.election_id in {e.pk for e in scope}]
     race_map = {race.pk: race for race in races}
-    race_ids = [r.pk for r in races]
+    race_ids = [r.pk for r in locked_races]
     for model, path in (
         (Candidate, "race_id"),
         (MeasureOption, "race_id"),
@@ -238,11 +266,11 @@ def apply_classification_plan(election, filing_rows, result_rows, source_hashes,
     ):
         list(model.objects.select_for_update().filter(**{path + "__in": race_ids}).values_list("pk", flat=True))
     list(
-        SourceRecord.objects.select_for_update()
+        SourceRecord.objects.select_for_update(of=('self',))
         .filter(Q(linked_race_id__in=race_ids) | Q(linked_candidate__race_id__in=race_ids))
         .values_list("pk", flat=True)
     )
-    list(ElectionSourceLink.objects.select_for_update().filter(election__in=scope).values_list("pk", flat=True))
+    list(ElectionSourceLink.objects.select_for_update().filter(election__in=affected).values_list("pk", flat=True))
     election.refresh_from_db()
     report = build_classification_plan(election, filing_rows, result_rows, source_hashes)
     if report["fingerprint"] != approved.get("fingerprint"):
@@ -278,12 +306,15 @@ def apply_classification_plan(election, filing_rows, result_rows, source_hashes,
         target = Election.objects.filter(canonical_key=key).first()
         if target is None:
             target, _ = ensure_event(election.election_date, classification)
+        combined_hints = {json.dumps(hint, sort_keys=True): hint
+                          for hint in [*(target.source_metadata or {}).get('nc_filing_hints', []),
+                                       *hint_groups.get(key, [])]}
         metadata = {
             **target.source_metadata,
             CLASSIFICATION: event_metadata(classification),
-            "nc_filing_hints": hint_groups.get(key, []),
+            "nc_filing_hints": list(combined_hints.values()),
         }
-        if target.pk != election.pk:
+        if target.pk != election.pk and target.pk not in report['existing_destination_ids']:
             metadata["nc_classification_parent_id"] = election.pk
         metadata.pop(CONTAINER, None)
         metadata.pop(RETIRED, None)
@@ -303,6 +334,12 @@ def apply_classification_plan(election, filing_rows, result_rows, source_hashes,
             race.canonical_key = move["race_key"]
             race.source_metadata = metadata
             race.save(update_fields=["election", "canonical_key", "source_metadata"])
+    reset_ids = report['pre_election_resets']['race_ids']
+    if reset_ids:
+        Race.objects.filter(pk__in=reset_ids).update(certification_status=Race.CertificationStatus.UPCOMING,
+                                                  race_status=Race.RaceStatus.ACTIVE)
+        OfficialResult.objects.filter(race_id__in=reset_ids).update(result_type='unofficial', certified_at=None)
+        Election.objects.filter(pk__in=[e.pk for e in target_events.values()]).update(status=Election.Status.UPCOMING)
     held_ids = {item["race_id"] for item in report["held"]}
     replacements = sorted({e.pk for e in target_events.values()} - {election.pk})
     for original in scope:

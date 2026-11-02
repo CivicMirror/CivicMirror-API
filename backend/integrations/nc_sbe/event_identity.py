@@ -66,6 +66,8 @@ def ensure_event(day: date, classification: NcClassification):
             existing.source_metadata = {**existing.source_metadata, "nc_event_key": key}
             existing.save(update_fields=["source_metadata"])
     meta = dict(existing.source_metadata or {}) if existing else {}
+    if meta.get(CONTAINER) or meta.get(RETIRED):
+        return existing, False
     meta.update(
         {
             CLASSIFICATION: event_metadata(classification),
