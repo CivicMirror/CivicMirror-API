@@ -180,6 +180,8 @@ List all elections.
 
 `election_type` choices: `general` · `primary` · `primary_runoff` · `special` · `general_runoff` · `municipal` · `party` · `other` (default `general`).
 
+**NC classification.** Elections and race list/detail responses additionally expose `classification` (null on records without classification evidence). The object preserves `jurisdiction_kind`, `jurisdiction_key`, `phase`, `special_context`, `evidence_status` (`confirmed`, `inferred`, or `held`), reasons, sources, rule version and research status. A special primary retains its primary phase; a municipal November general may be inferred while municipality-specific date research is pending. Classification does not assert certification or winners. Elections also expose `needs_review` and `replacement_election_ids`. Retired split parents are omitted from ordinary election lists and ZIP lookup; their detail remains available with replacement IDs. Held legacy race components remain visible with held classification and are excluded from automatic re-import/derivation.
+
 `sources` (`contributing_sources`) lists every integration that has written to this record; `field_provenance` maps individual field names to the source that last set them — both exist to support cross-source merge/reconciliation and are informational only.
 
 ---
@@ -783,6 +785,7 @@ Each trigger acquires a per-task idempotency lock (keyed to the current schedule
 |------|-------------|
 | `/internal/tasks/sync-elections/` | Google Civic API election sync |
 | `/internal/tasks/poll-results/` | Poll all pending-results elections for registered state results adapters |
+| `/internal/tasks/poll-ky-results/` | Poll Kentucky live-results sources for their election-scoped contests |
 | `/internal/tasks/poll-upcoming-results/` | Poll upcoming (not yet certified/archived) elections with a results adapter so candidate lists populate before election day |
 | `/internal/tasks/sync-openstates/` | OpenStates candidate sync (all 50 states) |
 | `/internal/tasks/sync-fec/` | FEC candidate sync |
