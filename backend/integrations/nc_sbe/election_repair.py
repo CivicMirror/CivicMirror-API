@@ -134,7 +134,10 @@ def build_classification_plan(election, filing_rows, result_rows, source_hashes)
     for rows in groups.values():
         title_index[(normalized_title(rows[0].office_title), (rows[0].raw or {}).get("party_code", ""))].append(rows)
     targets, moves, held = {}, [], []
-    pre_election = election.election_date > timezone.localdate()
+    pre_election = election.election_date > timezone.localdate() or (
+        election.election_date == timezone.localdate()
+        and result_rows and not any((row.vote_count or 0) > 0 for row in result_rows)
+    )
     for race in races:
         if (race.source_metadata or {}).get("nc_superseded_by"):
             continue
@@ -336,10 +339,13 @@ def apply_classification_plan(election, filing_rows, result_rows, source_hashes,
             race.save(update_fields=["election", "canonical_key", "source_metadata"])
     reset_ids = report['pre_election_resets']['race_ids']
     if reset_ids:
-        Race.objects.filter(pk__in=reset_ids).update(certification_status=Race.CertificationStatus.UPCOMING,
+        pending = election.election_date <= timezone.localdate()
+        Race.objects.filter(pk__in=reset_ids).update(certification_status=(
+            Race.CertificationStatus.RESULTS_PENDING if pending else Race.CertificationStatus.UPCOMING),
                                                   race_status=Race.RaceStatus.ACTIVE)
         OfficialResult.objects.filter(race_id__in=reset_ids).update(result_type='unofficial', certified_at=None)
-        Election.objects.filter(pk__in=[e.pk for e in target_events.values()]).update(status=Election.Status.UPCOMING)
+        Election.objects.filter(pk__in=[e.pk for e in target_events.values()]).update(
+            status=Election.Status.RESULTS_PENDING if pending else Election.Status.UPCOMING)
     held_ids = {item["race_id"] for item in report["held"]}
     replacements = sorted({e.pk for e in target_events.values()} - {election.pk})
     for original in scope:

@@ -145,7 +145,11 @@ def test_external_held_destination_is_not_unheld_by_repair(mixed):
 
 
 @pytest.mark.django_db
-def test_reviewed_future_zero_archive_resets_false_certification_without_changing_votes(mixed):
+@pytest.mark.parametrize('on_election_day', [False, True])
+def test_reviewed_future_zero_archive_resets_false_certification_without_changing_votes(mixed, on_election_day):
+    from contextlib import nullcontext
+    from unittest.mock import patch
+
     from integrations.nc_sbe.election_repair import apply_classification_plan, build_classification_plan
 
     election, races, rows = mixed
@@ -156,16 +160,19 @@ def test_reviewed_future_zero_archive_resets_false_certification_without_changin
     OfficialResult.objects.filter(race__election=election).update(vote_count=0)
     for row in rows:
         row.vote_count = 0
-    report = build_classification_plan(election, [], rows, {'results':'source'})
-    assert report['pre_election_resets']['race_ids'] == [r.pk for r in races]
     before = list(OfficialResult.objects.order_by('pk').values_list('pk', 'race_id', 'candidate_id', 'vote_count'))
-    apply_classification_plan(election, [], rows, {'results':'source'}, report)
+    clock = (patch('integrations.nc_sbe.election_repair.timezone.localdate', return_value=election.election_date)
+             if on_election_day else nullcontext())
+    with clock:
+        report = build_classification_plan(election, [], rows, {'results':'source'})
+        assert report['pre_election_resets']['race_ids'] == [r.pk for r in races]
+        apply_classification_plan(election, [], rows, {'results':'source'}, report)
     assert before == list(OfficialResult.objects.order_by('pk').values_list('pk', 'race_id', 'candidate_id', 'vote_count'))
     for race in races:
         race.refresh_from_db()
-        assert race.certification_status == 'upcoming'
+        assert race.certification_status == ('results_pending' if on_election_day else 'upcoming')
         assert race.race_status == 'active'
-        assert race.election.status == 'upcoming'
+        assert race.election.status == ('results_pending' if on_election_day else 'upcoming')
     assert set(OfficialResult.objects.values_list('result_type', flat=True)) == {'unofficial'}
 
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.13, Django, Celery, PostgreSQL, Redis, the existing aggregation identity service and NC SBE sources.
 
-**Spec / design status:** This is a design-gated closeout roadmap. Its evidence baseline is [the refreshed inventory](../../nc-election-classification-inventory-2026-11-02.md) and [its JSON](../../nc-election-classification-inventory-2026-11-02.json), not an approved classification design. Task 1 produces the design at `docs/superpowers/specs/2026-11-02-nc-election-classification-design.md`; update subsequent interfaces if that design changes them.
+**Spec / design status:** The user subsequently authorized implementation of the updated jurisdiction-first rules and deferred municipality-specific dates. The [implementation contract](../specs/2026-11-02-nc-election-classification-design.md) now governs the shared classifier, routing and repair. The baseline is [the refreshed inventory](../../nc-election-classification-inventory-2026-11-02.md) and [its JSON](../../nc-election-classification-inventory-2026-11-02.json). The checklist below retains the complete closeout roadmap; code implementation and an isolated data rehearsal do not themselves establish production closeout.
 
 ## Revised direction: jurisdiction first, state-level first
 
