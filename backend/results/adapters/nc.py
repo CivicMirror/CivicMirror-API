@@ -162,6 +162,10 @@ class NorthCarolinaAdapter(StateResultsAdapter):
         from integrations.nc_sbe.event_identity import filter_result_rows
 
         rows = filter_result_rows(election, _aggregate_rows(raw_rows))
+        if (election.election_date == timezone.localdate()
+                and not any((row.vote_count or 0) > 0 for row in rows)):
+            return AdapterResult(rows=[], source_url=source_url, mapping_confidence='none',
+                                 notes='NC election-day archive contains no reported votes')
         for row in rows:
             row.raw['source_version'] = etag or ''
 

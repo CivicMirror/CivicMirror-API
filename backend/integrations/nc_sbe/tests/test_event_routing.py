@@ -234,7 +234,8 @@ def test_held_classification_never_derives_winners_for_any_phase(phase):
 
 
 @pytest.mark.django_db
-def test_future_nc_results_do_not_create_certified_or_archived_races():
+@pytest.mark.parametrize('on_election_day', [False, True])
+def test_future_nc_results_do_not_create_certified_or_archived_races(on_election_day):
     from integrations.nc_sbe.event_identity import ensure_event
     from results.adapters.base import AdapterResult
     from results.models import OfficialResult
@@ -245,7 +246,9 @@ def test_future_nc_results_do_not_create_certified_or_archived_races():
     rows = _aggregate_rows([raw(title='NC GOVERNOR', kind='S', county='WAKE', votes='0')])
     result = AdapterResult(rows, 'https://example.org/results.zip', 'full')
     race = _bootstrap_races_from_results(event, result, 'NC')[0]
-    _process_race_results(race, result, 'NC')
+    from contextlib import nullcontext
+    with patch('results.tasks.timezone.localdate', return_value=day) if on_election_day else nullcontext():
+        _process_race_results(race, result, 'NC')
     race.refresh_from_db()
     assert race.certification_status != 'results_certified'
     assert race.race_status != 'archived'
