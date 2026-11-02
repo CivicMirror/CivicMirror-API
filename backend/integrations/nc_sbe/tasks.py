@@ -35,11 +35,12 @@ from aggregation.identity import name_match_key, race_canonical_key
 from elections.models import Election, Race
 from ops.models import SyncLog
 
+from .classification import classify_nc_contest, regular_dates
 from .client import NcSbeClient, _results_zip_url, parse_candidate_listing_csv
+from .event_identity import CLASSIFICATION, CONTAINER, RETIRED, discover_filing_events, ensure_event
 from .exceptions import NcSbeRetryableError
 from .mappers import (
     dedupe_candidate_rows,
-    election_name,
     election_type_from_date,
     group_candidate_rows,
     is_in_scope_contest,
@@ -77,8 +78,6 @@ def sync_nc_elections(self):
     )
 
     try:
-        from aggregation import ingest
-
         client = NcSbeClient()
         date_strs = client.list_election_date_strs()
         logger.info("nc_sbe.sync_elections.discovered count=%d", len(date_strs))
@@ -86,6 +85,11 @@ def sync_nc_elections(self):
         created = updated = skipped = 0
         today = timezone.localdate()
 
+        # The statutory calendar can identify upcoming regular dates before an
+        # ENRS prefix exists. Prefix-only unknown dates remain discovery holds.
+        date_strs = sorted(set(date_strs) | {
+            d.strftime('%Y_%m_%d') for d in regular_dates(today.year) if d >= today
+        })
         for date_str in date_strs:
             try:
                 d = datetime.date(
@@ -102,33 +106,17 @@ def sync_nc_elections(self):
                 continue
 
             etype = election_type_from_date(d)
-            source_id = f"nc_sbe_{date_str}"
-            results_url = _results_zip_url(date_str)
-
+            if etype == 'other':
+                skipped += 1
+                logger.info('nc_sbe.sync_elections.classification_pending date=%s', d)
+                continue
             status = (
                 Election.Status.RESULTS_PENDING
                 if d <= today
                 else Election.Status.UPCOMING
             )
 
-            election, was_created = ingest.ingest_election(
-                source=_SOURCE,
-                source_id=source_id,
-                identity={
-                    "state": "NC",
-                    "election_type": etype,
-                    "election_date": d,
-                    "jurisdiction_level": Election.JurisdictionLevel.STATE,
-                },
-                fields={
-                    "name": election_name(d),
-                    "status": status,
-                    "source_metadata": {
-                        "nc_date_str": date_str,
-                        "results_url": results_url,
-                    },
-                },
-            )
+            election, was_created = ensure_event(d,classify_nc_contest(d,'US SENATE'))
             if was_created:
                 created += 1
             else:
@@ -138,13 +126,23 @@ def sync_nc_elections(self):
                     Election.objects.filter(pk=election.pk).update(status=status)
                 updated += 1
 
+        published_dates = set()
+        for stamp in date_strs:
+            try:
+                published_dates.add(datetime.date.fromisoformat(stamp.replace('_','-')))
+            except ValueError:
+                continue
+        extra_created,extra_updated,held = discover_filing_events(client,published_dates,today.year)
+        created += extra_created
+        updated += extra_updated
+
         logger.info(
             "nc_sbe.sync_elections.done created=%d updated=%d skipped=%d",
             created, updated, skipped,
         )
 
         sync_log.records_created = created
-        sync_log.notes = f"updated={updated} skipped_pre_{_MIN_YEAR}={skipped}"
+        sync_log.notes = f"updated={updated} skipped_or_pending={skipped} filing_rows_held={held}"
         sync_log.status = SyncLog.Status.COMPLETED
         sync_log.completed_at = timezone.now()
         sync_log.save(update_fields=["records_created", "notes", "status", "completed_at"])
@@ -191,10 +189,15 @@ def sync_nc_candidates(self):
 
     try:
         elections = list(Election.objects.filter(state="NC", status__in=_ACTIVE_STATUSES))
-        elections_by_date = {e.election_date: e for e in elections}
+        known_dates = {e.election_date for e in elections}
         years = sorted({e.election_date.year for e in elections})
 
         client = NcSbeClient()
+        for stamp in client.list_election_date_strs():
+            try:
+                known_dates.add(datetime.date.fromisoformat(stamp.replace('_','-')))
+            except ValueError:
+                continue
         created = updated = skipped_out_of_scope = skipped_no_election = 0
 
         for year in years:
@@ -213,8 +216,7 @@ def sync_nc_candidates(self):
                     continue
 
                 d = parse_candidate_filing_date(election_dt)
-                election = elections_by_date.get(d) if d else None
-                if election is None:
+                if d not in known_dates:
                     skipped_no_election += 1
                     continue
 
@@ -222,6 +224,20 @@ def sync_nc_candidates(self):
                 if not deduped:
                     continue
                 first = deduped[0]
+                flags = {(r.get('is_unexpired') or '').strip().upper() for r in group_rows}
+                if len(flags) > 1:
+                    logger.warning('nc_sbe.sync_candidates.conflicting_unexpired date=%s contest=%s', d, contest_name)
+                    skipped_no_election += 1
+                    continue
+                flag = next(iter(flags))
+                classification = classify_nc_contest(d,contest_name,party_contest=party_contest,is_unexpired=flag)
+                if not classification.resolved:
+                    skipped_no_election += 1
+                    continue
+                election, _ = ensure_event(d,classification)
+                if any((election.source_metadata or {}).get(k) for k in (CONTAINER, RETIRED)):
+                    skipped_no_election += 1
+                    continue
 
                 identity, fields = map_race_identity(
                     contest_name=contest_name,
@@ -230,12 +246,20 @@ def sync_nc_candidates(self):
                     vote_for=int((first.get("vote_for") or "1").strip() or 1),
                     term=first.get("term") or "",
                 )
+                fields['source_metadata'].update({CLASSIFICATION:classification.to_dict(),
+                    'is_unexpired':{'TRUE':True,'FALSE':False}.get(flag)})
                 # A later filing refresh must retain the reviewed results identity
                 # and sourced seat count on the same canonical race.
                 key = race_canonical_key(election.canonical_key or f"e{election.pk}",
                                          identity['office_title'], identity.get('ocd_division_id', ''),
                                          identity['race_type'], identity.get('contest_variant', ''))
                 existing = Race.objects.filter(canonical_key=key).first()
+                if existing and (
+                    existing.pk in (existing.election.source_metadata or {}).get('nc_classification_held_race_ids', [])
+                    or (existing.source_metadata or {}).get('nc_superseded_by')
+                ):
+                    skipped_no_election += 1
+                    continue
                 if existing and (existing.source_metadata or {}).get('nc_contest_key'):
                     fields['source_metadata'] = {**existing.source_metadata, **fields['source_metadata']}
                     fields.pop('max_selections', None)

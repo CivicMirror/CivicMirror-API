@@ -53,6 +53,12 @@ def ingest_official_results(self, state: str, election_id: int):
         logger.error("ingest_official_results: election %s not found", election_id)
         return
 
+    if state == 'NC' and any((election.source_metadata or {}).get(key) for key in (
+        'nc_classification_container','nc_classification_retired',
+    )):
+        logger.info('NC legacy classification container remains held: election=%s', election.pk)
+        return
+
     adapter = adapter_class()
 
     # If no races exist, clear any stale version cache so the adapter performs
@@ -84,6 +90,10 @@ def ingest_official_results(self, state: str, election_id: int):
         return
 
     if not result.rows:
+        if state == 'NC' and 'nc_classification' in (election.source_metadata or {}):
+            # Missing or out-of-scope rows are not evidence that already
+            # certified races became uncertified. Leave this event retryable.
+            return
         # 'none' confidence means the adapter never attempted a fetch (e.g. no
         # results_url configured yet) — nothing was found to be "partial", so
         # leave races pending rather than mislabeling them as partial_results
@@ -343,6 +353,12 @@ def _certify_election_if_complete(election) -> bool:
     """
     from elections.models import Election, Race
 
+    if election.state == 'NC' and 'nc_classification' in (election.source_metadata or {}):
+        if election.election_date > timezone.localdate() or any((election.source_metadata or {}).get(key) for key in (
+            'nc_classification_container','nc_classification_retired','nc_classification_held_race_ids',
+        )):
+            return False
+
     if election.status in Election.TERMINAL_STATUSES:
         return False
     races = Race.objects.filter(election=election).exclude(race_status=Race.RaceStatus.CANCELLED)
@@ -397,6 +413,13 @@ def _store_race_results(race, adapter_result, state: str):
     from results.models import OfficialResult
 
     if (race.source_metadata or {}).get('nc_superseded_by'):
+        return
+    if state == 'NC' and race.election.election_date > timezone.localdate():
+        return
+    if (state == 'NC' and race.election.election_date == timezone.localdate()
+            and not any((row.vote_count or 0) > 0 for row in adapter_result.rows)):
+        return
+    if state == 'NC' and race.pk in (race.election.source_metadata or {}).get('nc_classification_held_race_ids',[]):
         return
     if state == "NC":
         from results.nc_identity import adopt_filing_identity
@@ -621,7 +644,9 @@ def poll_pending_results(self):
         election_date__lt=timezone.now().date(),
         status=Election.Status.RESULTS_PENDING,
         state__in=supported,
-    )
+    ).exclude(state='NC',source_metadata__has_key='nc_classification_retired',
+              source_metadata__nc_classification_retired=True).exclude(
+        state='NC',source_metadata__has_key='nc_classification_container',source_metadata__nc_classification_container=True)
     queued = 0
     for election in elections:
         ingest_official_results.delay(election.state, election.pk)
@@ -668,7 +693,9 @@ def poll_upcoming_results(self):
             Election.Status.RESULTS_PENDING,
         ],
         state__in=supported,
-    )
+    ).exclude(state='NC',source_metadata__has_key='nc_classification_retired',
+              source_metadata__nc_classification_retired=True).exclude(
+        state='NC',source_metadata__has_key='nc_classification_container',source_metadata__nc_classification_container=True)
     queued = 0
     for election in elections:
         ingest_official_results.delay(election.state, election.pk)

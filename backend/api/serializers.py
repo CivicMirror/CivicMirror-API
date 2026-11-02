@@ -16,6 +16,10 @@ class ElectionSerializer(serializers.ModelSerializer):
     race_count = serializers.IntegerField(read_only=True)
     election_cycle = ElectionCycleSerializer(read_only=True)
     sources = serializers.ListField(source="contributing_sources", read_only=True)
+    classification = serializers.JSONField(source='source_metadata.nc_classification',default=None,read_only=True)
+    replacement_election_ids = serializers.ListField(
+        source='source_metadata.nc_classification_replacements',default=list,read_only=True,
+    )
 
     class Meta:
         model = Election
@@ -23,6 +27,7 @@ class ElectionSerializer(serializers.ModelSerializer):
             'id', 'source_id', 'name', 'election_date', 'election_type', 'jurisdiction_level',
             'state', 'status', 'last_synced_at', 'election_cycle', 'race_count',
             'sources', 'field_provenance',
+            'classification', 'needs_review', 'replacement_election_ids',
         ]
 
 
@@ -81,7 +86,17 @@ class OfficialResultSerializer(serializers.ModelSerializer):
         return obj.measure_option.option_label if obj.measure_option_id else None
 
 
-class RaceListSerializer(serializers.ModelSerializer):
+class NcRaceClassificationMixin:
+    def get_classification(self,obj):
+        if obj.election.state == 'NC' and obj.pk in (obj.election.source_metadata or {}).get(
+            'nc_classification_held_race_ids',[]
+        ):
+            return {'evidence_status':'held','reasons':['legacy_identity_component_held']}
+        return (obj.source_metadata or {}).get('nc_classification')
+
+
+class RaceListSerializer(NcRaceClassificationMixin,serializers.ModelSerializer):
+    classification = serializers.SerializerMethodField()
     class Meta:
         model = Race
         fields = [
@@ -89,11 +104,13 @@ class RaceListSerializer(serializers.ModelSerializer):
             'geography_scope', 'certification_status', 'race_status',
             'vote_method', 'ocd_division_id', 'source', 'last_synced_at',
             'party', 'normalized_party',
+            'classification',
         ]
         extra_kwargs = {'geography_scope': {'help_text': GEOGRAPHY_SCOPE_HELP}}
 
 
-class RaceDetailSerializer(serializers.ModelSerializer):
+class RaceDetailSerializer(NcRaceClassificationMixin,serializers.ModelSerializer):
+    classification = serializers.SerializerMethodField()
     candidates = CandidateSerializer(many=True, read_only=True)
     measure_options = MeasureOptionSerializer(many=True, read_only=True)
     sources = serializers.ListField(source="contributing_sources", read_only=True)
@@ -111,6 +128,7 @@ class RaceDetailSerializer(serializers.ModelSerializer):
             'geography_scope', 'certification_status', 'race_status',
             'vote_method', 'max_selections', 'ballot_type',
             'party', 'normalized_party',
+            'classification',
             'ocd_division_id', 'normalized_office_title',
             'yes_vote_details', 'no_vote_details', 'match_confidence',
             'source', 'last_synced_at', 'candidates', 'measure_options',

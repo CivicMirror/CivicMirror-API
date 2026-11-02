@@ -66,7 +66,11 @@ class ElectionViewSet(ReadOnlyModelViewSet):
     ordering = ['election_date']
 
     def get_queryset(self):
-        return Election.objects.select_related('election_cycle').annotate(
+        queryset = Election.objects.select_related('election_cycle')
+        if self.action != 'retrieve':
+            queryset = queryset.exclude(state='NC',source_metadata__has_key='nc_classification_retired',
+                                        source_metadata__nc_classification_retired=True)
+        return queryset.annotate(
             race_count=Count('races', filter=~Q(races__source_metadata__has_key='nc_superseded_by'))
         )
 
@@ -213,6 +217,8 @@ class LookupView(APIView):
             Election.objects
             .filter(state=state)
             .exclude(status=Election.Status.ARCHIVED)
+            .exclude(state='NC',source_metadata__has_key='nc_classification_retired',
+                     source_metadata__nc_classification_retired=True)
             .annotate(race_count=Count('races', filter=~Q(races__source_metadata__has_key='nc_superseded_by')))
         )
 

@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from django.db import transaction
+from django.utils import timezone
 
 from aggregation.identity import normalize_party
 
@@ -165,6 +166,11 @@ def derive_winners(race, rows=None) -> Derivation:
     from elections.models import Race
     from results.models import OfficialResult
 
+    if race.election.state == 'NC' and (
+        date.fromisoformat(str(race.election.election_date)) > timezone.localdate()
+        or race.pk in (race.election.source_metadata or {}).get('nc_classification_held_race_ids', [])
+    ):
+        return Derivation('skipped_election_classification')
     if (race.source_metadata or {}).get('nc_superseded_by'):
         return Derivation("skipped_superseded")
     if race.race_type != Race.RaceType.CANDIDATE:

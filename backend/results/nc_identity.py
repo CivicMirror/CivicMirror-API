@@ -236,6 +236,9 @@ def apply_metadata(race, rows, source_url: str) -> None:
             )
         }
     )
+    classification = first.get('nc_classification')
+    if classification:
+        meta['nc_classification'] = classification
     meta["nc_identity_verified"] = all(row.raw.get("nc_identity_verified") for row in rows)
     meta["reporting_counties"] = sorted({c for row in rows for c in row.raw.get("reporting_counties", [])})
     meta["nc_results_source_url"] = source_url
