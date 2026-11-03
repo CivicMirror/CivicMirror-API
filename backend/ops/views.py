@@ -20,7 +20,11 @@ _US_STATE_CODES = frozenset([
     "DC", "PR", "GU", "VI", "AS", "MP",
 ])
 
-_GLOBAL_SOURCES = frozenset(["civic_api"])
+# Cross-cutting sources with no single associated state. These are reported
+# under "global" rather than "by_state"; _source_state_code returns None for
+# them, so without this set they would be dropped from the response entirely.
+# Held "civic_api" until the Google Civic integration was retired (issue #229).
+_GLOBAL_SOURCES = frozenset(["openstates", "fec", "congress", "census", "election_calendar"])
 
 _FULL_CORE_STATES = frozenset([
     "AL", "AZ", "CO", "CT", "FL", "GA", "IL", "MA", "MI", "NC", "NY", "PA", "SC", "TX", "VA",
@@ -36,8 +40,8 @@ def _source_state_code(source: str) -> str | None:
     Every current state-specific SyncLog.source value is prefixed with its
     state's 2-letter code followed by an underscore — this derives the
     state from that convention instead of a hand-maintained lookup table.
-    Returns None for national/non-state sources (civic_api, openstates,
-    fec, congress, census, election_calendar, ...).
+    Returns None for national/non-state sources (openstates, fec, congress,
+    census, election_calendar, ...); see _GLOBAL_SOURCES.
     """
     prefix = source.split("_", 1)[0].upper()
     return prefix if prefix in _US_STATE_CODES else None

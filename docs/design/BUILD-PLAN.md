@@ -312,7 +312,7 @@ GET  /health/                            ← no auth, Cloud Run health check
 - Celery worker service: `min-instances=1`, `--cpu-boost`
 - Cloud SQL (PostgreSQL) via Cloud SQL Auth Proxy sidecar
 - Cloud Memorystore (Redis) for Celery broker
-- Secret Manager entries: `CIVIC_API_KEY`, `DATABASE_URL`, `REDIS_URL`, `CIVICMIRROR_API_KEY`, `SECRET_KEY`
+- Secret Manager entries: `DATABASE_URL`, `REDIS_URL`, `CIVICMIRROR_API_KEY`, `SECRET_KEY` (`CIVIC_API_KEY` removed — Civic retired, issue #229)
 
 ### 6.5 Cloud Scheduler Jobs
 - `sync-elections`: POST to `/internal/tasks/sync-elections/` every 6 hours, OIDC auth

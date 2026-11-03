@@ -371,6 +371,11 @@ SCHEDULER_OIDC_AUDIENCE = env('SCHEDULER_OIDC_AUDIENCE', default='')
 SCHEDULER_SA_EMAIL = env('SCHEDULER_SA_EMAIL', default='')
 FEC_API_KEY = env('FEC_API_KEY', default='')
 OPENSTATES_API_KEY = env('OPENSTATES_API_KEY', default='')
+# OpenStates previously read the Civic integration's HTTP tuning settings. It
+# now has its own; the defaults match the values it inherited (issue #229).
+OPENSTATES_HTTP_TIMEOUT_SECONDS = env.int('OPENSTATES_HTTP_TIMEOUT_SECONDS', default=10)
+OPENSTATES_MAX_RETRIES = env.int('OPENSTATES_MAX_RETRIES', default=3)
+OPENSTATES_RETRY_BACKOFF_SECONDS = env.float('OPENSTATES_RETRY_BACKOFF_SECONDS', default=1.0)
 GITHUB_TOKEN = env('GITHUB_TOKEN', default='')
 
 # Universal Cloudflare Worker proxy (bypasses GCP datacenter IP blocks on

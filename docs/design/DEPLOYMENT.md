@@ -129,7 +129,6 @@ gcloud secrets create django-secret-key --replication-policy=automatic
 gcloud secrets create civicmirror-api-key --replication-policy=automatic
 gcloud secrets create database-url --replication-policy=automatic
 gcloud secrets create redis-url --replication-policy=automatic
-gcloud secrets create civic-api-key --replication-policy=automatic
 gcloud secrets create fec-api-key --replication-policy=automatic
 gcloud secrets create openstates-api-key --replication-policy=automatic
 gcloud secrets create internal-task-token --replication-policy=automatic
@@ -197,7 +196,6 @@ DATABASE_URL=database-url:latest,\
 REDIS_URL=redis-url:latest,\
 CELERY_BROKER_URL=redis-url:latest,\
 CIVICMIRROR_API_KEY=civicmirror-api-key:latest,\
-CIVIC_API_KEY=civic-api-key:latest,\
 FEC_API_KEY=fec-api-key:latest,\
 OPENSTATES_API_KEY=openstates-api-key:latest" \
   --set-env-vars="\
@@ -232,7 +230,6 @@ DATABASE_URL=database-url:latest,\
 REDIS_URL=redis-url:latest,\
 CELERY_BROKER_URL=redis-url:latest,\
 CELERY_RESULT_BACKEND=redis-url:latest,\
-CIVIC_API_KEY=civic-api-key:latest,\
 FEC_API_KEY=fec-api-key:latest,\
 OPENSTATES_API_KEY=openstates-api-key:latest" \
   --set-env-vars="\
@@ -269,14 +266,9 @@ export API_URL=$(gcloud run services describe $API_SERVICE \
 ### Create scheduler jobs
 
 ```bash
-# sync-elections: hourly
-gcloud scheduler jobs create http sync-elections \
-  --location=$REGION \
-  --schedule="0 * * * *" \
-  --uri="$API_URL/internal/tasks/sync-elections/" \
-  --http-method=POST \
-  --oidc-service-account-email=$SCHEDULER_SA_EMAIL \
-  --oidc-token-audience="$API_URL/internal/tasks/sync-elections/"
+# NOTE: the former hourly `sync-elections` job (Google Civic) was removed when
+# that integration was retired -- see issue #229. The route no longer exists and
+# a job pointing at it returns 404.
 
 # poll-results: daily at 06:00 UTC
 gcloud scheduler jobs create http poll-results \

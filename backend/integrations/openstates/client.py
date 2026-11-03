@@ -27,9 +27,9 @@ class OpenStatesClient:
     def __init__(self):
         self.api_key = settings.OPENSTATES_API_KEY
         self.base_url = self.BASE_URL.rstrip('/')
-        self.timeout = getattr(settings, 'CIVIC_HTTP_TIMEOUT_SECONDS', 10)
-        self.max_retries = getattr(settings, 'CIVIC_MAX_RETRIES', 3)
-        self.backoff_seconds = getattr(settings, 'CIVIC_RETRY_BACKOFF_SECONDS', 1.0)
+        self.timeout = getattr(settings, 'OPENSTATES_HTTP_TIMEOUT_SECONDS', 10)
+        self.max_retries = getattr(settings, 'OPENSTATES_MAX_RETRIES', 3)
+        self.backoff_seconds = getattr(settings, 'OPENSTATES_RETRY_BACKOFF_SECONDS', 1.0)
         self.session = requests.Session()
 
     def list_people(self, state: str, page: int = 1, per_page: int = 50) -> dict:

@@ -18,7 +18,11 @@ The CSV contains:
   - 14  State Board of Education candidates
   - and other statewide/judicial offices
 
-Federal races (Ohio's 15 US House districts) are handled by Civic API.
+Federal races (Ohio's 15 US House districts) are not created here. They were
+documented as coming from the Google Civic API, but that integration is retired
+(issue #229) and in practice those rows were bootstrapped by
+results/adapters/oh.py via results.tasks.ingest_official_results. Ohio has no
+dedicated Stage 1 source for federal races.
 """
 import logging
 

@@ -2,9 +2,12 @@
 New Jersey elections Celery tasks.
 
 Stage 1 enrichment — sync_nj_county_urls:
-  NJ has no custom election/race creation (Stage 1 stays on the existing
-  Google Civic API sync). This task only enriches already-existing NJ
-  Election rows with the current per-county Clarity URLs/IDs, scraped from
+  NJ has no custom election/race creation. This previously relied on the
+  Google Civic API sync, which is retired (issue #229), so NJ currently has
+  no Stage 1 creator -- Election rows come from election_calendar and races
+  only from results/adapters/nj.py bootstrapping. This task only enriches
+  already-existing NJ Election rows with the current per-county Clarity
+  URLs/IDs, scraped from
   the state's election-night-results page, so Stage 2 (results/adapters/
   nj.py) knows which counties to poll and with what election ID.
 

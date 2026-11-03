@@ -783,7 +783,6 @@ Each trigger acquires a per-task idempotency lock (keyed to the current schedule
 
 | Path | Description |
 |------|-------------|
-| `/internal/tasks/sync-elections/` | Google Civic API election sync |
 | `/internal/tasks/poll-results/` | Poll all pending-results elections for registered state results adapters |
 | `/internal/tasks/poll-ky-results/` | Poll Kentucky live-results sources for their election-scoped contests |
 | `/internal/tasks/poll-upcoming-results/` | Poll upcoming (not yet certified/archived) elections with a results adapter so candidate lists populate before election day |

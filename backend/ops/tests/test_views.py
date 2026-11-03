@@ -79,13 +79,15 @@ def test_multiple_sources_for_same_state_both_included(client):
 
 
 @pytest.mark.django_db
-def test_civic_api_goes_to_global_not_by_state(client):
-    _make_log("civic_api", records_created=12)
+def test_national_source_goes_to_global_not_by_state(client):
+    """A cross-cutting source is reported under "global", never under a state.
+    Used civic_api until the Google Civic integration was retired (issue #229)."""
+    _make_log("openstates", records_created=12)
     response = client.get("/api/coverage/sync-status/")
     data = response.json()
-    assert data["global"]["civic_api"]["records_created"] == 12
-    assert "civic_api" not in data["by_state"]
-    assert not any("civic_api" in sources for sources in data["by_state"].values())
+    assert data["global"]["openstates"]["records_created"] == 12
+    assert "openstates" not in data["by_state"]
+    assert not any("openstates" in sources for sources in data["by_state"].values())
 
 
 @pytest.mark.django_db

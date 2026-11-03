@@ -274,29 +274,36 @@ result data"), so they are a discovery path too, not only a results path.
 
 ### Retirement steps
 
-1. ~~Remove the `0 4 * * *` `sync-elections` crontab entry~~ — **done in Part 1**;
+All of these are **done** as of commits `3d98c71` and the follow-up cleanup commit.
+
+1. ~~Remove the `0 4 * * *` `sync-elections` crontab entry~~ — done in Part 1;
    that alone stops all new Civic ingestion.
-2. Remove `'integrations.civic'` from `INSTALLED_APPS`
-   (`config/settings/base.py:146`).
-3. Remove the trigger route and view: `internal/urls.py:7`,
-   `internal/views.py:12,99-100`. Remove
-   `elections/management/commands/sync_elections.py`.
-4. **Release the contact locks** (Part 3 scope item 3): clear `field_provenance`
-   entries where `civic_api` owns an empty `image_url` / `website_url` /
-   `description`, so state adapters can fill them. ~516 candidates.
-5. Delete the 52 `SourcePrecedence` rows for `civic_api` (also tracked as Part 3
-   scope item 6) — **including the
-   `(*, *, 0)` wildcard**, which is what let Civic outrank every unranked
-   adapter. Note 23 adapters (`mi_sos`, `il_sbe`, `mn_sos`, `oh_sos`, `or_sos`,
-   `tn_sos`, `ky_sos`, `al_sos`, `ga_sos`, `pa_sos`, `tx_goelect`, `wa_votewa`,
-   `hi_olvr`, `az_sos`, `nj_elections`, …) have **no precedence rows at all** and
-   resolve to `+inf`; removing the Civic wildcard is safe, but the unranked-
-   adapter gap deserves its own issue.
-6. Leave existing Civic rows in place at this stage — the sweep is Part 3.
-   Nothing needs *migrating*: #2232 holds only MI and VA races, both already
-   covered by `mi_sos` and `va_elect`.
-7. Keep `Race.Source.CIVIC_API` in the enum for historical rows; stop writing it.
-8. Drop `CIVIC_API_KEY` from deploy config once the above ships.
+2. ~~Remove `'integrations.civic'` from `INSTALLED_APPS`~~.
+3. ~~Remove the trigger route, view, task-lock entry and the
+   `elections/management/commands/sync_elections.py` command~~.
+4. ~~Delete the `integrations/civic/` package~~.
+5. ~~Remove the `CIVIC_*` settings and their `.env.example` block~~. Note
+   `integrations/openstates/client.py` was reading `CIVIC_HTTP_TIMEOUT_SECONDS`,
+   `CIVIC_MAX_RETRIES` and `CIVIC_RETRY_BACKOFF_SECONDS`; it now has its own
+   `OPENSTATES_*` settings with the same defaults.
+6. ~~Remove `civic_api` from the orchestrator's `FIELD_PRIORITY` and
+   `SOURCE_PRIORITY`~~, and from `ops/views.py`'s `_GLOBAL_SOURCES`.
+7. ~~Keep `Race.Source.CIVIC_API` and `SourceRecord.SourceType.CIVIC`~~ so
+   historical rows still load; stop writing them.
+8. ~~Correct the stale docs and comments~~: `oh_sos` / `nj_elections` docstrings,
+   the `va_elect` comment, `DEPLOYMENT.md` (the `civic-api-key` secret and the
+   hourly `sync-elections` scheduler job), `API-Reference.md`,
+   `endpoint-reference.md`, `openapi.yaml`, `README.md`, `BUILD-PLAN.md`,
+   `Sources.md` and `.github/copilot-instructions.md`.
+
+**Database cleanup is deliberately *not* part of this step — it is Part 3.** An
+earlier revision listed the contact-lock release and the `SourcePrecedence`
+deletions here; they are sequenced last on purpose, because running them while
+the source is still live would let the next sync re-create what the sweep
+removed. Until Part 3 runs, the 52 `civic_api` precedence rows (including the
+`(*, *, 0)` wildcard) and ~516 empty contact locks remain in place. They are
+pre-existing conditions, not regressions from the code removal, but they do mean
+**no state adapter can yet fill a contact field Civic owns**.
 
 Retirement requires **no merge, no title aliasing, no candidate reconciliation
 and no precedence reordering** — the entire risky path in the previous revision

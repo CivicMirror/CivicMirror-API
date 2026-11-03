@@ -9,7 +9,7 @@ info:
   title: CivicMirror API
   description: >
     Aggregates and normalizes election data from multiple public sources
-    (Google Civic, OpenStates, Ballotpedia, OpenFEC, Clarity Elections, MEDSL)
+    (state election offices, OpenStates, OpenFEC, Clarity Elections, MEDSL)
     into a unified REST API. Identifiers use OCD-IDs and FIPS codes.
     Dates are ISO 8601.
   version: "1"
@@ -179,7 +179,7 @@ components:
           example: 12
         source:
           type: string
-          example: civic_api
+          example: nc_sbe
         created_at:
           type: string
           format: date-time
@@ -232,7 +232,7 @@ components:
           example: 3
         source:
           type: string
-          example: civic_api
+          example: nc_sbe
         created_at:
           type: string
           format: date-time

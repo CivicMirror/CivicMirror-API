@@ -2,6 +2,11 @@
 
 This document catalogs promising election-data sources and reference projects for CivicMirror.
 
+> **Note (2026-11-03):** the Google Civic Information API has since been retired from
+> this project in full — see issue #229. The evaluation and recommendations below
+> predate that decision and are kept as research history; do not treat Civic as a
+> baseline or first-choice source.
+
 ## Goal
 
 CivicMirror needs a realistic mix of sources that can help mirror real-world elections for:

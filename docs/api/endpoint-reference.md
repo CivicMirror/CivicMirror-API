@@ -32,7 +32,7 @@
 
 ## Introduction
 
-The CivicMirror API aggregates and normalizes election data from multiple public sources (Google Civic, OpenStates, Ballotpedia, OpenFEC, Clarity Elections, MEDSL, and others) into a unified, queryable REST API.
+The CivicMirror API aggregates and normalizes election data from multiple public sources (state election offices, OpenStates, OpenFEC, Clarity Elections, MEDSL, and others) into a unified, queryable REST API.
 
 All endpoints return JSON. All identifiers use [OCD-IDs](https://opencivicdata.readthedocs.io/en/latest/data/datatypes.html) and [FIPS codes](https://www.census.gov/library/reference/code-lists/ansi.html) for jurisdiction normalization. Dates are ISO 8601 (`YYYY-MM-DD` / `YYYY-MM-DDTHH:MM:SSZ`).
 
@@ -209,7 +209,7 @@ Returns ballot and representative data for a given address or ZIP code.
 | `400` | `MISSING_LOCATION` | Neither `address` nor `zip` was provided |
 | `400` | `INVALID_ADDRESS` | Address could not be geocoded |
 | `404` | `NO_CONTESTS` | Valid address but no active contests found (not an error condition — treat as empty ballot) |
-| `503` | `UPSTREAM_UNAVAILABLE` | Google Civic API is unavailable |
+| `503` | `UPSTREAM_UNAVAILABLE` | A required upstream source is unavailable |
 
 **cURL:**
 ```bash
@@ -1042,7 +1042,7 @@ All errors follow a consistent JSON envelope:
 | `404` | `NO_CONTESTS` | Valid address; no active contests in this jurisdiction |
 | `404` | `NO_BOUNDARY` | District exists but no boundary geometry is available |
 | `429` | `RATE_LIMIT_EXCEEDED` | Too many requests; see `Retry-After` header |
-| `503` | `UPSTREAM_UNAVAILABLE` | A required upstream source (e.g., Google Civic API) is unreachable |
+| `503` | `UPSTREAM_UNAVAILABLE` | A required upstream source (e.g., a state election office feed) is unreachable |
 
 ### Common Scenarios
 

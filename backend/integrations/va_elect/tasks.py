@@ -96,8 +96,9 @@ def sync_va_elections(self):
                 updated_count += 1
 
             # Force-write enr_slug to election.source_metadata even when a higher-
-            # precedence source (civic_api) owns the identity group — the VA results
-            # adapter and map_race both require enr_slug to be present there.
+            # precedence source owns the identity group — the VA results adapter
+            # and map_race both require enr_slug to be present there. (This used
+            # to be civic_api, now retired; see issue #229.)
             if enr_slug_value:
                 meta = dict(election_obj.source_metadata or {})
                 if not meta.get("enr_slug"):

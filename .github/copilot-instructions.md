@@ -37,7 +37,7 @@ These represent minimum data standards when sourcing and normalizing content.
 ## Project Roadmap
 
 1. Define canonical data schema / JSON structure
-2. Prototype ingestion pipeline for Google Civic API
+2. ~~Prototype ingestion pipeline for Google Civic API~~ (retired — issue #229)
 3. Add OpenStates and Ballotpedia adapters
 4. Build normalization / deduplication layer
 5. Expose unified REST API
@@ -70,86 +70,24 @@ backend/
 
 ---
 
-## Google Civic Information API
+## Google Civic Information API — RETIRED
 
-**Base URL:** `https://www.googleapis.com/civicinfo/v2`  
-**Auth:** `?key={CIVIC_API_KEY}` — store in env var `CIVIC_API_KEY`, never hardcode.
+**Do not write code against the Google Civic Information API.** The integration
+was removed in full (see issue #229). `integrations/civic/`, the
+`/internal/tasks/sync-elections/` route and every `CIVIC_*` setting are gone.
 
-### Endpoints
+Why it was retired:
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /elections` | All upcoming/recent elections — use for scheduled sync into `Election` model |
-| `GET /voterinfo?address=...&electionId=...` | Races, candidates, polling info for a specific address |
-| `GET /representatives` | Elected officials by address (future use) |
+- It was a lossy round-trip of state feeds this project already pulls directly.
+- Its nationwide election carries `ocdDivisionId = ocd-division/country:us`, so no
+  state could be parsed and the resulting `Election` rows had no canonical key —
+  their races could never deduplicate against state-adapter races.
+- `voterinfo` needs a street address and returns only that precinct's ballot, so
+  its local coverage is a biased sample rather than statewide data.
 
-`voterinfo` requires a specific `electionId` — always call `/elections` first. For ZIP-only queries use `"{zip} USA"` as the address string. The API returns `400` for valid addresses with no active contests — treat as "no data", not an error.
-
-### Model Mapping
-
-```python
-# Election (from /elections)
-Election.objects.update_or_create(
-    source_id=election["id"],
-    defaults={
-        "name": election["name"],
-        "election_date": election["electionDay"],
-        "jurisdiction_level": parse_jurisdiction(election["ocdDivisionId"]),
-        "state": parse_state(election["ocdDivisionId"]),
-        "source": "civic_api",
-    }
-)
-
-# Race (from voterinfo contest)
-Race.objects.update_or_create(
-    election=election_obj,
-    office_title=contest.get("office") or contest.get("referendumTitle"),
-    jurisdiction=contest["district"]["name"],
-    defaults={
-        "race_type": "measure" if contest["type"] == "Referendum" else "candidate",
-        "geography_scope": contest["district"].get("scope", ""),
-        "source": "civic_api",
-        "certification_status": "upcoming",
-    }
-)
-```
-
-**Race type determination:** `contest.type == "Referendum"` → `race_type = "measure"` (create `MeasureOption` rows for Yes/No/Abstain); all other types → `race_type = "candidate"` (create `Candidate` rows).
-
-### Celery Sync Pattern
-
-```python
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def sync_elections(self):
-    client = CivicAPIClient()
-    try:
-        for election in client.list_elections():
-            sync_election_races.delay(election["id"])
-    except CivicAPIError as exc:
-        raise self.retry(exc=exc)
-```
-
-Sync interval: `CIVIC_SYNC_INTERVAL_HOURS = 6` (configurable via settings).
-
-### Error Handling
-
-| Status | Action |
-|---|---|
-| 400 | Log warning, skip — no data for this address/election |
-| 403 | Raise immediately, alert ops (bad API key) |
-| 429 | Retry with exponential backoff |
-| 503 | Retry with backoff via Celery |
-
-### State/ZIP Filtering
-
-- **By ZIP:** Call `voterinfo` with `"{zip} USA"` for each active election; deduplicate results by `(office_title, jurisdiction, election_id)`.
-- **By state:** Use state capital address as representative query; supplement with statewide-scope races already in the database.
-
-### Known Limitations
-
-- Local race coverage varies — when `voterinfo` returns no contests, prompt user to use the local race wizard.
-- `referendumText` can be very long — truncate to 2000 chars for the display field; store full text separately.
-- Candidate photos/bios are not provided; source from candidate website links in the response.
+Elections and races come from `integrations/<state>/` (Stage 1) and
+`results/adapters/` (results, all 50 states). `Race.Source.CIVIC_API` remains in
+the enum only so historical rows still load.
 
 ---
 
@@ -157,7 +95,7 @@ Sync interval: `CIVIC_SYNC_INTERVAL_HOURS = 6` (configurable via settings).
 
 | Source | Coverage | Format | Notes |
 |---|---|---|---|
-| [Google Civic Information API](https://developers.google.com/civic-information) | Federal, State, Local | REST/JSON | Elections, races, candidates, polling by address |
+| ~~Google Civic Information API~~ | — | — | **Retired — see issue #229; do not use** |
 | [OpenStates API](https://openstates.org/api/v3/) | State Legislative | REST/JSON | Bills, legislators, votes |
 | [Ballotpedia](https://ballotpedia.org/API_documentation) | Federal, State, Local | REST/JSON | Candidate & ballot measure data |
 | [OpenFEC API](https://api.open.fec.gov/developers/) | Federal | REST/JSON | Campaign finance, candidates, filings |
@@ -169,7 +107,7 @@ Sync interval: `CIVIC_SYNC_INTERVAL_HOURS = 6` (configurable via settings).
 ## Data Source Tiers
 
 **Tier 1 — Core (build around these first):**
-- **Google Civic Information API** (`https://www.googleapis.com/civicinfo/v2`) — upcoming elections, live ballot races, candidates, polling locations; requires address + `electionId` for ballot detail
+- ~~Google Civic Information API~~ — **retired (issue #229)**; elections and races now come from per-state `integrations/<state>/` adapters and `results/adapters/`
 - **OpenFEC API** (`https://api.open.fec.gov/v1/`) — federal candidate metadata
 - **U.S. Census Geocoder + TIGER/Line** — address/ZIP → district resolution
 - **Open Civic Data division IDs** — shared OCD identifier normalization

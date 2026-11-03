@@ -41,11 +41,13 @@ Use this table to identify the next best integration target. States with multipl
 | Symbol | Meaning |
 |---|---|
 | ✅ | Complete — dedicated state integration working |
-| ⚠️ | Partial — cross-cutting sources only (Google Civic API / OpenStates / OpenFEC) |
+| ⚠️ | Partial — cross-cutting sources only (OpenStates / OpenFEC) and/or results-adapter bootstrap |
 | ❌ | Not yet implemented |
 
 > **Base coverage for all states via cross-cutting integrations:**
-> Elections (Google Civic API) · Races (OpenStates) · Candidate Info (OpenStates — state legislative candidates, all 50 states)
+> Elections (`election_calendar` seed) · Races (OpenStates; results-adapter bootstrap) · Candidate Info (OpenStates — state legislative candidates, all 50 states)
+>
+> The Google Civic API was retired in full — see issue #229.
 
 ---
 
