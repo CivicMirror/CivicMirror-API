@@ -374,28 +374,74 @@ sample, not coverage.
 
 ### Audit scope — what to sweep
 
-1. **Orphan races**: `contributing_sources = ["civic_api"]` → 139 rows. Retire
-   with their candidates and `MeasureOption` rows.
-2. **Merged races** (`contributing_sources` length > 1, includes `civic_api`) →
-   8 rows, CA only. **Do not delete.** Strip `civic_api` from
-   `contributing_sources` and reassign any `field_provenance` entries it owns to
-   the next-ranked contributing source.
-3. **Contact provenance locks**: ~516 candidates where `civic_api` owns an empty
-   `image_url` / `website_url` / `description`. Clear those entries so state
-   adapters can fill them. This is the one step that *improves* data rather than
-   removing it.
-4. **Keyless elections**: #2232 (29 races), #2236 (0), #1772 (0) — the three
-   `canonical_key IS NULL` rows. Retire as empty `needs_review` shells; keep the
-   `Election` rows so `ElectionSourceLink` history survives.
-5. **Civic-created election stubs**: #1777, #2226 (AR), #2224 (PA), #2228, #2229
-   (SC). Civic created the election row but the races came from
-   `results_adapter`. **Keep the elections**; drop only the `civic_api`
-   `ElectionSourceLink` and contributing-source entry.
-6. **`SourcePrecedence`**: 52 `civic_api` rows including the `(*, *, 0)`
-   wildcard.
-7. **Post-sweep verification**: re-run the orphan and exact-match queries; both
-   should return zero. Confirm no `Race` or `Candidate` row still carries
-   `civic_api` in `field_provenance` or `contributing_sources`.
+Implemented as `python manage.py sweep_civic_api [--dry-run] [--audit-file PATH]`
+(`backend/elections/management/commands/sweep_civic_api.py`), transactional and
+idempotent. **Rehearsed against a full clone of production; not yet applied to
+production.**
+
+**Scope item 1 as first written was wrong.** It said "orphan races:
+`contributing_sources = ["civic_api"]` → 139 rows, retire with their candidates".
+Measuring the data falsified that definition twice over:
+
+1. **Provenance is blind to the results layer.** `results/tasks.py` writes
+   `OfficialResult` without routing through `aggregation.ingest`, so it never
+   records itself in `contributing_sources` or `field_provenance`. MD #1888 races
+   11003/11004 read `civic_api` on *every* field yet hold certified results from
+   `elections.maryland.gov`. `OfficialResult.race` is `on_delete=CASCADE`, so a
+   naive delete destroys them **silently** — no error, no warning. This is the
+   same observability gap as the missing results-layer `SyncLog` (issue #230).
+2. **"Civic-only" is not "duplicate."** In six of the nine affected elections the
+   Civic races are the *only* races present. Deleting them dedupes nothing; it
+   empties the election.
+
+So the sweep is tiered. All three rules are structural and re-evaluated per run
+— not a hand-maintained allowlist — so they stay correct as the data changes:
+
+| rule | effect |
+|---|---|
+| race has any `OfficialResult` | **hold** (CASCADE would destroy real results) |
+| deleting an election's Civic races would leave it with zero races | **hold** |
+| …unless the election is **keyless** | **delete** — a keyless election *is* the defect; holding it would preserve the bug |
+
+Rehearsal result on the clone (44,422 races, identical to production):
+
+| | rows | where |
+|---|---|---|
+| races **deleted** | **93** | CA #1778 (30), MI #1890 (22), WA #1934 (12), #2232 (29) |
+| races **held** | **46** | MD #1888 (17), WI #1938 (24), LA #1943 (2), UT #1928 (2), VA #1932 (1) |
+| merged races stripped of `civic_api` | 8 | CA only; provenance reassigned to the surviving source |
+| empty contact locks released | 246 candidates | 18 real values preserved |
+| `SourcePrecedence` rows deleted | 52 | including the `(*, *, 0)` wildcard |
+| keyless shells | 3 | **reported only, never mutated** |
+
+Verified on the clone afterwards: `official_results` total unchanged at 358,328;
+MD #1888 still holds its 3; zero empty locks remain; the 9 surviving real Civic
+contact values intact; all 3 shells still `state = NULL`, which is what keeps
+them poller-ineligible. A second run is a clean no-op.
+
+**Deleting the `SourcePrecedence` rows is what actually releases the locks** —
+`precedence.resolve_rank` returns `float("inf")` for a source with no rows, so
+every other source can then overwrite. Clearing the empty provenance entries is
+done as well so the stored provenance stops claiming Civic owns a field it never
+filled.
+
+**Collateral the command reports before deleting:**
+
+- *Recoverable:* 4 candidates carry `openstates` enrichment on delete-tier races.
+  OpenStates re-attaches on its next sync.
+- *Permanent:* 4 candidates hold contact values Civic itself supplied. Civic
+  cannot re-supply them, so the values are written to the audit file first. All
+  four are public state-site URLs (`michigan.gov/sos`, `leg.wa.gov`, …) and so
+  are re-derivable.
+
+**Not swept (deliberately):** the `civic_api` `ElectionSourceLink` rows (39) and
+`Election.contributing_sources` entries. Civic genuinely did contribute to those
+elections; the links are the only record that Civic election id `12000` ever
+existed, and `contributing_sources` is a historical record, not a live claim.
+
+**The 46 held rows are no longer a Civic problem.** They are state-adapter
+coverage gaps — MD, WI, LA, UT and VA primaries where no state adapter produced
+races — and belong in their own issue.
 
 ### Audit queries
 
