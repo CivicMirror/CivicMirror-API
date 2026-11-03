@@ -655,3 +655,100 @@ probably dead in production too — unless Cloud Run's egress is treated
 differently from my IP, which is possible and untested. Worth confirming
 against the first real result fetch; if it 403s, the fallback needs the solver
 as well.
+
+---
+
+# MVIC verified against the live site (via a local FlareSolverr, 2026-11-02)
+
+Run as a one-off experiment through a local FlareSolverr container, not through
+the project's `core.cf_solver`. Read-only requests to a public SOS site.
+
+## 1. The 403 is bot fingerprinting, not an active challenge
+
+FlareSolverr fetched `https://mvic.sos.state.mi.us/votehistory/` with
+`status: ok, message: "Challenge not detected!"`, HTTP 200, 44 KB. A plain
+request with a browser User-Agent still gets 403, so the block is below the
+UA layer (TLS/JA3 fingerprint). Any real browser session defeats it, which is
+why `core.cf_solver` works — and means a lighter solver would do for the HTML
+pages.
+
+## 2. `parse_mvic_elections` works perfectly on the real page
+
+51 dropdown entries, every date and id extracted cleanly. The discovery code
+committed in `4532599` does what it claims.
+
+## 3. Nov 3, 2026 is not in MVIC's dropdown, and has no id yet
+
+Newest entries: `2026-08-04 → 706`, `2026-05-05 → 705`, `2026-02-03 → 708`.
+Note the ids are not ordered by date, so Nov's cannot be extrapolated — and
+`707` is unassigned. Probing `GetCountyVoteRecords` for **707, 709, 710, 711
+and 712** returned `"No election results for selected election date"` for every
+one.
+
+**This corrects the advice in the previous section.** There is no
+`mi_mvic_election_id` to set by hand tonight; MVIC has not published the
+election. Discovery is therefore not merely the long-term answer, it is the
+only one — it will pick the id up on the first `sync_mi_elections` run after
+MVIC publishes, which on this evidence happens when results start posting.
+
+## 4. `parse_mvic_county_results_html` cannot parse real MVIC output
+
+`GetCountyVoteRecords?electionId=706` returns 867 KB of genuine Aug 4, 2026
+primary results — `STATE PRIMARY, OFFICIAL`, `Counties: 83/83`,
+`GOVERNOR 4 YEAR TERM (1) POSITION / DEMOCRATIC / Benson, Jocelyn 1,251,160
+83.22%`.
+
+`parse_mvic_county_results_html` returns **0 rows** from it.
+
+Cause: the real document puts each field in its own table cell, so
+`soup.get_text("\n")` yields
+
+```
+'GOVERNOR 4 YEAR TERM (1) POSITION'
+'DEMOCRATIC'
+'Benson, Jocelyn'
+'1,251,160'
+'83.22%'
+'Party Votes:'
+'1,503,406'
+```
+
+while the parser requires name, votes and percent on **one** line separated by
+two or more spaces:
+
+```python
+re.match(r"^(?P<name>.+?)\s{2,}(?P<votes>[\d,]+)\s{2,}(?P<pct>[\d.]+)%?$", line)
+```
+
+which is exactly how the 332-byte `mvic_county_records_705.html` fixture was
+written. Same root cause as the BOE listing parser: **all three Michigan
+fixtures are synthetic and were built to match the code rather than captured
+from the source.** The real document also carries `Party Votes:` subtotal rows
+that any rewrite must skip.
+
+One good sign for the title matching: MVIC's contest wording is
+`GOVERNOR 4 YEAR TERM (1) POSITION`, which `result_office_title` already
+normalizes to `Governor` — matching the race the BOE listing creates.
+
+## 5. The bulk path remains unverified
+
+`GetElectionResultFile?electionId=706` is a file download, so FlareSolverr
+returned a blank browser tab rather than the payload; a cookie-replay attempt
+was blocked locally. So `parse_mvic_result_file` and its 318-byte synthetic
+TSV fixture are **still unvalidated against real data**. Given that both other
+Michigan parsers failed on real input, assume this one needs checking too.
+`core.cf_solver` can retrieve it — `fetch_through_cf` fetches the payload from
+inside the browser session — so this is testable in the deployed environment
+today.
+
+## Michigan's results path, current state
+
+| Step | State |
+|---|---|
+| Races for results to match | fixed, `612f798` |
+| `mi_mvic_election_id` populated | wired, `4532599`; no id published yet |
+| Bulk TSV fetch + parse (primary path) | **unverified** |
+| County-records fetch + parse (fallback) | **broken — 0 rows on real input** |
+
+So Michigan will still serve no results until the parsers are validated
+against real output, independently of everything fixed so far.
