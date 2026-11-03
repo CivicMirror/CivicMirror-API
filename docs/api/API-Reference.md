@@ -786,6 +786,7 @@ Each trigger acquires a per-task idempotency lock (keyed to the current schedule
 | `/internal/tasks/poll-results/` | Poll all pending-results elections for registered state results adapters |
 | `/internal/tasks/poll-ky-results/` | Poll Kentucky live-results sources for their election-scoped contests |
 | `/internal/tasks/poll-upcoming-results/` | Poll upcoming (not yet certified/archived) elections with a results adapter so candidate lists populate before election day |
+| `/internal/tasks/advance-past-elections/` | Move past-dated elections still in `upcoming`/`active` to `results_pending`, so they stay reachable by `poll-results` instead of falling through both pollers (issue #231). Never touches `results_certified`/`archived`. |
 | `/internal/tasks/sync-openstates/` | OpenStates candidate sync (all 50 states) |
 | `/internal/tasks/sync-fec/` | FEC candidate sync |
 | `/internal/tasks/sync-sc-vrems/` | South Carolina VREMS sync |

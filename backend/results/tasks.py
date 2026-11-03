@@ -729,3 +729,85 @@ def poll_ky_results(election_id=None):
         ingest_official_results.delay('KY', pk)
     logger.info('poll_ky_results queued=%s explicit=%s', len(ids), election_id is not None)
     return {'queued': ids}
+
+
+@shared_task(bind=True, max_retries=3)
+def advance_past_elections(self):
+    """
+    Move past-dated elections out of the pre-results statuses so the results
+    pollers can still reach them.
+
+    WHY THIS EXISTS (issue #231)
+    ----------------------------
+    The two pollers have mutually exclusive filters::
+
+        poll_upcoming_results:  election_date >= today AND status IN (upcoming, active, results_pending)
+        poll_pending_results:   election_date <  today AND status == results_pending
+
+    So an election dated today whose status is still ``upcoming`` or ``active``
+    is reachable *today only*. Tomorrow its date is in the past, which drops it
+    from ``poll_upcoming_results``, and its status is not ``results_pending``,
+    which drops it from ``poll_pending_results``. It becomes permanently
+    unreachable and its results adapter never runs again.
+
+    Nothing else closes this. ``election_calendar.seed_2026_elections`` does set
+    status from date, but it is not in the scheduler crontab; the per-state
+    ``sync-*`` jobs each call their own ``infer_election_status``, but only for
+    elections that adapter happens to touch. Measured on 2026-11-03 this had
+    already silently orphaned six elections -- including a 2024 Minnesota
+    primary carrying 28 races -- with 59 more (6,182 races, 212,362 official
+    results, Kentucky's general among them) one midnight from the same fate.
+
+    Status is transitioned directly rather than through ``aggregation.ingest``,
+    following the ``_certify_election_if_complete`` precedent above: this is a
+    lifecycle correction, not source data, so it does not claim provenance.
+
+    ``Election.TERMINAL_STATUSES`` (``results_certified``, ``archived``) are
+    never touched -- an election that finished must not be reopened.
+
+    SEQUENCING (issue #230)
+    -----------------------
+    Advancing an election to ``results_pending`` makes it eligible for
+    ``poll_pending_results``, which is where the #230 waste lives: raceless past
+    elections can never certify and are re-fetched in full on every run. Land
+    #230's age bound before turning polling back on, or this adds to a poll set
+    that is already ~52% dead weight.
+    """
+    from elections.models import Election
+    from ops.models import SyncLog
+
+    sync_log = SyncLog.objects.create(
+        source='lifecycle',
+        task_name='advance_past_elections',
+        status=SyncLog.Status.STARTED,
+    )
+    try:
+        stranded = Election.objects.filter(
+            election_date__lt=timezone.localdate(),
+            status__in=[Election.Status.UPCOMING, Election.Status.ACTIVE],
+        ).exclude(status__in=Election.TERMINAL_STATUSES)
+
+        rows = list(stranded.values_list('pk', 'state', 'election_date', 'status'))
+        updated = stranded.update(status=Election.Status.RESULTS_PENDING)
+
+        for pk, state, election_date, previous in rows:
+            logger.info(
+                'advance_past_elections: election %s (%s, %s) %s -> results_pending',
+                pk, state or '-', election_date, previous,
+            )
+
+        sync_log.records_updated = updated
+        sync_log.notes = f'advanced={updated}'
+        sync_log.status = SyncLog.Status.COMPLETED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=['records_updated', 'notes', 'status', 'completed_at'])
+        logger.info('advance_past_elections: advanced %d election(s)', updated)
+        return {'advanced': updated, 'elections': [r[0] for r in rows]}
+    except Exception as exc:
+        logger.exception('advance_past_elections failed')
+        sync_log.error_count = 1
+        sync_log.last_error = str(exc)
+        sync_log.status = SyncLog.Status.FAILED
+        sync_log.completed_at = timezone.now()
+        sync_log.save(update_fields=['error_count', 'last_error', 'status', 'completed_at'])
+        raise

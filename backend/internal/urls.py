@@ -6,6 +6,7 @@ urlpatterns = [
     path("tasks/poll-ky-results/", views.poll_ky_results_trigger, name="internal-poll-ky-results"),
     path("tasks/poll-results/", views.poll_results_trigger, name="internal-poll-results"),
     path("tasks/poll-upcoming-results/", views.poll_upcoming_results_trigger, name="internal-poll-upcoming-results"),
+    path("tasks/advance-past-elections/", views.advance_past_elections_trigger, name="internal-advance-past-elections"),
     path("tasks/sync-openstates/", views.sync_openstates_trigger, name="internal-sync-openstates"),
     path("tasks/sync-fec/", views.sync_fec_trigger, name="internal-sync-fec"),
     path("tasks/sync-sc-vrems/", views.sync_sc_vrems_trigger, name="internal-sync-sc-vrems"),
