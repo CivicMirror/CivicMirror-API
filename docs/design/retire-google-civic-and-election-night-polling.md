@@ -1,0 +1,389 @@
+# Retiring Google Civic, and election-night polling cadence
+
+Status: decided 2026-11-03. Supersedes the merge-based plan in this file's
+earlier revision.
+Origin: reported duplication between Election #1891 and #2232 (Michigan).
+Evidence: live `civicmirror-postgres` (`civicmirror_api`), the running
+`civicmirror-worker` / `civicmirror-scheduler` containers, and the live Google
+Civic API. All read-only; no writes were made.
+
+## Decision
+
+1. **Retire the Google Civic API integration project-wide.**
+2. **Audit the database for Civic leftovers and duplicate records.**
+3. **Put election-night results polling on an election-night cadence.**
+
+The reported Michigan duplication is a symptom of (1). Retiring the source stops
+new duplicates; (2) cleans up what previous pulls already wrote. (3) surfaced
+during the investigation and is independently urgent — see the note under
+Sequencing.
+
+---
+
+## Part 1 — Retire Google Civic
+
+### What the duplication actually was
+
+#2232 is not a Michigan record. It is a **national Civic bucket**.
+
+| | #1891 | #2232 |
+|---|---|---|
+| name | 2026 Michigan General Election | 2026 General Midterm Election |
+| state | `MI` | *(empty)* |
+| jurisdiction_level | `state` | `national` |
+| canonical_key | `MI:general:2026-11-03:state` | **NULL** |
+| source_id | — | `12000` (Civic election id) |
+| races | 338 (all `candidate`, `mi_sos`) | 29 (all `civic_api`) |
+
+Civic election `12000` carries `ocdDivisionId = "ocd-division/country:us"` —
+confirmed by a live call, not inferred. It is country-scoped, so:
+
+- `parse_state_from_ocd()` → `None`
+- `parse_jurisdiction_level()` → `NATIONAL`
+
+`ingest_election` then hits its guard:
+
+```python
+if not (state and election_date and election_type and jurisdiction_level):
+    # Cannot form a canonical key — keep as its own row, flagged for review.
+```
+
+…and #2232 is created with `canonical_key = NULL`. `ingest_race` falls back to
+the synthetic prefix `f"e{election.pk}"`, so every race is keyed
+`e2232|<office>|NO_OCD|<type>` while #1891's are keyed
+`MI:general:2026-11-03:state|<office>|NO_OCD|<type>`.
+
+**The prefixes can never match**, so no Civic race can ever dedupe against a
+state-adapter race. `mi_sos` ran at 08:45, found no match, and created its own
+copies. That is the whole duplication — inherited from the election row, not
+caused by anything about the races.
+
+Because `_representative_addresses_for_election` falls through to a 10-state
+sample when `election.state` is empty, and queues every address against the
+*same* national election id, #2232 also mixes states. Confirmed in `ops_synclog`
+for 2026-11-03 04:00: `MI-capital` wrote 93 records, `VA-capital` 7, the other
+eight states 0.
+
+### Why retirement rather than repair
+
+**It is a lossy round-trip of data we already hold.** The project pulls state
+feeds directly; those same feeds supply VIP, which supplies Civic. Civic then
+strips the state identifier — which is precisely the defect above. Every state
+in `_NATIONAL_SAMPLE_STATES` (CA TX NY FL PA OH GA NC MI VA) already has its own
+adapter.
+
+**Its one designed role is unfulfilled.** `SourcePrecedence` gives `civic_api`
+rank 0 for `contacts` in 13 states — it was kept for candidate photos, bios and
+websites. Actual delivery, attributed via `field_provenance`:
+
+| | civic-owned |
+|---|---|
+| real photos | **13** (of 3,139 total) |
+| real websites | **13** |
+| real bios | **0** |
+
+**And it actively blocks the better source.** Civic owns *empty* contact fields
+on hundreds of candidates:
+
+```
+civic_owns_EMPTY_photo   503
+civic_owns_EMPTY_site    503
+civic_owns_EMPTY_bio     516
+```
+
+`_apply_fields` writes only when `incoming <= owner_rank`. Where Civic is rank 0
+for contacts and the state adapter rank 1, `1 <= 0` is False — **Civic's empty
+string permanently locks the state adapter out of that field.** It squats the
+provenance lock and fills nothing.
+
+**Its local data is a sample, not coverage.** `voterinfo` requires a geocodable
+street address (a state-level address returns `200` with **0 contests** — tested).
+It returns *that precinct's* ballot. #2232's "Michigan" content is Lansing's:
+State Senate 21st, State House 77th, 30th Circuit, 54A District, Ingham Probate,
+Lansing schools and city measures — one of 110 House districts. Importing that
+into #1891 would have implied statewide coverage from a single precinct.
+
+**Nothing depends on it exclusively.** Two states ever had Civic as their sole
+race source — WI (24 races, #1938, Aug 11 primary) and LA (2 races, #1943,
+Jun 27 primary). Both have registered results adapters. Their adapters simply
+had nothing to pull at the time: WI publishes no election-night feed at all (72
+independent county clerks; WEC posts one certified XLSX weeks after canvass, and
+the listing page 403s to automation, so `Election.source_metadata
+["wi_results_xlsx_url"]` must be captured once by hand — it is `{}` today), and
+LA is a `ClarityAdapter` subclass awaiting posted results. Civic was filling a
+**cadence** gap, not a coverage gap.
+
+### Adapter coverage is complete
+
+`results/adapters/` registers **50 of 50 states** at runtime
+(`list_supported_states()`); only DC is absent. Both pollers filter
+`state__in=supported`, so every state is already scheduled. Results adapters also
+bootstrap races ("auto-bootstraps Race/Candidate/MeasureOption rows from the
+result data"), so they are a discovery path too, not only a results path.
+
+2026 production, 34 of 50 states with races:
+
+| tier | states |
+|---|---|
+| races + results | KY GA NM TX NC PA SC IA VT MA NY WA AR OH CA WV IL FL MN TN HI MD OR AZ CT VA AL MO ME (29) |
+| races, **zero** results | **MI (534) UT (96) WI (24) CO (10) LA (2)** |
+| no 2026 races | AK DE ID IN KS MS MT ND NE NH NJ NV OK RI SD WY (16) |
+
+### Accepted losses
+
+- **Ballot measures.** `mi_sos` supplies 338 races, all `candidate`, zero
+  measures; `va_elect` has 0 races on #1933. Retiring Civic drops the MI
+  proposals and the three VA constitutional amendments, which exist only in
+  #2232. Measures are explicitly **not in project focus** — accepted as a happy
+  accident, not a regression. Worth a separate issue for measure coverage.
+- **WI and LA primary races** (26 rows, both past elections) lose their only
+  source. Their adapters remain the correct long-term path.
+
+### Retirement steps
+
+1. Remove the `0 4 * * *` `sync-elections` entry from the scheduler crontab —
+   this alone stops all new Civic ingestion.
+2. Remove `'integrations.civic'` from `INSTALLED_APPS`
+   (`config/settings/base.py:146`).
+3. Remove the trigger route and view: `internal/urls.py:7`,
+   `internal/views.py:12,99-100`. Remove
+   `elections/management/commands/sync_elections.py`.
+4. **Release the contact locks** (Part 2 scope item 3): clear `field_provenance`
+   entries where `civic_api` owns an empty `image_url` / `website_url` /
+   `description`, so state adapters can fill them. ~516 candidates.
+5. Delete the 52 `SourcePrecedence` rows for `civic_api` (also tracked as Part 2
+   scope item 6) — **including the
+   `(*, *, 0)` wildcard**, which is what let Civic outrank every unranked
+   adapter. Note 23 adapters (`mi_sos`, `il_sbe`, `mn_sos`, `oh_sos`, `or_sos`,
+   `tn_sos`, `ky_sos`, `al_sos`, `ga_sos`, `pa_sos`, `tx_goelect`, `wa_votewa`,
+   `hi_olvr`, `az_sos`, `nj_elections`, …) have **no precedence rows at all** and
+   resolve to `+inf`; removing the Civic wildcard is safe, but the unranked-
+   adapter gap deserves its own issue.
+6. Leave existing Civic rows in place at this stage — the sweep is Part 2.
+   Nothing needs *migrating*: #2232 holds only MI and VA races, both already
+   covered by `mi_sos` and `va_elect`.
+7. Keep `Race.Source.CIVIC_API` in the enum for historical rows; stop writing it.
+8. Drop `CIVIC_API_KEY` from deploy config once the above ships.
+
+Retirement requires **no merge, no title aliasing, no candidate reconciliation
+and no precedence reordering** — the entire risky path in the previous revision
+of this document disappears.
+
+---
+
+## Part 2 — Audit the database for Civic leftovers
+
+Retirement stops new writes; it does not remove what earlier pulls left behind.
+The audit below was run read-only against production on 2026-11-03 and should be
+re-run after retirement ships, since numbers will have moved.
+
+### What is actually there
+
+**147 Civic races across 9 elections. 139 of them (95%) never merged with
+anything.**
+
+| election | state | date | merged | **civic-orphan** |
+|---|---|---|---|---|
+| #1778 California Primary | CA | 2026-06-02 | 8 | **30** |
+| #2232 General Midterm | *(none)* | 2026-11-03 | 0 | **29** |
+| #1938 Wisconsin Primary | WI | 2026-08-11 | 0 | **24** |
+| #1890 Michigan Primary | MI | 2026-08-04 | 0 | **22** |
+| #1888 Maryland Primary | MD | 2026-06-23 | 0 | **17** |
+| #1934 Washington Primary | WA | 2026-08-04 | 0 | **12** |
+| #1943 Louisiana Primary | LA | 2026-06-27 | 0 | **2** |
+| #1928 Utah Primary | UT | 2026-06-23 | 0 | **2** |
+| #1932 Virginia Dem Primary | VA | 2026-08-04 | 0 | **1** |
+
+Only California ever merged Civic into state-adapter races, 8 times.
+
+### The leftovers are invisible to exact matching
+
+A query for same-election races sharing a `normalized_office_title`, one Civic
+and one not, returns **zero rows**. That is not good news — it means every race
+whose title matched *already merged*, and **what remains are precisely the
+differently-modeled duplicates that no key comparison will catch.**
+
+Worked example, MI #1890 (August primary):
+
+| source | office | scope |
+|---|---|---|
+| `mi_sos` | `Governor` | statewide |
+| `civic_api` | `Governor — Democratic Primary` | statewide |
+| `civic_api` | `Governor — Republican Primary` | statewide |
+
+Same contest, three rows. Note Civic's party-split model is arguably the *more*
+correct one for a primary — `mi_sos` collapses both party ballots into a single
+`Governor` race, which is exactly what `ingest.py`'s
+`aggregation.ingest_race.primary_missing_party` warning exists to flag. Retiring
+Civic removes the duplicate and leaves the collapsed `mi_sos` model in place;
+**the primary party-split modelling gap in `mi_sos` is a separate issue and
+should be filed as one.**
+
+The same shape repeats across the orphan set: `United States Senator —
+Democratic/Republican Primary`, `Representative in Congress — D/R Primary`,
+`State Senator — D/R Primary`.
+
+### Sampling signature confirms these are not coverage
+
+MI #1890's orphans are Lansing and Detroit only — Ingham County millages,
+Capital Area District Library, Wayne County Executive, `CITY OF DETROIT 144,
+PRECINCT 06144` convention delegates. That is `MI-capital` + `MI-largest`, the
+two representative addresses, not Michigan. Deleting them removes a biased
+sample, not coverage.
+
+### Audit scope — what to sweep
+
+1. **Orphan races**: `contributing_sources = ["civic_api"]` → 139 rows. Retire
+   with their candidates and `MeasureOption` rows.
+2. **Merged races** (`contributing_sources` length > 1, includes `civic_api`) →
+   8 rows, CA only. **Do not delete.** Strip `civic_api` from
+   `contributing_sources` and reassign any `field_provenance` entries it owns to
+   the next-ranked contributing source.
+3. **Contact provenance locks**: ~516 candidates where `civic_api` owns an empty
+   `image_url` / `website_url` / `description`. Clear those entries so state
+   adapters can fill them. This is the one step that *improves* data rather than
+   removing it.
+4. **Keyless elections**: #2232 (29 races), #2236 (0), #1772 (0) — the three
+   `canonical_key IS NULL` rows. Retire as empty `needs_review` shells; keep the
+   `Election` rows so `ElectionSourceLink` history survives.
+5. **Civic-created election stubs**: #1777, #2226 (AR), #2224 (PA), #2228, #2229
+   (SC). Civic created the election row but the races came from
+   `results_adapter`. **Keep the elections**; drop only the `civic_api`
+   `ElectionSourceLink` and contributing-source entry.
+6. **`SourcePrecedence`**: 52 `civic_api` rows including the `(*, *, 0)`
+   wildcard.
+7. **Post-sweep verification**: re-run the orphan and exact-match queries; both
+   should return zero. Confirm no `Race` or `Candidate` row still carries
+   `civic_api` in `field_provenance` or `contributing_sources`.
+
+### Audit queries
+
+```sql
+-- orphans vs merged, per election
+SELECT e.id, e.state, e.name,
+  count(*) FILTER (WHERE jsonb_array_length(r.contributing_sources) > 1) AS merged,
+  count(*) FILTER (WHERE r.contributing_sources = '["civic_api"]'::jsonb) AS orphan
+FROM elections_race r JOIN elections_election e ON e.id = r.election_id
+WHERE r.contributing_sources @> '["civic_api"]'::jsonb
+GROUP BY 1,2,3 ORDER BY orphan DESC;
+
+-- same-election title collisions (expect 0 before AND after)
+SELECT a.election_id, a.office_title, b.office_title, b.source
+FROM elections_race a JOIN elections_race b
+  ON a.election_id = b.election_id AND a.id <> b.id
+ AND a.normalized_office_title = b.normalized_office_title
+WHERE a.contributing_sources @> '["civic_api"]'::jsonb
+  AND NOT b.contributing_sources @> '["civic_api"]'::jsonb;
+
+-- contact locks held with empty values
+SELECT count(*) FROM elections_candidate
+WHERE (field_provenance->>'image_url'   = 'civic_api' AND image_url   = '')
+   OR (field_provenance->>'website_url' = 'civic_api' AND website_url = '')
+   OR (field_provenance->>'description' = 'civic_api' AND description = '');
+```
+
+### Execution
+
+A management command with `--dry-run`, transactional and idempotent, reporting
+counts per category before and after. Rehearse against a clone (the
+`civicmirror-*-test-db` pattern) and run it only after retirement has shipped and
+the 04:00 Civic sync is confirmed stopped — otherwise the next sync re-creates
+what the sweep removed.
+
+**Do not run this while results are live.** It touches `Race` and `Candidate`
+rows in elections that are currently being updated.
+
+---
+
+## Part 3 — Election-night polling cadence
+
+**This is the more urgent finding.** The scheduler is still in off-season mode,
+by its own admission. From `/data/DockerConfigs/CivicMirror/scheduler/crontab`:
+
+```
+# All tasks run once daily, overnight. Times are UTC and do not auto-shift for DST.
+# Off-season schedule while there are no active elections to monitor hourly.
+# Revisit before the November active window if sync-elections/poll-sc-enr/
+# sync-sc-enr-results need to return to hourly cadence.
+```
+
+Today **is** the November active window. The revisit did not happen.
+
+Over the last 72 hours the scheduler called:
+
+```
+1317  /internal/tasks/poll-ky-results/        every 2 minutes
+   2  /internal/tasks/poll-upcoming-results/  daily, 08:05 UTC
+   2  /internal/tasks/poll-results/           daily, 08:00 UTC
+   2  /internal/tasks/sync-<state>/           daily, each
+```
+
+**Kentucky is the only state on a live cadence.** Worker logs for the last 48h
+show `ingest_official_results` running for election 1883 (KY) and nothing else.
+
+Consequences tonight, if unchanged:
+
+- Michigan has 534 races and **0 official results**. `sync-mi-sos` ran 08:45 and
+  will not run again until 08:45 tomorrow.
+- The same holds for UT, CO, and every other state with races but no results.
+- `poll-upcoming-results` last ran 08:05 today; next run 08:05 tomorrow. Returns
+  arriving this evening are picked up ~12 hours late.
+- The 16 states with no 2026 races were polled at 08:05 while their contests were
+  not yet posted, found nothing, and will not be asked again today.
+
+### Proposed cadence
+
+Mirror the KY pattern for the active window, then revert:
+
+```cron
+# Election-night active window. Revert to daily after certification.
+*/2  * * * *  trigger.sh /internal/tasks/poll-ky-results/     # unchanged
+*/5  * * * *  trigger.sh /internal/tasks/poll-upcoming-results/
+*/10 * * * *  trigger.sh /internal/tasks/poll-results/
+*/15 * * * *  trigger.sh /internal/tasks/sync-mi-sos/
+```
+
+Notes:
+
+- `poll_upcoming_results` already filters to a 14-day window and non-terminal
+  statuses, and `ingest_official_results` short-circuits on an unchanged source
+  version, so a tight cadence is cheap for states with nothing new.
+- Add the handful of state syncs whose feeds actually update live. Do **not**
+  blanket-accelerate all 37 sync jobs — several (PA, UT) are already on
+  non-default slots specifically to dodge WAF/403 blocks, and hammering them
+  risks losing the window entirely.
+- Set a reminder to revert after certification; the current comment shows an
+  un-actioned "revisit" note is not sufficient.
+
+### Observability gap
+
+`results/tasks.py` writes **no `SyncLog`** — there is no `results_adapter` row in
+`ops_synclog`. For the 16 zero-race states it is therefore impossible to
+distinguish "ran and found nothing" from "ran and errored" except by reading
+worker logs. The conclusion that those states ran cleanly is inferred from the
+absence of error activity, not from a positive success record. Results-layer
+`SyncLog` instrumentation should be its own issue, and would have made this
+whole investigation an hour shorter.
+
+---
+
+## Sequencing
+
+Documented in the requested order — retire, audit, then polling.
+
+1. **Retire Civic** (Part 1). The time-sensitive element is removing the
+   `0 4 * * *` `sync-elections` crontab entry before tomorrow morning, which
+   stops #2232 growing again. The code changes can follow on the same branch.
+2. **Audit** (Part 2). Must come after retirement is live, or the next sync
+   re-creates what the sweep removed. Dry-run on a clone first, and not while
+   results are actively landing.
+3. **Polling cadence** (Part 3). A crontab change on the scheduler host; no code
+   deploy.
+
+**One caveat on this ordering.** Part 3 is the only item that is
+*election-day* urgent — tonight's returns outside Kentucky are not being
+collected, and Michigan is sitting at 534 races / 0 results. Part 1 and Part 2
+are correctness work that is safe to do deliberately. If tonight's results
+matter, the Part 3 crontab change can be made independently and immediately
+without touching Parts 1 or 2; nothing in it depends on Civic being retired
+first.
