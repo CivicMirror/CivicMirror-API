@@ -843,3 +843,123 @@ using `electionId=706`, which would settle it before tomorrow night. Note the
 fallback now works, and when it is used the adapter reports
 `mapping_confidence="partial"`, so those races stay `partial_results` and never
 auto-certify.
+
+---
+
+# MVIC bulk result file — rewritten against the real files
+
+Both real files supplied 2026-11-02:
+`2024STATE_GENERAL_MI_CENR_BY_COUNTY.txt` (electionId 699, 6,111 lines) and
+`2026STATE_PRIMARY_MI_CENR_BY_COUNTY.txt` (706, 2,538 lines).
+
+## The format, and why nothing parsed
+
+It is tab-delimited but it is not a bare CSV:
+
+```
+TOTAL VOTER TURNOUT: 97,057,730                     <- preamble
+ElectionDate  OfficeCode(text)  ...  CandidateVotes <- header, 18 columns
+2024-11-05  1  0  0  1  ALCONA  ELECTORS OF ...  5  GREEN  5006  STEIN  JILL ...
+RECORDS: 6108   RESULTS: OFFICIAL                   <- trailer
+```
+
+Two independent failures in `parse_mvic_result_file`:
+
+1. It fed the whole file to `csv.DictReader`, so **line 1 became the header** and
+   every record keyed off `"TOTAL VOTER TURNOUT: 97,057,730"`.
+2. Even with the right header, **every column name differs** from the ones it
+   looked for. It wanted `contest`/`office`/`race`, `candidate`/`candidate_name`
+   and `votes`/`vote_total`/`total_votes`; the file has `OfficeDescription`,
+   `CandidateLastName` + `CandidateFirstName` + `CandidateMiddleName` (split
+   across three columns) and `CandidateVotes`.
+
+The trailer also crashes naive parsing — it yields one all-`None` record.
+
+## The rewrite
+
+- Locate the header by its `OfficeDescription` marker; drop the preamble and the
+  `RECORDS:` trailer.
+- Map the real columns. Assemble the name as `"Last, First Middle"`, which is the
+  shape the BOE candidate listing uses — that correspondence is what lets results
+  match candidates at all.
+- Flag write-ins. The header says `WriteIn(W)/Uncommitted(Z)` but the files
+  carry `Y`; `PartyDescription` is also `WRITE-IN` on those rows, so either
+  signal identifies them.
+- **Sum the county rows into contest totals.** The file reports county splits
+  only, and `results/winners.py` derives winners solely from contest-total rows
+  (`jurisdiction_fragment == ""`), deliberately refusing to sum sub-jurisdiction
+  rows because fragments can overlap in general. Michigan's 83 counties
+  partition the state, so summing is sound here. The parser emits both: the
+  totals and the per-county detail.
+
+| | Old | New |
+|---|---|---|
+| 2024 general (699) | 0 rows | 630 totals + 6,108 county rows, 319 contests, 83 counties |
+| 2026 primary (706) | 0 rows | 550 totals + 2,535 county rows, 170 contests, 83 counties |
+
+**The aggregation is independently verified.** The summed totals reproduce
+MVIC's own published statewide figures exactly — Benson 1,251,160, Swanson
+252,236, James 466,714, Cox 121,261, Johnson 328,194, Nesbitt 16,295, write-ins
+10 — matching the HTML results page parsed by the separate county-records path,
+and the contest count agrees at 170.
+
+## MVIC states whether results are official, and we now read it
+
+The trailer carries `RESULTS: OFFICIAL`. Almost no source in this repo exposes
+that, which is why 13 adapters hardcode `result_type="official"` and why the
+pre-election certification guard was needed at all.
+
+`parse_mvic_result_status` reads it, and `results/adapters/mi.py` uses it in
+place of the hardcoded value. Unknown or missing is treated as **unofficial**,
+not assumed final. So Michigan's election-night returns will be stored as
+unofficial and cannot certify a race, and the switch to certified happens when
+MVIC itself says the canvass is done — which is the behaviour the `can_certify`
+guard approximates for every other state.
+
+## Fixtures
+
+`mvic_result_file_705.tsv` (318 bytes, synthetic, invented column names) is
+**deleted**, replaced by `mvic_result_file_706.txt` — real rows for Governor and
+U.S. Senator across three counties, with the genuine preamble, 18-column header
+and trailer (33 rows, 4 KB).
+
+`results/tests/test_mi_adapter.py`'s bulk test used inline text with the invented
+columns, which is precisely what hid this; it now feeds the real fixture,
+asserts that county rows sum to the totals, and has a second case confirming
+that an `UNOFFICIAL` trailer yields unofficial rows.
+
+Full suite: `1 failed, 2398 passed, 2 skipped` — the same pre-existing date
+expiry. `ruff check .` clean.
+
+## Open: the Governor ticket will not match
+
+`results/tasks.py:529-541` matches candidates on `name_match_key` — normalized
+tokens, sorted — then exact/iexact name. There is no surname fallback.
+
+- The BOE **general** listing gives Michigan's gubernatorial candidate as
+  `"Benson, Jocelyn / Brinks, Winnie"` (a running-mate ticket) →
+  `benson brinks jocelyn winnie`.
+- MVIC lists only the top of the ticket. The 2024 general file is the precedent:
+  office `ELECTORS OF PRESIDENT AND VICE-PRESIDENT OF THE UNITED STATES`, with
+  candidate `STEIN, JILL` and no running mate → `benson jocelyn` for Governor.
+
+Those keys differ, so **Michigan's Governor result rows will find no candidate
+and be dropped**, logged as `no candidate match`. The same applies to any
+Lieutenant Governor pairing.
+
+This cannot be confirmed until MVIC publishes a 2026 general file, but the 2024
+precedent is strong. The contained fix is in `mi_sos`: ingest the ticket's
+candidate under the top-of-ticket name and keep the full ticket in
+`source_metadata` (or as a candidate alias, which `d8a20ac` added for NC),
+rather than teaching the shared matcher about tickets. Worth deciding before
+tomorrow night.
+
+## Michigan's results path now
+
+| Step | State |
+|---|---|
+| Races for results to match | fixed, `612f798` |
+| `mi_mvic_election_id` populated | wired, `4532599`; MVIC has not published Nov 3 |
+| Bulk TSV fetch + parse (primary path) | **fixed and verified against both real files** |
+| County-records fetch + parse (fallback) | fixed and verified, `8ab0fec` |
+| Governor/Lt. Governor ticket matching | **open — see above** |

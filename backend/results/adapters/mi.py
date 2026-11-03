@@ -8,7 +8,11 @@ from django.core.cache import cache
 from integrations.mi_sos.client import MiSosClient
 from integrations.mi_sos.exceptions import MiSosRetryableError
 from integrations.mi_sos.mappers import is_write_in, result_office_title
-from integrations.mi_sos.parsers import parse_mvic_county_results_html, parse_mvic_result_file
+from integrations.mi_sos.parsers import (
+    parse_mvic_county_results_html,
+    parse_mvic_result_file,
+    parse_mvic_result_status,
+)
 
 from .base import AdapterResult, ResultRow, StateResultsAdapter
 from .registry import register
@@ -85,9 +89,14 @@ class MichiganAdapter(StateResultsAdapter):
         client = MiSosClient()
         source_url = f"https://mvic.sos.state.mi.us/VoteHistory/GetElectionResultFile?electionId={mvic_id}"
         mapping_confidence = "full"
+        # MVIC's bulk file states whether the results are official in its own trailer,
+        # which almost no source does. Trust it instead of hardcoding "official", so
+        # election-night returns stay unofficial and do not certify a race.
+        result_type = "official"
         try:
             text = client.fetch_result_file(int(mvic_id))
             raw_rows = parse_mvic_result_file(text)
+            result_type = parse_mvic_result_status(text)
         except MiSosRetryableError as exc:
             logger.warning("mi_mvic.bulk_fetch_failed election=%s: %s", mvic_id, exc)
             source_url = f"https://mvic.sos.state.mi.us/VoteHistory/GetCountyVoteRecords?electionId={mvic_id}"
@@ -105,7 +114,7 @@ class MichiganAdapter(StateResultsAdapter):
                 source_version=checksum,
             )
 
-        rows = _to_result_rows(raw_rows, "official")
+        rows = _to_result_rows(raw_rows, result_type)
         return AdapterResult(
             rows=rows,
             source_url=source_url,

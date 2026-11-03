@@ -50,22 +50,63 @@ def test_fetch_results_uses_bulk_file_first(client_cls):
         jurisdiction_level=Election.JurisdictionLevel.STATE,
         state="MI",
         source_id="mi_test",
-        source_metadata={"mi_mvic_election_id": 705},
+        source_metadata={"mi_mvic_election_id": 706},
     )
-    client_cls.return_value.fetch_result_file.return_value = (
-        "contest\tcandidate\tparty\tvotes\tpct\tcounty\n"
-        "35TH DISTRICT STATE SENATOR\tGREENE, CHEDRICK\tDEMOCRATIC\t36583\t58.88\tBAY\n"
-    )
+    # Real MVIC bulk output. The inline text this test used to pass had invented
+    # column names (contest/candidate/votes), so it hid the parser returning nothing
+    # on the actual file, whose columns are OfficeDescription/CandidateLastName/
+    # CandidateVotes behind a preamble line.
+    fixture = (
+        Path(__file__).parents[2]
+        / "integrations" / "mi_sos" / "tests" / "fixtures" / "mvic_result_file_706.txt"
+    ).read_text(encoding="utf-8")
+    client_cls.return_value.fetch_result_file.return_value = fixture
 
     result = MichiganAdapter().fetch_results(election.election_date, election.pk)
 
     assert result.mapping_confidence == "full"
-    assert result.rows[0].candidate_name == "GREENE, CHEDRICK"
-    assert result.rows[0].vote_count == 36583
-    assert result.rows[0].vote_pct == 58.88
-    assert result.rows[0].jurisdiction_fragment == "BAY"
-    assert result.rows[0].office_title == "State Senate - District 35"
+    governor = [r for r in result.rows if r.office_title == "Governor"]
+    assert governor
+
+    totals = [r for r in governor if r.jurisdiction_fragment == ""]
+    benson_total = next(r for r in totals if r.candidate_name == "Benson, Jocelyn")
+    counties = [
+        r for r in governor
+        if r.jurisdiction_fragment and r.candidate_name == "Benson, Jocelyn"
+    ]
+    assert benson_total.vote_count == sum(r.vote_count for r in counties)
+    assert {r.jurisdiction_fragment for r in counties} == {"ALCONA", "WAYNE", "OAKLAND"}
+
+    # The file declares "RESULTS: OFFICIAL" in its trailer, so these are official.
+    assert {r.result_type for r in result.rows} == {"official"}
     client_cls.return_value.fetch_county_vote_records.assert_not_called()
+
+
+@pytest.mark.django_db
+@patch("results.adapters.mi.MiSosClient")
+def test_election_night_returns_are_not_reported_as_official(client_cls):
+    """MVIC's trailer says UNOFFICIAL until the canvass completes; trust it."""
+    election = Election.objects.create(
+        name="MI Test",
+        election_date="2026-05-05",
+        election_type="special",
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state="MI",
+        source_id="mi_test_unofficial",
+        source_metadata={"mi_mvic_election_id": 706},
+    )
+    fixture = (
+        Path(__file__).parents[2]
+        / "integrations" / "mi_sos" / "tests" / "fixtures" / "mvic_result_file_706.txt"
+    ).read_text(encoding="utf-8")
+    client_cls.return_value.fetch_result_file.return_value = fixture.replace(
+        "RESULTS: OFFICIAL", "RESULTS: UNOFFICIAL"
+    )
+
+    result = MichiganAdapter().fetch_results(election.election_date, election.pk)
+
+    assert result.rows
+    assert {r.result_type for r in result.rows} == {"unofficial"}
 
 
 @pytest.mark.django_db

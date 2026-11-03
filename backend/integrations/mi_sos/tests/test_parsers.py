@@ -5,6 +5,7 @@ from integrations.mi_sos.parsers import (
     parse_mvic_county_results_html,
     parse_mvic_elections,
     parse_mvic_result_file,
+    parse_mvic_result_status,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -49,14 +50,94 @@ def test_parse_boe_candidate_listing_preserves_withdrawn_and_disqualified_status
     assert {"DISQ", "WITHD"} <= statuses
 
 
-def test_parse_mvic_result_file_returns_candidate_rows():
-    rows = parse_mvic_result_file(_fixture("mvic_result_file_705.tsv"))
-    assert len(rows) == 3
-    assert rows[0]["contest"] == "35TH DISTRICT STATE SENATOR PARTIAL TERM ENDING 1/1/2027"
-    assert rows[0]["candidate_name"] == "GREENE, CHEDRICK"
-    assert rows[0]["votes"] == "36583"
-    assert rows[0]["vote_pct"] == "58.88"
-    assert rows[0]["county"] == "BAY"
+# ---------------------------------------------------------------------------
+# MVIC bulk result file: preamble, header, trailer, and per-county rows
+# ---------------------------------------------------------------------------
+
+def _result_file() -> str:
+    return _fixture("mvic_result_file_706.txt")
+
+
+def test_parse_mvic_result_file_skips_the_preamble_and_trailer():
+    """Real MVIC output, captured from electionId=706.
+
+    Line 1 is "TOTAL VOTER TURNOUT: ...", line 2 the header, and the last line
+    "RECORDS: n  RESULTS: OFFICIAL". Handing the whole file to csv.DictReader takes
+    the preamble as the header and yields nothing usable.
+    """
+    rows = parse_mvic_result_file(_result_file())
+
+    assert rows
+    assert not [r for r in rows if "TOTAL VOTER TURNOUT" in r["contest"]]
+    assert not [r for r in rows if r["contest"].startswith("RECORDS:")]
+
+
+def test_parse_mvic_result_file_reads_the_real_column_names():
+    """Office, name and votes live in OfficeDescription/CandidateLastName/CandidateVotes."""
+    rows = parse_mvic_result_file(_result_file())
+    alcona = [
+        r for r in rows
+        if r["county"] == "ALCONA" and r["contest"].startswith("GOVERNOR 4 YEAR")
+    ]
+
+    benson = next(r for r in alcona if r["candidate_name"] == "Benson, Jocelyn")
+    assert benson["party"] == "DEMOCRATIC"
+    assert benson["votes"] == "1054"
+    # The file carries no percentages.
+    assert benson["vote_pct"] == ""
+
+
+def test_candidate_names_are_assembled_as_last_comma_given():
+    """The BOE candidate listing uses the same shape, which is how the two match up."""
+    names = {r["candidate_name"] for r in parse_mvic_result_file(_result_file())}
+
+    assert "Benson, Jocelyn" in names
+    assert "Swanson, Christopher Robert" in names
+
+
+def test_county_rows_are_summed_into_contest_totals():
+    """results.winners only derives winners from contest-total rows.
+
+    It refuses to sum sub-jurisdiction rows itself because fragments can overlap;
+    Michigan's counties partition the state, so the parser sums them.
+    """
+    rows = parse_mvic_result_file(_result_file())
+    totals = [r for r in rows if r["county"] == ""]
+    counties = [r for r in rows if r["county"]]
+
+    assert totals and counties
+    governor = [r for r in totals if r["contest"].startswith("GOVERNOR 4 YEAR")]
+    benson = next(r for r in governor if r["candidate_name"] == "Benson, Jocelyn")
+    expected = sum(
+        int(r["votes"]) for r in counties
+        if r["candidate_name"] == "Benson, Jocelyn" and r["contest"].startswith("GOVERNOR 4 YEAR")
+    )
+    assert int(benson["votes"]) == expected
+    assert benson["raw"]["aggregated_from"] == "county"
+
+
+def test_write_in_rows_are_flagged():
+    rows = parse_mvic_result_file(_result_file())
+
+    write_ins = [r for r in rows if r["write_in"]]
+    assert write_ins
+    assert all("WRITE-IN" in r["candidate_name"].upper() or r["party"].upper() == "WRITE-IN"
+               for r in write_ins)
+
+
+def test_result_status_comes_from_the_files_own_trailer():
+    """MVIC states this explicitly, so a race is not certified from election-night data."""
+    assert parse_mvic_result_status(_result_file()) == "official"
+    assert parse_mvic_result_status(
+        "TOTAL VOTER TURNOUT: 1\r\nElectionDate\tOfficeDescription\r\nRECORDS: 0\tRESULTS: UNOFFICIAL\r\n"
+    ) == "unofficial"
+    # Unknown or missing is treated as unofficial rather than assumed final.
+    assert parse_mvic_result_status("no trailer here") == "unofficial"
+
+
+def test_parse_mvic_result_file_without_a_header_returns_nothing():
+    assert parse_mvic_result_file("TOTAL VOTER TURNOUT: 5\r\nnothing useful\r\n") == []
+    assert parse_mvic_result_file("") == []
 
 
 # ---------------------------------------------------------------------------

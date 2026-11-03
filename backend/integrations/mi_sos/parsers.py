@@ -140,39 +140,143 @@ def parse_boe_candidate_listing(html: str) -> list[dict[str, str]]:
     return candidates
 
 
+# MVIC's bulk result file ("<year><TYPE>_MI_CENR_BY_COUNTY.txt") is tab-delimited, but
+# it is not a bare CSV: line 1 is a preamble ("TOTAL VOTER TURNOUT: 97,057,730"), line 2
+# the header, and the last line a trailer ("RECORDS: 6108\tRESULTS: OFFICIAL"). Feeding
+# the whole file to csv.DictReader takes the preamble as the header and yields nothing
+# usable, and every column name differs from the ones the previous implementation looked
+# for — it searched for "contest"/"candidate"/"votes" against OfficeDescription,
+# CandidateLastName and CandidateVotes. Verified 2026-11-02 against the real
+# 2024 general (6,109 lines) and 2026 primary (2,538 lines) files.
+_TSV_HEADER_MARKER = "OfficeDescription"
+_TSV_TRAILER_PREFIX = "RECORDS:"
+_RESULTS_STATUS_RE = re.compile(r"RESULTS:\s*(?P<status>[A-Za-z]+)")
+_COL_OFFICE = "OfficeDescription"
+_COL_COUNTY = "CountyName"
+_COL_PARTY = "PartyDescription"
+_COL_LAST = "CandidateLastName"
+_COL_FIRST = "CandidateFirstName"
+_COL_MIDDLE = "CandidateMiddleName"
+_COL_VOTES = "CandidateVotes"
+_COL_WRITE_IN = "WriteIn(W)/Uncommitted(Z)"
+# The header says W/Z; the files actually carry "Y". Party is also set to WRITE-IN on
+# those rows, so either signal identifies them.
+_WRITE_IN_FLAG = "Y"
+_WRITE_IN_PARTY = "WRITE-IN"
+
+
+def _result_file_body(text: str) -> list[str]:
+    """The header line and data lines, with the preamble and trailer removed."""
+    lines = (text or "").splitlines()
+    header_index = next(
+        (i for i, line in enumerate(lines) if _TSV_HEADER_MARKER in line),
+        None,
+    )
+    if header_index is None:
+        return []
+    body = [
+        line for line in lines[header_index:]
+        if line.strip() and not line.startswith(_TSV_TRAILER_PREFIX)
+    ]
+    return body
+
+
+def parse_mvic_result_status(text: str) -> str:
+    """
+    "official" or "unofficial", from the file's own trailer.
+
+    MVIC states this explicitly ("RESULTS: OFFICIAL"), which most sources never do —
+    results.tasks only certifies a race when every row is official, so reading it here
+    keeps election-night returns out of results_certified. Unknown or missing is
+    treated as unofficial.
+    """
+    for line in reversed((text or "").splitlines()):
+        if line.startswith(_TSV_TRAILER_PREFIX):
+            match = _RESULTS_STATUS_RE.search(line)
+            if match and match.group("status").upper() == "OFFICIAL":
+                return "official"
+            return "unofficial"
+    return "unofficial"
+
+
+def _mvic_candidate_name(record: dict) -> str:
+    """"Last, First Middle" — the shape the BOE candidate listing also uses."""
+    last = _squash(record.get(_COL_LAST) or "")
+    given = _squash(" ".join(
+        part for part in (record.get(_COL_FIRST) or "", record.get(_COL_MIDDLE) or "") if part
+    ))
+    if last and given:
+        return f"{last}, {given}"
+    return last or given
+
+
 def parse_mvic_result_file(text: str) -> list[dict[str, Any]]:
-    if not (text or "").strip():
+    """
+    Per-county rows plus a contest-total row per candidate.
+
+    The file reports only county splits. results.winners derives winners from
+    contest-total rows (jurisdiction_fragment == "") and deliberately refuses to sum
+    sub-jurisdiction rows itself, because fragments can overlap in general. Michigan's
+    83 counties partition the state exactly, so summing them here is safe and is the
+    only way these results yield a winner.
+    """
+    body = _result_file_body(text)
+    if not body:
         return []
 
-    sample = text[:2048]
-    try:
-        dialect = csv.Sniffer().sniff(sample, delimiters="\t,|")
-    except csv.Error:
-        dialect = csv.excel_tab
+    reader = csv.DictReader(io.StringIO("\n".join(body)), delimiter="\t")
+    county_rows: list[dict[str, Any]] = []
+    totals: dict[tuple, dict[str, Any]] = {}
 
-    reader = csv.DictReader(io.StringIO(text), dialect=dialect)
-    rows = []
     for record in reader:
-        normalized = {
-            str(k or "").strip().lower().replace(" ", "_"): (v or "").strip()
-            for k, v in record.items()
-        }
-        contest = normalized.get("contest") or normalized.get("office") or normalized.get("race") or ""
-        candidate = normalized.get("candidate") or normalized.get("candidate_name") or ""
-        votes = normalized.get("votes") or normalized.get("vote_total") or normalized.get("total_votes") or ""
-        if not contest or not candidate or votes == "":
+        contest = _squash(record.get(_COL_OFFICE) or "")
+        candidate_name = _mvic_candidate_name(record)
+        votes_raw = (record.get(_COL_VOTES) or "").strip().replace(",", "")
+        if not contest or not candidate_name or not votes_raw:
             continue
-        rows.append({
+        try:
+            votes = int(votes_raw)
+        except ValueError:
+            continue
+
+        party = _squash(record.get(_COL_PARTY) or "")
+        county = _squash(record.get(_COL_COUNTY) or "")
+        write_in = (
+            (record.get(_COL_WRITE_IN) or "").strip().upper() == _WRITE_IN_FLAG
+            or party.upper() == _WRITE_IN_PARTY
+        )
+
+        shared = {
             "contest": contest,
-            "party": normalized.get("party", ""),
-            "candidate_name": candidate,
-            "votes": votes.replace(",", ""),
-            "vote_pct": (normalized.get("pct") or normalized.get("percent") or normalized.get("vote_pct") or "")
-            .replace("%", ""),
-            "county": normalized.get("county", ""),
-            "raw": normalized,
+            "party": party,
+            "candidate_name": candidate_name,
+            "vote_pct": "",  # the file carries no percentages
+            "write_in": write_in,
+        }
+        county_rows.append({
+            **shared,
+            "votes": str(votes),
+            "county": county,
+            "raw": {"source": "mvic_result_file", "county": county, **shared},
         })
-    return rows
+
+        key = (contest, candidate_name, party)
+        entry = totals.setdefault(key, {**shared, "votes": 0, "county": ""})
+        entry["votes"] += votes
+
+    total_rows = [
+        {
+            **entry,
+            "votes": str(entry["votes"]),
+            "raw": {
+                "source": "mvic_result_file",
+                "aggregated_from": "county",
+                **{k: v for k, v in entry.items() if k != "votes"},
+            },
+        }
+        for entry in totals.values()
+    ]
+    return total_rows + county_rows
 
 
 # MVIC renders results as a Bootstrap grid inside the "Election Results" tab, not a
