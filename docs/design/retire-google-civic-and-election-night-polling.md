@@ -9,18 +9,151 @@ Civic API. All read-only; no writes were made.
 
 ## Decision
 
-1. **Retire the Google Civic API integration project-wide.**
-2. **Audit the database for Civic leftovers and duplicate records.**
-3. **Put election-night results polling on an election-night cadence.**
+1. **Crontab edit** — open the election-night cadence and stop the Civic sync,
+   in one atomic change to one file.
+2. **Retire the Google Civic API integration project-wide** (code).
+3. **Audit the database** for Civic leftovers and duplicate records.
 
-The reported Michigan duplication is a symptom of (1). Retiring the source stops
-new duplicates; (2) cleans up what previous pulls already wrote. (3) surfaced
-during the investigation and is independently urgent — see the note under
-Sequencing.
+The reported Michigan duplication is a symptom of Civic's design. Step 1 is the
+whole of the urgent work: it both fixes the election-night cadence and cuts off
+new Civic writes, because `sync-elections` and the results pollers live in the
+same crontab. Step 2 removes the now-dead code. Step 3 sweeps what earlier pulls
+already wrote, and must come last — running it while the source is still live
+would let the next sync re-create what the sweep removed.
 
 ---
 
-## Part 1 — Retire Google Civic
+## Part 1 — Crontab: election-night cadence + stop Civic
+
+**One atomic change to one file**, `/data/DockerConfigs/CivicMirror/scheduler/crontab`
+on the scheduler host. No code deploy. Both halves of the urgent work live here,
+so there is no ordering window between them: cron reads the whole file.
+
+### The problem
+
+The scheduler is still in off-season mode, by its own admission:
+
+```
+# All tasks run once daily, overnight. Times are UTC and do not auto-shift for DST.
+# Off-season schedule while there are no active elections to monitor hourly.
+# Revisit before the November active window if sync-elections/poll-sc-enr/
+# sync-sc-enr-results need to return to hourly cadence.
+```
+
+Today **is** the November active window. The revisit did not happen. Over the
+last 72 hours the scheduler called:
+
+```
+1317  /internal/tasks/poll-ky-results/        every 2 minutes
+   2  /internal/tasks/poll-upcoming-results/  daily, 08:05 UTC
+   2  /internal/tasks/poll-results/           daily, 08:00 UTC
+   2  /internal/tasks/sync-<state>/           daily, each
+```
+
+**Kentucky is the only state on a live cadence.** Worker logs for the last 48h
+show `ingest_official_results` running for election #1883 (KY) and nothing else.
+Michigan holds 534 races and **0 official results**; `results/adapters/mi.py`
+pulls live MVIC county results and would populate them if asked.
+
+### The change
+
+```diff
+-# All tasks run once daily, overnight. Times are UTC and do not auto-shift for DST.
+-# Off-season schedule while there are no active elections to monitor hourly.
+-# Revisit before the November active window if sync-elections/poll-sc-enr/
+-# sync-sc-enr-results need to return to hourly cadence.
+-0 4 * * * /usr/local/bin/trigger.sh /internal/tasks/sync-elections/
++# Times are UTC and do not auto-shift for DST.
++#
++# ACTIVE WINDOW (opened 2026-11-03 for the November general). The results
++# pollers below run on a live cadence; the per-state sync-* discovery jobs stay
++# daily on purpose -- several sit on non-default slots to dodge WAF/403 blocks
++# (see the PA and UT notes further down) and must not be hammered.
++# REVERT the two poll-* cadences to daily once results are certified.
++#
++# sync-elections (Google Civic) removed 2026-11-03 -- integration retired.
++# ... See issue #229.
+
+-0 8 * * * /usr/local/bin/trigger.sh /internal/tasks/poll-results/
+-5 8 * * * /usr/local/bin/trigger.sh /internal/tasks/poll-upcoming-results/
++*/30 * * * * /usr/local/bin/trigger.sh /internal/tasks/poll-results/
++*/15 * * * * /usr/local/bin/trigger.sh /internal/tasks/poll-upcoming-results/
+```
+
+Four functional lines: drop `sync-elections` (the only Civic entry in the file),
+and move the two general pollers onto a live cadence.
+
+### Why these cadences and not faster
+
+An earlier draft proposed `*/5`. Measured load rules that out:
+
+| poller | queues per run | **of which have races** |
+|---|---|---|
+| `poll_upcoming_results` | 251 | **30** |
+| `poll_pending_results` | 207 | 100 |
+
+At `*/5`, `poll_upcoming_results` alone is ~3,000 task-queues/hour, and **221 of
+its 251 elections have no races** — overwhelmingly NC county and municipal rows,
+each triggering a pointless adapter fetch against NC SBE. That is precisely how
+the PA and UT WAF/403 blocks documented in this crontab were earned.
+
+`*/15` + `*/30` takes Michigan from 1 results check per day to 96, which is the
+difference that matters, at roughly a third of the request volume.
+`ingest_official_results` short-circuits on an unchanged source version, so
+repeat runs against quiet states are cheap.
+
+### What is deliberately *not* accelerated
+
+- **The 37 per-state `sync-*` jobs.** These are the discovery layer
+  (`integrations/`), not results. Tonight's need is vote counts, which the two
+  pollers drive via `results/adapters/` for all 50 states. PA and UT in
+  particular are parked on non-default slots specifically to dodge WAF/403
+  blocks — accelerating them risks losing the window entirely.
+- **`poll-ky-results`** stays at `*/2`; it already works.
+
+### Safety: this cannot amplify Civic
+
+The results pollers and the Civic sync are separate paths. `sync-elections` is
+the only Civic entry, and it is being removed, not accelerated. Independently,
+both pollers filter `state__in=supported` and all three Civic buckets have
+`state = NULL`:
+
+```
+'' in supported: False
+#2232 state=None  poller-eligible=False
+#2236 state=None  poller-eligible=False
+#1772 state=None  poller-eligible=False
+```
+
+The pollers **cannot reach** the Civic buckets at any cadence. Note this
+guarantee rests on `state` staying NULL on those rows — which is why Part 3
+retires them as empty `needs_review` shells rather than backfilling a state.
+
+### One accepted side effect
+
+`poll-results` does reach MI #1890, CA #1778 and WA #1934 — `results_pending`
+elections that still contain Civic orphans — so winner derivation re-runs over
+duplicated races more often. This is not new breakage (it already happens daily)
+and tonight's 2026-11-03 elections contain no Civic orphans. If the churn is
+unwanted, `poll-results` can stay daily until Part 3 has swept, while
+`poll-upcoming-results` (which covers tonight) goes live immediately.
+
+### Follow-up
+
+The 221-raceless-election amplification is worth fixing in code: an
+election-night poller scoped to elections *with races* on *today's* date would
+cut the volume by ~90%. Out of scope for a crontab-only change.
+
+### Revert
+
+Restore `poll-results` to `0 8 * * *` and `poll-upcoming-results` to
+`5 8 * * *` once results are certified. The header carries a REVERT note; the
+previous "revisit" note went un-actioned for a full cycle, so set a calendar
+reminder rather than relying on the comment.
+
+---
+
+## Part 2 — Retire Google Civic (code)
 
 ### What the duplication actually was
 
@@ -141,17 +274,17 @@ result data"), so they are a discovery path too, not only a results path.
 
 ### Retirement steps
 
-1. Remove the `0 4 * * *` `sync-elections` entry from the scheduler crontab —
-   this alone stops all new Civic ingestion.
+1. ~~Remove the `0 4 * * *` `sync-elections` crontab entry~~ — **done in Part 1**;
+   that alone stops all new Civic ingestion.
 2. Remove `'integrations.civic'` from `INSTALLED_APPS`
    (`config/settings/base.py:146`).
 3. Remove the trigger route and view: `internal/urls.py:7`,
    `internal/views.py:12,99-100`. Remove
    `elections/management/commands/sync_elections.py`.
-4. **Release the contact locks** (Part 2 scope item 3): clear `field_provenance`
+4. **Release the contact locks** (Part 3 scope item 3): clear `field_provenance`
    entries where `civic_api` owns an empty `image_url` / `website_url` /
    `description`, so state adapters can fill them. ~516 candidates.
-5. Delete the 52 `SourcePrecedence` rows for `civic_api` (also tracked as Part 2
+5. Delete the 52 `SourcePrecedence` rows for `civic_api` (also tracked as Part 3
    scope item 6) — **including the
    `(*, *, 0)` wildcard**, which is what let Civic outrank every unranked
    adapter. Note 23 adapters (`mi_sos`, `il_sbe`, `mn_sos`, `oh_sos`, `or_sos`,
@@ -159,7 +292,7 @@ result data"), so they are a discovery path too, not only a results path.
    `hi_olvr`, `az_sos`, `nj_elections`, …) have **no precedence rows at all** and
    resolve to `+inf`; removing the Civic wildcard is safe, but the unranked-
    adapter gap deserves its own issue.
-6. Leave existing Civic rows in place at this stage — the sweep is Part 2.
+6. Leave existing Civic rows in place at this stage — the sweep is Part 3.
    Nothing needs *migrating*: #2232 holds only MI and VA races, both already
    covered by `mi_sos` and `va_elect`.
 7. Keep `Race.Source.CIVIC_API` in the enum for historical rows; stop writing it.
@@ -167,11 +300,12 @@ result data"), so they are a discovery path too, not only a results path.
 
 Retirement requires **no merge, no title aliasing, no candidate reconciliation
 and no precedence reordering** — the entire risky path in the previous revision
-of this document disappears.
+of this document disappears. With Part 1 already applied, nothing in this part
+is time-sensitive.
 
 ---
 
-## Part 2 — Audit the database for Civic leftovers
+## Part 3 — Audit the database for Civic leftovers
 
 Retirement stops new writes; it does not remove what earlier pulls left behind.
 The audit below was run read-only against production on 2026-11-03 and should be
@@ -295,95 +429,15 @@ rows in elections that are currently being updated.
 
 ---
 
-## Part 3 — Election-night polling cadence
-
-**This is the more urgent finding.** The scheduler is still in off-season mode,
-by its own admission. From `/data/DockerConfigs/CivicMirror/scheduler/crontab`:
-
-```
-# All tasks run once daily, overnight. Times are UTC and do not auto-shift for DST.
-# Off-season schedule while there are no active elections to monitor hourly.
-# Revisit before the November active window if sync-elections/poll-sc-enr/
-# sync-sc-enr-results need to return to hourly cadence.
-```
-
-Today **is** the November active window. The revisit did not happen.
-
-Over the last 72 hours the scheduler called:
-
-```
-1317  /internal/tasks/poll-ky-results/        every 2 minutes
-   2  /internal/tasks/poll-upcoming-results/  daily, 08:05 UTC
-   2  /internal/tasks/poll-results/           daily, 08:00 UTC
-   2  /internal/tasks/sync-<state>/           daily, each
-```
-
-**Kentucky is the only state on a live cadence.** Worker logs for the last 48h
-show `ingest_official_results` running for election 1883 (KY) and nothing else.
-
-Consequences tonight, if unchanged:
-
-- Michigan has 534 races and **0 official results**. `sync-mi-sos` ran 08:45 and
-  will not run again until 08:45 tomorrow.
-- The same holds for UT, CO, and every other state with races but no results.
-- `poll-upcoming-results` last ran 08:05 today; next run 08:05 tomorrow. Returns
-  arriving this evening are picked up ~12 hours late.
-- The 16 states with no 2026 races were polled at 08:05 while their contests were
-  not yet posted, found nothing, and will not be asked again today.
-
-### Proposed cadence
-
-Mirror the KY pattern for the active window, then revert:
-
-```cron
-# Election-night active window. Revert to daily after certification.
-*/2  * * * *  trigger.sh /internal/tasks/poll-ky-results/     # unchanged
-*/5  * * * *  trigger.sh /internal/tasks/poll-upcoming-results/
-*/10 * * * *  trigger.sh /internal/tasks/poll-results/
-*/15 * * * *  trigger.sh /internal/tasks/sync-mi-sos/
-```
-
-Notes:
-
-- `poll_upcoming_results` already filters to a 14-day window and non-terminal
-  statuses, and `ingest_official_results` short-circuits on an unchanged source
-  version, so a tight cadence is cheap for states with nothing new.
-- Add the handful of state syncs whose feeds actually update live. Do **not**
-  blanket-accelerate all 37 sync jobs — several (PA, UT) are already on
-  non-default slots specifically to dodge WAF/403 blocks, and hammering them
-  risks losing the window entirely.
-- Set a reminder to revert after certification; the current comment shows an
-  un-actioned "revisit" note is not sufficient.
-
-### Observability gap
-
-`results/tasks.py` writes **no `SyncLog`** — there is no `results_adapter` row in
-`ops_synclog`. For the 16 zero-race states it is therefore impossible to
-distinguish "ran and found nothing" from "ran and errored" except by reading
-worker logs. The conclusion that those states ran cleanly is inferred from the
-absence of error activity, not from a positive success record. Results-layer
-`SyncLog` instrumentation should be its own issue, and would have made this
-whole investigation an hour shorter.
-
----
-
 ## Sequencing
 
-Documented in the requested order — retire, audit, then polling.
+1. **Crontab** (Part 1) — do first and immediately. Election-day urgent, no code
+   deploy, and it stops new Civic writes in the same edit.
+2. **Retire Civic code** (Part 2) — normal branch, normal review. Nothing
+   time-sensitive once the crontab entry is gone.
+3. **Audit** (Part 3) — last. Must follow retirement, or the next sync re-creates
+   what the sweep removed. Dry-run against a clone (the `civicmirror-*-test-db`
+   pattern) and do not run it while results are actively landing.
 
-1. **Retire Civic** (Part 1). The time-sensitive element is removing the
-   `0 4 * * *` `sync-elections` crontab entry before tomorrow morning, which
-   stops #2232 growing again. The code changes can follow on the same branch.
-2. **Audit** (Part 2). Must come after retirement is live, or the next sync
-   re-creates what the sweep removed. Dry-run on a clone first, and not while
-   results are actively landing.
-3. **Polling cadence** (Part 3). A crontab change on the scheduler host; no code
-   deploy.
-
-**One caveat on this ordering.** Part 3 is the only item that is
-*election-day* urgent — tonight's returns outside Kentucky are not being
-collected, and Michigan is sitting at 534 races / 0 results. Part 1 and Part 2
-are correctness work that is safe to do deliberately. If tonight's results
-matter, the Part 3 crontab change can be made independently and immediately
-without touching Parts 1 or 2; nothing in it depends on Civic being retired
-first.
+The current branch for Parts 2 and 3 is `chore/retire-google-civic`. Tracking
+issue: #229.
