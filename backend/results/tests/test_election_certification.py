@@ -114,3 +114,96 @@ def test_non_terminal_status_still_updates_from_source():
     )
     e.refresh_from_db()
     assert e.status == Election.Status.RESULTS_PENDING
+
+
+# ---------------------------------------------------------------------------
+# Nothing is certified before the canvass (can_certify)
+# ---------------------------------------------------------------------------
+
+def _days_from_today(offset):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    return timezone.localdate() + timedelta(days=offset)
+
+
+@pytest.mark.django_db
+def test_can_certify_only_after_election_day_and_its_buffer():
+    from results.tasks import can_certify
+
+    assert can_certify(_election(election_date=_days_from_today(-2), canonical_key="k-past")) is True
+    # TIME_ZONE is UTC, so localdate() rolls over at 8pm ET on election night while western
+    # polls are open. The one-day buffer keeps certification out of that window.
+    assert can_certify(_election(election_date=_days_from_today(-1), canonical_key="k-yday")) is False
+    assert can_certify(_election(election_date=_days_from_today(0), canonical_key="k-today")) is False
+    assert can_certify(_election(election_date=_days_from_today(1), canonical_key="k-future")) is False
+
+
+@pytest.mark.django_db
+def test_election_not_certified_before_it_is_held():
+    """The Illinois defect: 141 races archived + certified for an election held the next day."""
+    from results.tasks import _certify_election_if_complete
+
+    e = _election(election_date=_days_from_today(1), canonical_key="k-unheld")
+    _race(e, 1)
+    _race(e, 2)
+
+    assert _certify_election_if_complete(e) is False
+    e.refresh_from_db()
+    assert e.status == Election.Status.RESULTS_PENDING
+
+
+@pytest.mark.django_db
+def test_official_rows_before_election_day_leave_the_race_live():
+    from results.models import OfficialResult
+    from results.tasks import _process_race_results
+    from results.tests.test_tasks import make_adapter_result, make_result_row
+
+    e = _election(election_date=_days_from_today(1), canonical_key="k-unheld-race")
+    race = _race(e, 1, cert=Race.CertificationStatus.RESULTS_PENDING)
+    from elections.models import Candidate
+
+    Candidate.objects.create(race=race, name="Alice Smith", party="DEM")
+    rows = [make_result_row(
+        candidate_name="Alice Smith",
+        result_type=OfficialResult.ResultType.OFFICIAL,
+        office_title="Office 1",
+        is_winner=None,
+    )]
+
+    _process_race_results(race, make_adapter_result(rows=rows), "MA")
+
+    race.refresh_from_db()
+    # The votes are still recorded — only the certification claim is withheld.
+    row = OfficialResult.objects.get(race=race)
+    assert row.vote_count == 50000
+    assert row.certified_at is None
+    assert race.certification_status == Race.CertificationStatus.RESULTS_PENDING
+    assert race.race_status == Race.RaceStatus.ACTIVE
+
+
+@pytest.mark.django_db
+def test_official_rows_after_election_day_still_certify():
+    from results.models import OfficialResult
+    from results.tasks import _process_race_results
+    from results.tests.test_tasks import make_adapter_result, make_result_row
+
+    e = _election(election_date=_days_from_today(-7), canonical_key="k-held-race")
+    race = _race(e, 1, cert=Race.CertificationStatus.RESULTS_PENDING)
+    from elections.models import Candidate
+
+    Candidate.objects.create(race=race, name="Alice Smith", party="DEM")
+    rows = [make_result_row(
+        candidate_name="Alice Smith",
+        result_type=OfficialResult.ResultType.OFFICIAL,
+        office_title="Office 1",
+        is_winner=None,
+    )]
+
+    _process_race_results(race, make_adapter_result(rows=rows), "MA")
+
+    race.refresh_from_db()
+    assert OfficialResult.objects.get(race=race).certified_at is not None
+    assert race.certification_status == Race.CertificationStatus.RESULTS_CERTIFIED
+    assert race.race_status == Race.RaceStatus.ARCHIVED

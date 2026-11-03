@@ -343,6 +343,46 @@ def _bootstrap_races_from_results(election, adapter_result, state: str) -> list:
     return created_races
 
 
+def _election_date(election_or_race) -> datetime.date | None:
+    """election_date as a date, whether it is stored as a date or an ISO string."""
+    value = getattr(election_or_race, "election_date", None)
+    if isinstance(value, str):
+        try:
+            return datetime.date.fromisoformat(value)
+        except ValueError:
+            return None
+    return value
+
+
+# settings.TIME_ZONE is 'UTC', so timezone.localdate() rolls over at 00:00 UTC — 8pm ET on
+# election night, with polls still open in the Mountain, Pacific, Alaska and Hawaii zones.
+# A plain "election_date < localdate()" would therefore let certification start mid-evening.
+# Requiring a full extra day removes that edge entirely, and costs nothing: canvasses take
+# days to weeks, and poll_pending_results runs daily until the election certifies.
+_CERTIFY_BUFFER = datetime.timedelta(days=1)
+
+
+def can_certify(election) -> bool:
+    """
+    True only once election day is well and truly over (see _CERTIFY_BUFFER).
+
+    Nothing used to stop an adapter's result_type="official" rows from flipping a race to
+    results_certified/archived before the polls opened: 13 adapters stamp "official"
+    unconditionally, because most sources expose no "these are final" signal, and
+    poll_upcoming_results deliberately polls elections ahead of their date to bootstrap
+    candidate lists. Illinois' 141 races sat archived+certified for an election that had
+    not been held.
+
+    Pre-election and election-night rows are still persisted; the race just stays
+    results_pending, and poll_pending_results re-polls and certifies it once the buffer
+    has passed.
+    """
+    election_date = _election_date(election)
+    if election_date is None:
+        return False
+    return election_date + _CERTIFY_BUFFER < timezone.localdate()
+
+
 def _certify_election_if_complete(election) -> bool:
     """
     Mark the election results_certified once every (non-cancelled) race is results_certified.
@@ -360,6 +400,8 @@ def _certify_election_if_complete(election) -> bool:
             return False
 
     if election.status in Election.TERMINAL_STATUSES:
+        return False
+    if not can_certify(election):
         return False
     races = Race.objects.filter(election=election).exclude(race_status=Race.RaceStatus.CANCELLED)
     if not races.exists():
@@ -601,10 +643,18 @@ def _store_race_results(race, adapter_result, state: str):
         all_official = all(
             r.result_type == OfficialResult.ResultType.OFFICIAL for r in matched_rows
         )
-        if all_official:
+        if all_official and can_certify(race.election):
             race.certification_status = Race.CertificationStatus.RESULTS_CERTIFIED
             race.race_status = Race.RaceStatus.ARCHIVED
             race.save(update_fields=['certification_status', 'race_status'])
+        elif all_official:
+            # Pre-election "official" rows are unofficial returns; keep the race live.
+            logger.warning(
+                "_process_race_results: refusing to certify race %s before election day (%s)",
+                race.id, _election_date(race.election),
+            )
+            race.certification_status = Race.CertificationStatus.RESULTS_PENDING
+            race.save(update_fields=['certification_status'])
         else:
             # Full-confidence match but results are still unofficial (e.g. Clarity feed)
             race.certification_status = Race.CertificationStatus.RESULTS_PENDING
@@ -620,9 +670,12 @@ def _certified_at_for_row(race, result_type: str):
 
     if result_type != OfficialResult.ResultType.OFFICIAL:
         return None
-    election_date = race.election.election_date
-    if isinstance(election_date, str):
-        election_date = datetime.date.fromisoformat(election_date)
+    if not can_certify(race.election):
+        # Same reasoning as can_certify: nothing is certified before the canvass.
+        return None
+    election_date = _election_date(race.election)
+    if election_date is None:
+        return None
     current_tz = timezone.get_current_timezone()
     return timezone.make_aware(datetime.datetime.combine(election_date, datetime.time.min), current_tz)
 

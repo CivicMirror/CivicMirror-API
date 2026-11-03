@@ -20,9 +20,17 @@ Cycle URL resolution: hardcoded to the 2024 general election's known PDF
 URL for this historical POC. Live discovery of the current cycle's PDF
 URL/filename for future elections is out of scope — see the plan's
 "Follow-up work" section.
+
+Because the URL is pinned to one cycle, fetch_results refuses any election
+whose date is not Nov 5, 2024 (_SUPPORTED_ELECTION_DATE). Without that guard
+the adapter served certified 2024 rows — President, U.S. Senator, Governor,
+Lieutenant Governor — under whatever election id it was handed, including the
+Nov 3, 2026 general. When live cycle discovery lands, replace the guard with
+real URL resolution rather than widening it.
 """
 from __future__ import annotations
 
+import datetime
 import hashlib
 import io
 import logging
@@ -47,6 +55,8 @@ _BROWSER_USER_AGENT = (
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
 _PDF_MAGIC_BYTES = b"%PDF"
+# The one cycle _GRAND_TOTALS_URL actually describes.
+_SUPPORTED_ELECTION_DATE = datetime.date(2024, 11, 5)
 
 
 class MoSosError(Exception):
@@ -80,6 +90,24 @@ class MissouriAdapter(StateResultsAdapter):
 
     def fetch_results(self, election_date, election_id: int) -> AdapterResult:
         from elections.models import Election
+
+        if isinstance(election_date, str):
+            try:
+                election_date = datetime.date.fromisoformat(election_date)
+            except ValueError:
+                election_date = None
+        if election_date != _SUPPORTED_ELECTION_DATE:
+            logger.warning(
+                "mo_sos.adapter.unsupported_cycle election=%s date=%s supported=%s",
+                election_id, election_date, _SUPPORTED_ELECTION_DATE,
+            )
+            return AdapterResult(
+                rows=[], source_url="", mapping_confidence="none",
+                notes=(
+                    f"MO adapter only covers the {_SUPPORTED_ELECTION_DATE} general election; "
+                    f"election {election_id} is dated {election_date}"
+                ),
+            )
 
         try:
             Election.objects.get(pk=election_id)

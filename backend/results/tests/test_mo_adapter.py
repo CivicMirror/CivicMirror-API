@@ -180,3 +180,80 @@ def test_fetch_results_returns_empty_for_missing_election():
     result = MissouriAdapter().fetch_results(election_date=date(2024, 11, 5), election_id=999999)
     assert result.rows == []
     assert result.mapping_confidence == "none"
+
+
+@pytest.mark.django_db
+@patch("results.adapters.mo.MissouriAdapter._fetch_grand_totals_pdf_bytes")
+def test_fetch_results_refuses_any_cycle_other_than_2024(mock_fetch):
+    """_GRAND_TOTALS_URL is pinned to Nov 5, 2024; every other date must fetch nothing.
+
+    Without this guard the adapter served certified 2024 rows under Missouri's
+    Nov 3, 2026 general election (see docs/2026-11-02-midterm-poll-triage.md).
+    """
+    election = Election.objects.create(
+        name="2026 Missouri General Election",
+        election_date=date(2026, 11, 3),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state="MO",
+        source_id="mo-2026-general",
+        status=Election.Status.UPCOMING,
+    )
+
+    result = MissouriAdapter().fetch_results(
+        election_date=election.election_date, election_id=election.pk
+    )
+
+    assert result.rows == []
+    assert result.mapping_confidence == "none"
+    assert "2024-11-05" in result.notes
+    mock_fetch.assert_not_called()
+
+
+@pytest.mark.django_db
+@patch("results.adapters.mo.MissouriAdapter._fetch_grand_totals_pdf_bytes")
+def test_fetch_results_refuses_an_unparseable_or_missing_date(mock_fetch):
+    election = Election.objects.create(
+        name="2026 Missouri General Election",
+        election_date=date(2026, 11, 3),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state="MO",
+        source_id="mo-2026-general-bad-date",
+        status=Election.Status.UPCOMING,
+    )
+
+    for bad_date in ("not-a-date", None):
+        result = MissouriAdapter().fetch_results(election_date=bad_date, election_id=election.pk)
+        assert result.rows == []
+        assert result.mapping_confidence == "none"
+    mock_fetch.assert_not_called()
+
+
+@pytest.mark.django_db
+@patch("results.adapters.mo.MissouriAdapter._fetch_grand_totals_pdf_bytes")
+@patch("results.adapters.mo.pdfplumber")
+def test_fetch_results_accepts_an_iso_string_election_date(mock_pdfplumber, mock_fetch):
+    """Election.election_date arrives as a string from some callers; 2024 must still work."""
+    from django.core.cache import cache
+
+    # pks are reused across rolled-back tests, so a sibling test's checksum entry
+    # would otherwise make this fetch report unchanged.
+    cache.clear()
+    election = Election.objects.create(
+        name="2024 Missouri General Election",
+        election_date=date(2024, 11, 5),
+        jurisdiction_level=Election.JurisdictionLevel.STATE,
+        state="MO",
+        source_id="mo-2024-general-iso",
+        status=Election.Status.RESULTS_CERTIFIED,
+    )
+    mock_fetch.return_value = b"%PDF-1.4\n..."
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = _load_fixture("mo_grand_totals_page1_excerpt.txt")
+    mock_pdf_context = MagicMock()
+    mock_pdf_context.__enter__.return_value.pages = [mock_page]
+    mock_pdfplumber.open.return_value = mock_pdf_context
+
+    result = MissouriAdapter().fetch_results(election_date="2024-11-05", election_id=election.pk)
+
+    assert result.mapping_confidence == "full"
+    assert result.rows
