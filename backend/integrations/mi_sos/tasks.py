@@ -1,18 +1,22 @@
 from __future__ import annotations
 
-from datetime import date
+import logging
+from datetime import date, datetime
 
 from celery import shared_task
 from celery.exceptions import Retry
 from django.utils import timezone
 
+from core.cf_solver import CfSolverError
 from elections.models import Candidate, Election, Race
 from ops.models import SyncLog
 
 from .client import MiSosClient
 from .exceptions import MiSosRetryableError
 from .mappers import candidate_status, geography_scope, normalize_office_title, party_abbrev
-from .parsers import parse_boe_candidate_listing
+from .parsers import parse_boe_candidate_listing, parse_mvic_elections
+
+logger = logging.getLogger(__name__)
 
 _MI_ELECTION_SPECS = [
     {
@@ -34,6 +38,59 @@ _MI_ELECTION_SPECS = [
 ]
 
 
+_MVIC_ID_KEY = "mi_mvic_election_id"
+
+
+def _discover_mvic_election_ids(client: MiSosClient) -> dict[date, str]:
+    """
+    MVIC election id per election date, read from the vote-history dropdown.
+
+    results/adapters/mi.py cannot fetch anything without this id — it reads
+    Election.source_metadata["mi_mvic_election_id"] and returns no rows when the key
+    is absent. Nothing used to write it, and parse_mvic_elections, which exists to
+    read it, was never called, so Michigan's results adapter had never run.
+
+    Deliberately non-fatal: candidate ingestion below comes from an entirely separate
+    BOE host, and MVIC being unreachable (CF solver down or unconfigured) must not
+    stop Michigan's ballot from syncing. Costs one CF solve per run; fetch_through_cf
+    caches for 25 minutes and this task runs daily, so no pre-check is worth it.
+    """
+    try:
+        html = client.fetch_votehistory_page()
+    except (MiSosRetryableError, CfSolverError) as exc:
+        logger.warning("mi_sos.mvic_discovery_unavailable err=%s", exc)
+        return {}
+
+    try:
+        rows = parse_mvic_elections(html)
+    except Exception:
+        # Broad on purpose: a shape change in MVIC's page must degrade this enrichment
+        # step, never take the BOE candidate sync down with it.
+        logger.exception("mi_sos.mvic_discovery_parse_failed")
+        return {}
+
+    ids: dict[date, str] = {}
+    for row in rows:
+        raw_date = (row.get("date") or "").strip()
+        if not raw_date:
+            continue
+        try:
+            # MVIC writes "5/5/2026" unpadded; strptime accepts padded and unpadded alike.
+            parsed = datetime.strptime(raw_date, "%m/%d/%Y").date()
+        except ValueError:
+            logger.warning("mi_sos.mvic_unparseable_date value=%r", raw_date)
+            continue
+        if parsed in ids:
+            logger.warning(
+                "mi_sos.mvic_duplicate_date date=%s keeping=%s ignoring=%s",
+                parsed, ids[parsed], row.get("election_id"),
+            )
+            continue
+        ids[parsed] = row["election_id"]
+    logger.info("mi_sos.mvic_discovery_done elections=%d", len(ids))
+    return ids
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
 def sync_mi_elections(self=None):
     from aggregation import ingest
@@ -47,7 +104,15 @@ def sync_mi_elections(self=None):
     client = MiSosClient()
 
     try:
+        mvic_ids = _discover_mvic_election_ids(client)
         for spec in _MI_ELECTION_SPECS:
+            source_metadata = {
+                "mi_boe_election_type": spec["boe_type"],
+                "mi_boe_election_year": spec["boe_year"],
+            }
+            mvic_id = mvic_ids.get(spec["election_date"])
+            if mvic_id:
+                source_metadata[_MVIC_ID_KEY] = mvic_id
             election, _ = ingest.ingest_election(
                 source="mi_sos",
                 source_id=spec["source_id"],
@@ -64,12 +129,16 @@ def sync_mi_elections(self=None):
                         if spec["election_date"] > timezone.localdate()
                         else Election.Status.RESULTS_PENDING
                     ),
-                    "source_metadata": {
-                        "mi_boe_election_type": spec["boe_type"],
-                        "mi_boe_election_year": spec["boe_year"],
-                    },
+                    "source_metadata": source_metadata,
                 },
             )
+            if mvic_id and (election.source_metadata or {}).get(_MVIC_ID_KEY) != mvic_id:
+                # A higher-precedence source owns source_metadata, so the id did not
+                # land and results for this election will still fetch nothing.
+                logger.warning(
+                    "mi_sos.mvic_id_not_applied election=%s date=%s mvic_id=%s",
+                    election.pk, spec["election_date"], mvic_id,
+                )
 
             rows = parse_boe_candidate_listing(
                 client.fetch_candidate_listing(spec["boe_type"], spec["boe_year"])

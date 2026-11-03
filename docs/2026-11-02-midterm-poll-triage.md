@@ -560,3 +560,98 @@ tomorrow.
   — #2232 is `needs_review` with `state=None` and is never polled — but they
   are now genuine duplicates of #1891's races and should be cleaned when the
   Civic routing fix lands.
+
+---
+
+# MVIC election-id discovery — Michigan's results adapter had never run
+
+## The second Michigan blocker
+
+`results/adapters/mi.py:76` reads `Election.source_metadata["mi_mvic_election_id"]`
+and returns `rows=[], mapping_confidence="none"` when the key is absent, before
+it builds a URL. **Nothing in the repo ever wrote that key** — the adapter was
+its only reference. So Michigan's results adapter, which is otherwise complete
+and tested, had never fetched anything.
+
+The code to find the id already existed and was **dead**:
+`parse_mvic_elections` reads `{election_id, date, name}` out of the MVIC
+vote-history dropdown, and `fetch_votehistory_page` fetches that page. Neither
+was called by any task or adapter.
+
+`00-MASTER-INDEX.md` lists Michigan results as "✅ Complete (MVIC)", which on
+this evidence is wrong and worth correcting.
+
+## Michigan's two hosts
+
+| | System | Host | Supplies |
+|---|---|---|---|
+| BOE | Bureau of Elections filings (entellitrak) | `mi-boe.entellitrak.com` | candidates and races, pre-election |
+| MVIC | Michigan Voter Information Center | `mvic.sos.state.mi.us` | vote totals, and the election id above |
+
+Exact URLs:
+
+```
+https://mi-boe.entellitrak.com/etk-mi-boe-prod/page.request.do?page=page.miboePublicReport&electionType=GEN&electionYear=2026
+https://mvic.sos.state.mi.us/votehistory/
+https://mvic.sos.state.mi.us/VoteHistory/GetElectionResultFile?electionId={mvic_id}
+https://mvic.sos.state.mi.us/VoteHistory/GetCountyVoteRecords?electionId={mvic_id}
+```
+
+## The fix
+
+`sync_mi_elections` now runs `_discover_mvic_election_ids` once per run, maps
+each dropdown date to its id, and passes `mi_mvic_election_id` through
+`ingest_election`'s `source_metadata` for the spec whose date matches.
+
+- **Routed through the CF solver.** `fetch_votehistory_page` was a plain GET,
+  which would have 403'd in production. Checked 2026-11-02: `/`,
+  `/votehistory/`, `GetElectionResultFile` **and** `GetCountyVoteRecords` all
+  return 403 Cloudflare challenges to a plain request. There is no open list
+  endpoint, so the solver is unavoidable here.
+- **Non-fatal by construction.** MVIC and the BOE are different hosts; a solver
+  outage or an unset `CF_SOLVER_URL` must not stop Michigan's ballot from
+  syncing. Fetch failures catch `(MiSosRetryableError, CfSolverError)` — which
+  covers `CfSolverUnavailableError` — and the parse step catches broadly on
+  purpose, so a shape change in MVIC's page degrades this enrichment instead of
+  taking candidate ingestion down with it. Both paths log and return `{}`.
+- **Written through the merge engine, not around it**, since `_apply_fields`
+  replaces `source_metadata` wholesale: the BOE keys and the MVIC id go in one
+  dict. If a higher-precedence source owns the field the id will not land, so
+  that case logs `mi_sos.mvic_id_not_applied` rather than failing quietly.
+  Neither `mi_sos` nor `election_calendar` has a `SourcePrecedence` row today
+  (both rank ∞, and `inf <= inf` passes), so it lands — but `civic_api` is
+  seeded `("*", "*", 0)`, so if Civic ever contributes to a Michigan election
+  record this write stops. That exposure is pre-existing, and now audible.
+- One CF solve per run; `fetch_through_cf` caches 25 minutes and the task is
+  daily, so no pre-check.
+
+Tests: `test_client.py` covers the solver path and the unconfigured-solver
+mapping; `test_tasks.py` covers the id landing on the matching election only,
+the BOE sync surviving an MVIC outage, a later sync filling in an id MVIC had
+not published yet, and undatable dropdown entries being skipped.
+
+Full suite: `1 failed, 2387 passed, 2 skipped` — the same pre-existing
+date-expiry failure. `ruff check .` clean.
+
+## This may not produce results tomorrow
+
+MVIC's dropdown is a *vote history* list. It may not include Nov 3, 2026 until
+results start posting. If so, discovery runs, finds nothing, logs
+`mi_sos.mvic_discovery_unavailable` or simply no match, and the id stays unset
+until a later `sync_mi_elections` run — which is its own trigger
+(`POST /internal/tasks/sync-mi-sos/`), not something the results pollers fire.
+
+**So for tomorrow specifically, setting `mi_mvic_election_id` on election #1891
+by hand is still the reliable move.** This wiring is what stops it being a
+manual step for every future Michigan election.
+
+## Related finding, not fixed
+
+`results/adapters/mi.py:93-94` falls back to `GetCountyVoteRecords` with a
+plain request when the solved bulk fetch fails, and
+`test_fetch_county_vote_records_uses_plain_requests` enshrines that. That
+endpoint returned 403 to a plain request in my check, so the fallback is
+probably dead in production too — unless Cloud Run's egress is treated
+differently from my IP, which is possible and untested. Worth confirming
+against the first real result fetch; if it 403s, the fallback needs the solver
+as well.

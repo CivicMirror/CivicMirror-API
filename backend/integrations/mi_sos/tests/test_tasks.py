@@ -37,6 +37,7 @@ def test_sync_mi_elections_creates_election_race_and_candidates(parsed_candidate
     with patch("integrations.mi_sos.tasks.MiSosClient") as client_cls, \
          patch("integrations.mi_sos.tasks.parse_boe_candidate_listing", return_value=parsed_candidate_rows):
         client_cls.return_value.fetch_candidate_listing.return_value = "<html>fixture</html>"
+        client_cls.return_value.fetch_votehistory_page.return_value = "<html>no dropdown</html>"
         result = sync_mi_elections()
 
     assert result["created"] >= 3
@@ -57,6 +58,7 @@ def test_sync_mi_elections_marks_absent_running_candidate_withdrawn(parsed_candi
     with patch("integrations.mi_sos.tasks.MiSosClient") as client_cls, \
          patch("integrations.mi_sos.tasks.parse_boe_candidate_listing", return_value=parsed_candidate_rows):
         client_cls.return_value.fetch_candidate_listing.return_value = "<html>fixture</html>"
+        client_cls.return_value.fetch_votehistory_page.return_value = "<html>no dropdown</html>"
         sync_mi_elections()
 
     election = Election.objects.get(state="MI", election_type="primary", election_date="2026-08-04")
@@ -71,6 +73,7 @@ def test_sync_mi_elections_marks_absent_running_candidate_withdrawn(parsed_candi
     with patch("integrations.mi_sos.tasks.MiSosClient") as client_cls, \
          patch("integrations.mi_sos.tasks.parse_boe_candidate_listing", return_value=parsed_candidate_rows):
         client_cls.return_value.fetch_candidate_listing.return_value = "<html>fixture</html>"
+        client_cls.return_value.fetch_votehistory_page.return_value = "<html>no dropdown</html>"
         sync_mi_elections()
 
     stale.refresh_from_db()
@@ -95,6 +98,7 @@ def test_sync_mi_elections_ingests_the_real_general_listing_end_to_end():
 
     with patch("integrations.mi_sos.tasks.MiSosClient") as client_cls:
         client_cls.return_value.fetch_candidate_listing.return_value = fixture
+        client_cls.return_value.fetch_votehistory_page.return_value = "<html>no dropdown</html>"
         sync_mi_elections()
 
     election = Election.objects.get(state="MI", election_type="general", election_date="2026-11-03")
@@ -141,6 +145,7 @@ def test_resyncing_the_general_listing_is_idempotent_and_backfills_scope():
     def _run():
         with patch("integrations.mi_sos.tasks.MiSosClient") as client_cls:
             client_cls.return_value.fetch_candidate_listing.return_value = fixture
+            client_cls.return_value.fetch_votehistory_page.return_value = "<html>no dropdown</html>"
             sync_mi_elections()
 
     _run()
@@ -156,3 +161,87 @@ def test_resyncing_the_general_listing_is_idempotent_and_backfills_scope():
     assert set(Race.objects.filter(election=election).values_list("pk", flat=True)) == first_races
     assert Candidate.objects.filter(race__election=election).count() == first_candidates
     assert not Race.objects.filter(election=election, geography_scope="").exists()
+
+
+# ---------------------------------------------------------------------------
+# MVIC election-id discovery
+# ---------------------------------------------------------------------------
+
+_VOTEHISTORY_HTML = """
+<html><body>
+  <select id="ElectionDateId">
+    <option value="">Select an election</option>
+    <option value="705">5/5/2026 - MAY CONSOLIDATED</option>
+    <option value="712">11/3/2026 - GENERAL ELECTION</option>
+  </select>
+</body></html>
+"""
+
+
+def _sync_with(votehistory=None, listing="<html>no candidates</html>", side_effect=None):
+    with patch("integrations.mi_sos.tasks.MiSosClient") as client_cls:
+        client = client_cls.return_value
+        client.fetch_candidate_listing.return_value = listing
+        if side_effect is not None:
+            client.fetch_votehistory_page.side_effect = side_effect
+        else:
+            client.fetch_votehistory_page.return_value = votehistory
+        sync_mi_elections()
+
+
+@pytest.mark.django_db
+def test_discovery_writes_the_mvic_id_onto_the_matching_election():
+    """results/adapters/mi.py fetches nothing without this key, and nothing wrote it."""
+    _sync_with(votehistory=_VOTEHISTORY_HTML)
+
+    general = Election.objects.get(state="MI", election_type="general", election_date="2026-11-03")
+    assert general.source_metadata["mi_mvic_election_id"] == "712"
+    # The BOE keys must survive alongside it.
+    assert general.source_metadata["mi_boe_election_type"] == "GEN"
+
+    # The August primary is not in the dropdown, so it gets no id rather than a wrong one.
+    primary = Election.objects.get(state="MI", election_type="primary", election_date="2026-08-04")
+    assert "mi_mvic_election_id" not in primary.source_metadata
+
+
+@pytest.mark.django_db
+def test_candidate_sync_survives_mvic_being_unreachable():
+    """MVIC and the BOE are different hosts; a CF solver outage must not stop the ballot."""
+    from pathlib import Path
+
+    from core.cf_solver import CfSolverUnavailableError
+
+    fixture = (
+        Path(__file__).parent / "fixtures" / "boe_candidate_listing_2026_general.html"
+    ).read_text(encoding="utf-8")
+
+    _sync_with(listing=fixture, side_effect=CfSolverUnavailableError("CF_SOLVER_URL is not configured"))
+
+    election = Election.objects.get(state="MI", election_type="general", election_date="2026-11-03")
+    assert "mi_mvic_election_id" not in (election.source_metadata or {})
+    assert Race.objects.filter(election=election, office_title="Governor").exists()
+
+
+@pytest.mark.django_db
+def test_a_later_sync_fills_in_an_id_mvic_had_not_published_yet():
+    """MVIC may not list an election until its results start posting."""
+    _sync_with(votehistory="<html><body>no dropdown</body></html>")
+    general = Election.objects.get(state="MI", election_type="general", election_date="2026-11-03")
+    assert "mi_mvic_election_id" not in (general.source_metadata or {})
+
+    _sync_with(votehistory=_VOTEHISTORY_HTML)
+    general.refresh_from_db()
+    assert general.source_metadata["mi_mvic_election_id"] == "712"
+
+
+@pytest.mark.django_db
+def test_discovery_ignores_undatable_dropdown_entries():
+    _sync_with(votehistory="""
+        <html><body><select id="ElectionDateId">
+          <option value="900">No date here</option>
+          <option value="712">11/3/2026 - GENERAL ELECTION</option>
+        </select></body></html>
+    """)
+
+    general = Election.objects.get(state="MI", election_type="general", election_date="2026-11-03")
+    assert general.source_metadata["mi_mvic_election_id"] == "712"

@@ -23,12 +23,18 @@ class MiSosClient:
         self.session.headers.update(_HEADERS)
 
     def fetch_votehistory_page(self) -> str:
+        """
+        The MVIC vote-history page, whose dropdown carries each election's MVIC id.
+
+        Goes through the CF solver: every mvic.sos.state.mi.us path answers a plain
+        request with a 403 Cloudflare challenge, verified 2026-11-02 against
+        /, /votehistory/, GetElectionResultFile and GetCountyVoteRecords.
+        """
+        page_url = f"{_MVIC_BASE}/votehistory/"
         try:
-            resp = self.session.get(f"{_MVIC_BASE}/votehistory/", timeout=self.timeout)
-            resp.raise_for_status()
-            return resp.text
-        except requests.RequestException as exc:
-            raise MiSosRetryableError(f"MVIC votehistory page fetch failed: {exc}") from exc
+            return CfSolverClient().fetch_through_cf(page_url, page_url, payload_referer=page_url)
+        except CfSolverError as exc:
+            raise MiSosRetryableError(f"MVIC votehistory CF fetch failed: {exc}") from exc
 
     def fetch_candidate_listing(self, election_type: str, election_year: int) -> str:
         try:

@@ -1,20 +1,30 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from integrations.mi_sos.client import MiSosClient
+from integrations.mi_sos.exceptions import MiSosRetryableError
 
 
-def test_fetch_votehistory_page_uses_mvic_url():
-    response = MagicMock()
-    response.text = "<html>ok</html>"
-    response.raise_for_status.return_value = None
-
-    with patch("integrations.mi_sos.client.requests.Session") as session_cls:
-        session_cls.return_value.get.return_value = response
+def test_fetch_votehistory_page_goes_through_the_cf_solver():
+    """Every mvic.sos.state.mi.us path answers a plain request with a 403 challenge."""
+    with patch("integrations.mi_sos.client.CfSolverClient") as solver_cls:
+        solver_cls.return_value.fetch_through_cf.return_value = "<html>ok</html>"
         text = MiSosClient().fetch_votehistory_page()
 
     assert text == "<html>ok</html>"
-    session_cls.return_value.get.assert_called_once()
-    assert "mvic.sos.state.mi.us/votehistory" in session_cls.return_value.get.call_args.args[0]
+    solve_url, payload_url = solver_cls.return_value.fetch_through_cf.call_args.args[:2]
+    assert solve_url == "https://mvic.sos.state.mi.us/votehistory/"
+    assert payload_url == solve_url
+
+
+def test_fetch_votehistory_page_maps_an_unconfigured_solver_to_a_retryable_error():
+    from core.cf_solver import CfSolverUnavailableError
+
+    with patch("integrations.mi_sos.client.CfSolverClient") as solver_cls:
+        solver_cls.return_value.fetch_through_cf.side_effect = CfSolverUnavailableError("no url")
+        with pytest.raises(MiSosRetryableError):
+            MiSosClient().fetch_votehistory_page()
 
 
 def test_fetch_candidate_listing_uses_entellitrak_report_endpoint():
