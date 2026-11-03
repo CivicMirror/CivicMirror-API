@@ -1,3 +1,7 @@
+# test_internal_auth_* and test_oidc_* exercise the shared internal auth layer,
+# not any one task; the endpoint they post to is only a vehicle. They used
+# sync-elections until the Google Civic integration was retired (issue #229) and
+# now use sync-fec, whose own task-specific coverage lives further down.
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -24,26 +28,9 @@ def internal_token(settings):
 
 
 @pytest.mark.django_db
-@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
-def test_sync_elections_valid_token(client, internal_token):
-    with patch("internal.views.sync_elections") as mock_task:
-        mock_result = MagicMock()
-        mock_result.id = "abc-123"
-        mock_task.apply_async.return_value = mock_result
-        response = client.post(
-            "/internal/tasks/sync-elections/",
-            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
-        )
-    assert response.status_code == 202
-    data = response.json()
-    assert data["task_id"] == "abc-123"
-    mock_task.apply_async.assert_called_once()
-
-
-@pytest.mark.django_db
-def test_sync_elections_invalid_token(client, internal_token):
+def test_internal_auth_invalid_token(client, internal_token):
     response = client.post(
-        "/internal/tasks/sync-elections/",
+        "/internal/tasks/sync-fec/",
         HTTP_AUTHORIZATION="Bearer wrong-token",
     )
     assert response.status_code == 401
@@ -51,16 +38,16 @@ def test_sync_elections_invalid_token(client, internal_token):
 
 
 @pytest.mark.django_db
-def test_sync_elections_no_auth(client, internal_token):
-    response = client.post("/internal/tasks/sync-elections/")
+def test_internal_auth_no_auth(client, internal_token):
+    response = client.post("/internal/tasks/sync-fec/")
     assert response.status_code == 401
 
 
 @pytest.mark.django_db
 @override_settings(CELERY_TASK_ALWAYS_EAGER=False, INTERNAL_TASK_TOKEN="", SCHEDULER_OIDC_AUDIENCE="")
-def test_sync_elections_no_token_configured(client):
+def test_internal_auth_no_token_configured(client):
     response = client.post(
-        "/internal/tasks/sync-elections/",
+        "/internal/tasks/sync-fec/",
         HTTP_AUTHORIZATION="Bearer anything",
     )
     assert response.status_code == 401
@@ -80,13 +67,13 @@ def test_oidc_token_accepted(client):
         "email": "cloudrun-runtime@project.iam.gserviceaccount.com",
         "aud": "https://civicmirror-api-123.us-central1.run.app",
     }
-    with patch("internal.views.sync_elections") as mock_task, \
+    with patch("internal.views.sync_fec_candidates") as mock_task, \
          patch("google.oauth2.id_token.verify_oauth2_token", return_value=fake_payload):
         mock_result = MagicMock()
         mock_result.id = "oidc-task"
         mock_task.apply_async.return_value = mock_result
         response = client.post(
-            "/internal/tasks/sync-elections/",
+            "/internal/tasks/sync-fec/",
             HTTP_AUTHORIZATION="Bearer fake.oidc.jwt",
         )
     assert response.status_code == 202
@@ -106,7 +93,7 @@ def test_oidc_wrong_sa_rejected(client):
     }
     with patch("google.oauth2.id_token.verify_oauth2_token", return_value=fake_payload):
         response = client.post(
-            "/internal/tasks/sync-elections/",
+            "/internal/tasks/sync-fec/",
             HTTP_AUTHORIZATION="Bearer fake.oidc.jwt",
         )
     assert response.status_code == 401
@@ -122,33 +109,10 @@ def test_oidc_verification_failure_rejected(client):
     """Invalid/expired OIDC token is rejected."""
     with patch("google.oauth2.id_token.verify_oauth2_token", side_effect=ValueError("bad token")):
         response = client.post(
-            "/internal/tasks/sync-elections/",
+            "/internal/tasks/sync-fec/",
             HTTP_AUTHORIZATION="Bearer bad.jwt.token",
         )
     assert response.status_code == 401
-
-
-@pytest.mark.django_db
-@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
-def test_sync_elections_idempotency(client, internal_token):
-    with patch("internal.views.sync_elections") as mock_task:
-        mock_result = MagicMock()
-        mock_result.id = "abc-123"
-        mock_task.apply_async.return_value = mock_result
-
-        r1 = client.post(
-            "/internal/tasks/sync-elections/",
-            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
-        )
-        r2 = client.post(
-            "/internal/tasks/sync-elections/",
-            HTTP_AUTHORIZATION=f"Bearer {internal_token}",
-        )
-    assert r1.status_code == 202
-    assert r1.json()["task_id"] == "abc-123"
-    assert r2.status_code == 202
-    assert r2.json()["status"] == "already_running"
-    mock_task.apply_async.assert_called_once()
 
 
 @pytest.mark.django_db

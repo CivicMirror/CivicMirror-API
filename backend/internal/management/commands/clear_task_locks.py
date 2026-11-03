@@ -9,7 +9,7 @@ Usage:
 
 Lock-window formats vary by task cadence (daily / six-hourly / hourly), so the
 keys are built from the shared ``TASK_LOCKS`` registry rather than assuming a
-plain date — otherwise six-hourly (``sync_fec``) and hourly (``sync_elections``)
+plain date — otherwise six-hourly (``sync_fec``) and hourly (``poll_sc_enr``)
 locks would never match and could not be cleared.
 """
 

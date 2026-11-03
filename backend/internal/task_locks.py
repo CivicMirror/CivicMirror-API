@@ -11,7 +11,7 @@ Single source of truth for task-lock key construction, used by *both*:
 Keeping the window granularity + TTL for every task in one registry stops the
 trigger and the clearer from drifting apart. Previously the clearer assumed a
 plain ``YYYY-MM-DD`` window for every task, which meant ``sync_fec``
-(six-hourly) and ``sync_elections`` (hourly) locks could never actually be
+(six-hourly) and ``poll_sc_enr`` (hourly) locks could never actually be
 cleared because the key format didn't match.
 """
 from __future__ import annotations
@@ -31,7 +31,6 @@ _HOUR = 60 * 60
 # TTLs sit just under the schedule interval so the next window re-acquires cleanly.
 TASK_LOCKS: dict[str, tuple[str, int]] = {
     "poll_ky_results":      (WINDOW_TWO_MINUTES, 115),
-    "sync_elections":       (WINDOW_HOURLY,     55 * 60),
     "poll_sc_enr":          (WINDOW_HOURLY,     55 * 60),
     "sync_sc_enr_results":  (WINDOW_HOURLY,     55 * 60),
     "sync_fec":             (WINDOW_SIX_HOURLY, 6 * _HOUR),

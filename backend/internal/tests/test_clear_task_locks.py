@@ -3,7 +3,7 @@ Regression tests for idempotency-lock tooling.
 
 These exercise the cache-only paths (no DB), guarding the bug where
 ``clear_task_locks`` assumed a plain ``YYYY-MM-DD`` window for every task and so
-could never clear six-hourly (``sync_fec``) or hourly (``sync_elections``) locks.
+could never clear six-hourly (``sync_fec``) or hourly (``poll_sc_enr``) locks.
 """
 from io import StringIO
 
@@ -42,7 +42,7 @@ def test_windows_for_date_enumerates_each_granularity():
 def test_clears_six_hourly_and_hourly_locks():
     """The original bug: six-hourly/hourly locks were never matched and cleared."""
     fec = lock_key("sync_fec", "2026-05-27T12")        # six-hourly bucket
-    elections = lock_key("sync_elections", "2026-05-27T16")  # hourly bucket
+    elections = lock_key("poll_sc_enr", "2026-05-27T16")  # hourly bucket
     daily = lock_key("sync_ca_sos", "2026-05-27")
     for key in (fec, elections, daily):
         cache.add(key, 1, 9999)

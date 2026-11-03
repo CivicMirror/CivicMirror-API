@@ -9,7 +9,6 @@ from django.views.decorators.http import require_POST
 from integrations.al_sos.tasks import sync_al_elections, sync_al_fcpa_candidates
 from integrations.az_sos.tasks import sync_az_elections
 from integrations.ca_sos.tasks import sync_ca_elections
-from integrations.civic.tasks import sync_elections
 from integrations.co_sos.tasks import sync_co_elections
 from integrations.election_calendar.tasks import seed_2026_elections
 from integrations.fec.tasks import sync_fec_candidates
@@ -91,13 +90,6 @@ def _trigger(task_name, celery_task, request, task_kwargs=None):
         task_name, task.id, key,
     )
     return JsonResponse({"task_id": task.id}, status=202)
-
-
-@csrf_exempt
-@require_POST
-@require_internal_task_token
-def sync_elections_trigger(request):
-    return _trigger("sync_elections", sync_elections, request)
 
 
 @csrf_exempt

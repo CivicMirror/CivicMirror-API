@@ -51,7 +51,7 @@ def test_is_public_path():
     assert is_public_path('/api/v1/races/')
     assert not is_public_path('/api/races/')
     assert not is_public_path('/api/auth/login/')
-    assert not is_public_path('/internal/tasks/sync-elections/')
+    assert not is_public_path('/internal/tasks/sync-fec/')
 
 
 @pytest.mark.django_db

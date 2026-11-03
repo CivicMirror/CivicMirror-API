@@ -27,11 +27,11 @@ def _contact_office_priority(candidate: Candidate) -> list[str]:
 FieldPriority = Union[list[str], Callable[[Candidate], list[str]]]
 
 FIELD_PRIORITY: dict[str, FieldPriority] = {
-    'party': ['ocpf', 'civic_api', 'fec', 'congress', 'openstates', 'openelections'],
-    'incumbent': ['civic_api', 'congress', 'openstates', 'openelections'],
-    'image_url': ['civic_api', 'openstates', 'ocpf', 'openelections'],
-    'website_url': ['civic_api', 'congress', 'openstates', 'openelections'],
-    'description': ['civic_api', 'congress', 'openelections'],
+    'party': ['ocpf', 'fec', 'congress', 'openstates', 'openelections'],
+    'incumbent': ['congress', 'openstates', 'openelections'],
+    'image_url': ['openstates', 'ocpf', 'openelections'],
+    'website_url': ['congress', 'openstates', 'openelections'],
+    'description': ['congress', 'openelections'],
     'contact_phone': ['congress', 'openstates', 'openelections'],
     'contact_office': _contact_office_priority,
 }

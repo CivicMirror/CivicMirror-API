@@ -71,7 +71,9 @@ def test_enrich_respects_field_priority(base_race):
         race=base_race,
         name='Alex Smith',
         party='Democratic',
-        source_metadata={'_field_sources': {'party': 'civic_api'}},
+        # 'ocpf' outranks 'openstates' for party; this used 'civic_api' until the
+        # Google Civic integration was retired (issue #229).
+        source_metadata={'_field_sources': {'party': 'ocpf'}},
     )
     matcher = CandidateMatcher()
 

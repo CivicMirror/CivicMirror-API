@@ -73,9 +73,6 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 
 env = environ.Env(
     DJANGO_DEBUG=(bool, False),
-    CIVIC_HTTP_TIMEOUT_SECONDS=(int, 10),
-    CIVIC_MAX_RETRIES=(int, 3),
-    CIVIC_RETRY_BACKOFF_SECONDS=(float, 1.0),
 )
 environ.Env.read_env(BASE_DIR / '.env')
 
@@ -143,7 +140,6 @@ INSTALLED_APPS += [
     'results',
     'ops',
     'community',
-    'integrations.civic',
     'integrations.openstates',
     'integrations.fec',
     'integrations.sc_vrems',
@@ -373,7 +369,6 @@ TURNSTILE_EXPECTED_ACTION = env('TURNSTILE_EXPECTED_ACTION', default='register')
 INTERNAL_TASK_TOKEN = env('INTERNAL_TASK_TOKEN', default='')
 SCHEDULER_OIDC_AUDIENCE = env('SCHEDULER_OIDC_AUDIENCE', default='')
 SCHEDULER_SA_EMAIL = env('SCHEDULER_SA_EMAIL', default='')
-CIVIC_API_KEY = env('CIVIC_API_KEY', default='')
 FEC_API_KEY = env('FEC_API_KEY', default='')
 OPENSTATES_API_KEY = env('OPENSTATES_API_KEY', default='')
 GITHUB_TOKEN = env('GITHUB_TOKEN', default='')
@@ -401,10 +396,6 @@ IA_SOS_PROXY_SECRET = env('IA_SOS_PROXY_SECRET', default='')
 FIREBASE_AUTH_ENABLED = env.bool('FIREBASE_AUTH_ENABLED', default=True)
 FIREBASE_CREDENTIALS_FILE = env('FIREBASE_CREDENTIALS_FILE', default='')
 
-CIVIC_API_BASE = env('CIVIC_API_BASE', default='https://www.googleapis.com/civicinfo/v2')
-CIVIC_HTTP_TIMEOUT_SECONDS = env.int('CIVIC_HTTP_TIMEOUT_SECONDS', default=10)
-CIVIC_MAX_RETRIES = env.int('CIVIC_MAX_RETRIES', default=3)
-CIVIC_RETRY_BACKOFF_SECONDS = env.float('CIVIC_RETRY_BACKOFF_SECONDS', default=1.0)
 
 _LOG_LEVEL = env('LOG_LEVEL', default='INFO')
 
