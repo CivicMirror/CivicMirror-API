@@ -13,7 +13,13 @@ from ops.models import SyncLog
 
 from .client import MiSosClient
 from .exceptions import MiSosRetryableError
-from .mappers import candidate_status, geography_scope, normalize_office_title, party_abbrev
+from .mappers import (
+    candidate_status,
+    geography_scope,
+    normalize_office_title,
+    party_abbrev,
+    split_running_mates,
+)
 from .parsers import parse_boe_candidate_listing, parse_mvic_elections
 
 logger = logging.getLogger(__name__)
@@ -164,15 +170,20 @@ def sync_mi_elections(self=None):
                 )
                 created += int(race_created)
 
+                # Store the top of the ticket, not the joint ballot line, so MVIC's
+                # result rows match. The full line stays in source_metadata.
+                candidate_name, running_mates = split_running_mates(row["candidate_name"])
                 cand, cand_created = ingest.ingest_candidate(
                     race=race,
                     source="mi_sos",
-                    name=row["candidate_name"],
+                    name=candidate_name,
                     party=party_abbrev(row["party"]),
                     fields={
                         "candidate_status": candidate_status(row["status"]),
                         "incumbent": bool(row["incumbent"]),
                         "source_metadata": {
+                            "mi_ballot_name": row["candidate_name"],
+                            "mi_running_mates": running_mates,
                             "mi_candidate_status_raw": row["status"],
                             "mi_filing_method": row["filing_method"],
                             "mi_candidate_address": row["candidate_address"],

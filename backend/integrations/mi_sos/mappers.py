@@ -125,6 +125,27 @@ def geography_scope(normalized_office_title: str) -> str:
     return infer_geography_scope(normalized_office_title)
 
 
+# Michigan's general-election listing gives Governor as a joint ballot line,
+# "Benson, Jocelyn / Brinks, Winnie". MVIC's results name only the top of the ticket —
+# the 2024 general file lists "STEIN, JILL" under ELECTORS OF PRESIDENT AND
+# VICE-PRESIDENT, with no running mate. results.tasks matches candidates outside NC on
+# the exact (or case-insensitive) name, so storing the joint line would mean Michigan's
+# Governor result rows match nothing and are dropped.
+_TICKET_SEPARATOR_RE = re.compile(r"\s*/\s*")
+
+
+def split_running_mates(candidate_name: str) -> tuple[str, list[str]]:
+    """Return (top-of-ticket name, running mates) for a joint ballot line."""
+    parts = [
+        " ".join(part.split())
+        for part in _TICKET_SEPARATOR_RE.split(candidate_name or "")
+    ]
+    parts = [part for part in parts if part]
+    if not parts:
+        return "", []
+    return parts[0], parts[1:]
+
+
 def result_office_title(raw_contest: str) -> str:
     return normalize_office_title(raw_contest)
 

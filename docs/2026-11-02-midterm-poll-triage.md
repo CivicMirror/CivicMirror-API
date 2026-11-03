@@ -931,7 +931,9 @@ that an `UNOFFICIAL` trailer yields unofficial rows.
 Full suite: `1 failed, 2398 passed, 2 skipped` — the same pre-existing date
 expiry. `ruff check .` clean.
 
-## Open: the Governor ticket will not match
+## Closed: the Governor ticket (see "Running-mate tickets" below)
+
+### Original finding
 
 `results/tasks.py:529-541` matches candidates on `name_match_key` — normalized
 tokens, sorted — then exact/iexact name. There is no surname fallback.
@@ -963,3 +965,93 @@ tomorrow night.
 | Bulk TSV fetch + parse (primary path) | **fixed and verified against both real files** |
 | County-records fetch + parse (fallback) | fixed and verified, `8ab0fec` |
 | Governor/Lt. Governor ticket matching | **open — see above** |
+
+---
+
+# Running-mate tickets — closing the last Michigan gap
+
+## The gap
+
+`results/tasks.py:528-541` has two candidate-matching paths, and only the NC one
+is fuzzy:
+
+- `nc_identity_matched` → match on `name_match_key` (normalized tokens, sorted).
+- **every other state** → `filter(name=...)` then `filter(name__iexact=...)`.
+
+Michigan is the second path, so the stored name has to equal what MVIC emits.
+
+- BOE general listing: `"Benson, Jocelyn / Brinks, Winnie"` — a joint
+  Governor/Lt. Governor ballot line.
+- MVIC results: the top of the ticket only. The 2024 general file is the
+  precedent — office `ELECTORS OF PRESIDENT AND VICE-PRESIDENT OF THE UNITED
+  STATES`, candidate `STEIN, JILL`, no running mate.
+
+Michigan's Governor result rows would have matched nothing and been dropped.
+
+## The fix
+
+`split_running_mates` in `integrations/mi_sos/mappers.py` splits the joint line
+on `/`. `sync_mi_elections` stores the **top of the ticket** as
+`Candidate.name` and keeps the rest in `source_metadata`:
+
+- `mi_ballot_name` — the line as the BOE prints it,
+  `"Benson, Jocelyn / Brinks, Winnie"`
+- `mi_running_mates` — `["Brinks, Winnie"]`
+
+So Governor now holds `Benson, Jocelyn` (DEM), `James, John` (REP),
+`Hudson, Anthony` (LIB) and so on, each matching a name MVIC actually reports,
+with the printed ballot line preserved rather than discarded.
+
+Chosen over teaching the shared matcher about tickets, which would have changed
+candidate matching for all 50 states the night before an election.
+
+**Tradeoff:** the API's `Candidate.name` for Michigan's Governor race no longer
+shows the running mate; a consumer that wants the ballot line reads
+`source_metadata["mi_ballot_name"]`. Presenting the ticket as the display name
+while keeping the matchable name separate would need a model field, which is
+not an election-eve change.
+
+**Note for deployment order:** `ingest_candidate` matches on
+`name_match_key(name)`, so if a sync had already run with the joint line, this
+change would create a second candidate rather than renaming the first. Nothing
+has been deployed yet, so in practice there is nothing to clean — but do not
+run the BOE sync before this commit and then again after without checking.
+
+Tests: `split_running_mates` directly, and an end-to-end case asserting the
+Governor race holds `Benson, Jocelyn` and not the joint line, that the running
+mate and ballot line survive in `source_metadata`, and that the names parsed
+from the **real MVIC result file** intersect the race's candidate names — the
+actual property that was broken.
+
+Full suite: `1 failed, 2400 passed, 2 skipped` — the same pre-existing date
+expiry. `ruff check .` clean.
+
+## Timing for Nov 3 (per MI SOS)
+
+Polls close at 8pm ET and counting starts after, so no 2026 general result file
+exists before then. 8pm ET is 00:00 UTC Nov 4, which is also when
+`timezone.localdate()` rolls over — so `can_certify`'s one-day buffer holds
+certification until Nov 5 UTC, and MVIC's own `RESULTS: OFFICIAL` flag gates it
+on top of that. Election-night returns will land as unofficial rows on live
+races, which is the intended behaviour.
+
+Sequence on the night: MVIC publishes the election (giving it a dropdown entry
+and an id) → `sync_mi_elections` discovers the id → `ingest_official_results`
+fetches and matches. Discovery runs only when `sync_mi_elections` runs, so that
+task needs triggering after 8pm, not just the results pollers.
+
+## Michigan's results path
+
+| Step | State |
+|---|---|
+| Races for results to match | fixed, `612f798` |
+| `mi_mvic_election_id` populated | wired, `4532599`; published only after polls close |
+| Bulk TSV fetch + parse (primary path) | fixed, verified against both real files, `c905d41` |
+| County-records fetch + parse (fallback) | fixed, verified against real output, `8ab0fec` |
+| Governor/Lt. Governor ticket matching | fixed |
+
+Every known gap between Michigan and working results is closed. What remains
+unverifiable until tomorrow night is MVIC's exact 2026 general wording for
+contests and candidates — the 2024 general and 2026 primary files both agree
+with what the code now expects, which is the strongest evidence available
+before the file exists.

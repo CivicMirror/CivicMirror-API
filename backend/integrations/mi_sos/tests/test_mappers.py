@@ -126,3 +126,17 @@ def test_result_contest_titles_match_the_races_the_listing_creates():
         "Governor of Wayne State University"
     )
     assert result_office_title("MEMBER OF THE BOARD OF GOVERNORS OF WAYNE STATE UNIVERSITY") != "Governor"
+
+
+def test_running_mates_are_split_from_the_joint_ballot_line():
+    """MVIC names only the top of the ticket, and non-NC matching is on exact name."""
+    from integrations.mi_sos.mappers import split_running_mates
+
+    assert split_running_mates("Benson, Jocelyn  / Brinks, Winnie") == (
+        "Benson, Jocelyn", ["Brinks, Winnie"]
+    )
+    assert split_running_mates("James, John  / DeBoyer, Jay") == ("James, John", ["DeBoyer, Jay"])
+    # A single-name candidacy is untouched.
+    assert split_running_mates("Cox, Mike") == ("Cox, Mike", [])
+    assert split_running_mates("WRITE-IN") == ("WRITE-IN", [])
+    assert split_running_mates("") == ("", [])

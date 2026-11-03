@@ -107,10 +107,12 @@ def test_sync_mi_elections_ingests_the_real_general_listing_end_to_end():
 
     governor = Race.objects.get(election=election, office_title="Governor")
     assert governor.geography_scope == "statewide"
+    # Stored under the top of the ticket, so MVIC's result rows match; the running
+    # mate is kept in source_metadata.
     tickets = dict(Candidate.objects.filter(race=governor).values_list("name", "party"))
-    assert tickets["Benson, Jocelyn / Brinks, Winnie"] == "DEM"
-    assert tickets["James, John / DeBoyer, Jay"] == "REP"
-    assert tickets["Hudson, Anthony / Parmenter, Beau"] == "LIB"
+    assert tickets["Benson, Jocelyn"] == "DEM"
+    assert tickets["James, John"] == "REP"
+    assert tickets["Hudson, Anthony"] == "LIB"
 
     senate = Race.objects.get(election=election, office_title="U.S. Senate")
     assert senate.geography_scope == "federal"
@@ -245,3 +247,44 @@ def test_discovery_ignores_undatable_dropdown_entries():
 
     general = Election.objects.get(state="MI", election_type="general", election_date="2026-11-03")
     assert general.source_metadata["mi_mvic_election_id"] == "712"
+
+
+@pytest.mark.django_db
+def test_governor_ticket_is_stored_under_the_top_of_ticket_name():
+    """The joint ballot line would never match MVIC's result rows.
+
+    results/tasks.py matches candidates outside NC on the exact (or case-insensitive)
+    name, and MVIC's bulk file names only the top of the ticket. Storing
+    "Benson, Jocelyn / Brinks, Winnie" meant Michigan's Governor results were dropped.
+    """
+    from pathlib import Path
+
+    from integrations.mi_sos.parsers import parse_mvic_result_file
+
+    fixture = (
+        Path(__file__).parent / "fixtures" / "boe_candidate_listing_2026_general.html"
+    ).read_text(encoding="utf-8")
+    with patch("integrations.mi_sos.tasks.MiSosClient") as client_cls:
+        client_cls.return_value.fetch_candidate_listing.return_value = fixture
+        client_cls.return_value.fetch_votehistory_page.return_value = "<html>no dropdown</html>"
+        sync_mi_elections()
+
+    election = Election.objects.get(state="MI", election_type="general", election_date="2026-11-03")
+    governor = Race.objects.get(election=election, office_title="Governor")
+    names = set(Candidate.objects.filter(race=governor).values_list("name", flat=True))
+
+    assert "Benson, Jocelyn" in names
+    assert "Benson, Jocelyn / Brinks, Winnie" not in names
+
+    # The running mate and the ballot line as printed are preserved, not discarded.
+    benson = Candidate.objects.get(race=governor, name="Benson, Jocelyn")
+    assert benson.source_metadata["mi_running_mates"] == ["Brinks, Winnie"]
+    assert benson.source_metadata["mi_ballot_name"] == "Benson, Jocelyn / Brinks, Winnie"
+
+    # The real MVIC result rows now name a candidate this race actually has.
+    result_file = (
+        Path(__file__).parent / "fixtures" / "mvic_result_file_706.txt"
+    ).read_text(encoding="utf-8")
+    mvic_names = {r["candidate_name"] for r in parse_mvic_result_file(result_file)}
+    assert "Benson, Jocelyn" in mvic_names
+    assert mvic_names & names
