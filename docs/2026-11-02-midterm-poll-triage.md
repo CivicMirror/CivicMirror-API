@@ -289,3 +289,274 @@ is mounted; it is unaffected by these changes.
 Items 3–7 above (Civic national bucket, MI slate, `geography_scope` duplication,
 FL duplicate Governor, SC/TN candidate lists) and the coverage gap. No commits
 made.
+
+---
+
+# Civic national bucket (#2232) — diagnosis and plan
+
+## Why #2232 holds ten states' ballots
+
+`integrations/civic/mappers.py:36-41` maps a Civic election whose
+`ocd_division_id` has no `state:` segment to `jurisdiction_level=NATIONAL`
+with `state=None`. Google Civic returns exactly one such record for 2026,
+"2026 General Midterm Election".
+
+`state=None` then has two consequences:
+
+1. `aggregation/ingest.py:66-91` — `ingest_election` cannot build a canonical
+   key without a state, so the record took the **`needs_review` branch**: it
+   exists with `needs_review=True` and a populated `Election.source_id`,
+   outside the normalized identity scheme.
+2. `integrations/civic/tasks.py:31-39` —
+   `_representative_addresses_for_election` falls back, for a state-less
+   election, to one address from each of `_NATIONAL_SAMPLE_STATES`
+   (`CA TX NY FL PA OH GA NC MI VA`). Those addresses are each state's
+   **capital**: `MI-capital` is Lansing, `VA-capital` is Richmond
+   (`integrations/civic/addresses.py:81,185`). `sync_election_races` ingests
+   every contest returned for all ten addresses into that single election.
+
+That is the poll's "Michigan's statewide slate, Lansing city measures,
+Richmond VA's sales-tax question, Virginia's three constitutional
+amendments" — not a national layer, a ten-capital sample sheet.
+
+## What Michigan actually looks like (pulled 2026-11-02)
+
+- **#1891 "2026 Michigan General Election"** — state-level, `upcoming`,
+  sources `election_calendar` + `mi_sos`, 41 races, **every one judicial**:
+  Supreme Court (1), Circuit (10), District (24), Probate (6). No Governor,
+  U.S. Senator, U.S. House, state legislature, AG, Secretary of State or
+  ballot proposals. All 41 carry a blank `geography_scope` and jurisdiction
+  "Michigan".
+- **#2232** holds Michigan's entire partisan and statewide ballot.
+
+So Michigan's statewide slate has exactly one copy, and it is in the bucket.
+
+### This kills two earlier assumptions
+
+- **Stopping the fan-out is not safe containment.** It would freeze
+  Michigan's only statewide slate in a `needs_review` record and stop Civic
+  refreshing it.
+- **Routing Michigan's races will not duplicate anything.** `mi_sos`
+  contributes judicial offices only; Civic contributes everything else. Zero
+  office overlap, so the `_normalize_ocd` extension (collapsing a bare
+  statewide division to `""` so Civic key-matches no-OCD state sources) and
+  its key backfill are **not** needed for Michigan. They are still needed for
+  the general duplicate problem (item 6, FL's twin Governor races), which is
+  separate work.
+
+## Michigan serves no statewide results tomorrow night as things stand
+
+This is the consequence that matters on Nov 3, and it follows from #1891 being
+judicial-only.
+
+- `ingest_official_results("MI", 1891)` fetches MI SOS results via the
+  registered `mi` adapter and matches rows against #1891's races — 41 judicial
+  contests. Governor, U.S. Senator, AG and Secretary of State rows match
+  nothing, so they are logged as unmatched and dropped. The
+  results-bootstrap path cannot save them either: `results/tasks.py:92-93`
+  only bootstraps races when the election has **none**, and #1891 has 41.
+- #2232, which does hold those races, has `state=None`, and both
+  `poll_pending_results` and `poll_upcoming_results` filter
+  `state__in=supported`. It is never polled at all.
+
+So Michigan's statewide results have no race to land on in one record and no
+poller in the other. This is an election-night defect, not cleanup.
+
+## Superseded: Michigan never needed Civic at all
+
+The plan above (move Michigan's races out of #2232) was abandoned once the real
+cause came to light. Michigan has its own authoritative pre-election feed, and
+**our parser was discarding 90% of it**. See "MI BOE listing parser" below.
+Fixing that gives Michigan its full ballot from `mi_sos` into #1891, with no
+race moving, no key recomputation and no dependence on Civic.
+
+The Civic diagnosis above stays accurate and still needs the routing fix, but
+it is now ordinary cleanup for after Nov 3 rather than an election-night
+dependency.
+
+## Routing design
+
+In `sync_election_races`, resolve each contest's target election instead of
+always using the one passed in:
+
+- `election.state` set → use it unchanged. No behaviour change for the normal
+  per-state Civic elections.
+- `election.state` is None → derive the state from the contest's own OCD id
+  (`district.id` / `officeDivisionId`, via the existing
+  `parse_state_from_ocd`) and `ingest_election` the target with identity
+  `{state, election_type: infer_election_type(election.name), election_date,
+  jurisdiction_level: STATE}`.
+- No state derivable → fall back to the state-less election. That is where
+  the genuinely national row belongs (the poll's generic "Member, United
+  States Senate" with jurisdiction "United States Of America").
+
+`jurisdiction_level` is always `STATE`, never derived from the contest's OCD
+depth: Lansing's city measures go on Michigan's state record, matching how
+KY (3,328 mostly-local races) and NM (599, all local) already model local
+contests. Splitting local elections out is out of scope.
+
+**Pass no `name` when the target election already exists.**
+`aggregation/migrations/_seed_data.py:3` seeds `("*", "*", "civic_api", 0)` —
+Civic holds rank 0 for every state and every field group, and `mi_sos` has no
+`SourcePrecedence` rows at all (rank ∞). `_apply_fields` would otherwise
+overwrite `Election.name` and rename #1891 to "2026 General Midterm
+Election". Compute the target's `election_canonical_key` first; pass `name`
+and `status` only on creation.
+
+`ElectionSourceLink` is unique on `(election, source)`, not
+`(source, source_id)`, so several state elections may each carry a
+`civic_api` link with the same Civic source id. No constraint problem.
+
+## Backfill
+
+Forward-only routing is not enough: a race already in #2232 has a
+`canonical_key` built from that election's key, so the next sync would create
+a second MI race on #1891 and leave the first in place. The move must happen
+in the same change.
+
+Move, don't delete-and-resync — race ids are what consumers reference. Same
+command shape as `repair_premature_certification`: dry-run default, and for
+each race on a state-less `civic_api` election, derive the state from
+`race.ocd_division_id`, resolve or create the target election, recompute
+`race.canonical_key` (and candidate keys, which embed the race key), reparent,
+and on a canonical-key collision skip and report rather than merge — that
+collision *is* the duplicate problem, and it is not this change's job.
+
+## Status
+
+Diagnosis complete, no code written. The decision outstanding is whether to
+land routing + move before Nov 3 or after.
+
+---
+
+# MI BOE listing parser — Michigan's ballot was being discarded
+
+## What the source actually serves
+
+`sync_mi_elections` (`integrations/mi_sos/tasks.py:38`) fetches the Michigan
+BOE "Official Candidate Listing" for `electionType=GEN&electionYear=2026` —
+candidate filings, not results. Pulled live 2026-11-02, that document contains
+Michigan's whole ballot: Governor/Lt. Governor, U.S. Senate, Secretary of
+State, Attorney General, all 13 congressional districts, 38 State Senate
+districts, 110 State House districts, the State Board of Education, the three
+university governing boards, and the judicial offices.
+
+`parse_boe_candidate_listing` returned **73 candidates across 41 offices — all
+judicial**. The repaired parser returns **716 candidates across 338 offices**.
+That gap is exactly why #1891 was judicial-only, and why the Civic bucket
+looked like Michigan's only source.
+
+## Two causes, both verified against the live document
+
+1. **Nested tables.** The report is wrapped in a one-cell layout table.
+   `tr.find_all(["td", "th"])` recurses, so the outer row returned **9,995
+   cells** (3 with `recursive=False`). That row failed every shape heuristic
+   and left `current_office` empty, so the partisan section was dropped before
+   any column was read.
+2. **Hardcoded column indices.** Every row is
+   `['', Status, '', Party / Incumbent, Candidate Name, Filed On, Filing Method, '']`.
+   The parser read `status = cells[3]`, which holds `"Democratic Party"` — not
+   in `_STATUS_CODES`, so **every partisan row was rejected**. Non-partisan
+   (judicial) offices have no party, so `cells[3]` was blank, blank *is* a
+   valid status code, and they passed by accident.
+
+The repo's only fixture for this parser was an 877-byte synthetic file whose
+seven invented columns matched the parser's indices, so the mismatch was never
+caught. Columns are now located by **header text**, which handles the primary
+listing's layout and the general listing's alike.
+
+## Also fixed in the same area
+
+- **`party_abbrev` truncated every multi-word party.** The general listing says
+  "Green Party" where the primary says "Green", the suffix was never stripped,
+  and the fallback produced `GRE`, `U.S`, `WOR`, `NAT`. Now `GRN`, `UST`,
+  `WCP`, `NLP`, plus `NPA` for "No Party Affiliation", and `INCUMBENT` can
+  never be read as a party.
+- **The general listing's office wording was unrecognised.** It says "U.S.
+  Senate", "Representative in Congress" and "Representative in State
+  Legislature" where the primary says "United States Senator", "United States
+  Representative" and "State Representative". Both spellings now normalize to
+  one title — which matters because `result_office_title` runs the same
+  function, so this is what lets tomorrow's MVIC result rows key-match the
+  races.
+- **"Governor of Wayne State University" collapsed into "Governor".** A bare
+  `"GOVERNOR" in upper` test would have put two university-board candidates on
+  Michigan's gubernatorial ballot. The statewide boards are matched first and
+  the governorship now requires the title to start with "Governor". A
+  collision check across all 338 live offices reports none.
+- **`geography_scope` was never passed** by `mi_sos`, which is why all 41
+  existing races have it blank. Now set. Michigan elects its education and
+  university boards statewide, which a title-based inferrer cannot know —
+  `elections.geography` reads "State Board of Education" as `local` (that rule
+  exists for county boards such as NC's) and does not recognise the university
+  boards at all — so `mi_sos.mappers.geography_scope` names those four
+  explicitly and defers to the shared inferrer for everything else.
+- **`Candidate.incumbent`** is now set from the listing instead of only being
+  kept as raw metadata.
+
+## Tests
+
+`integrations/mi_sos/tests/fixtures/boe_candidate_listing_2026_general.html` —
+trimmed from the live document (7 offices, 34 candidate rows, 10 KB).
+Presentation attributes were stripped; **the row and cell structure, including
+the table nesting, is verbatim**, because that nesting is what the test
+exercises. 13 new cases in `test_parsers.py`, `test_mappers.py` and
+`test_tasks.py`, the last ingesting the fixture end to end and asserting that
+`result_office_title("UNITED STATES SENATOR")` equals the race title created.
+
+Full suite: `1 failed, 2380 passed, 2 skipped` — the one failure is the same
+pre-existing `test_seed_2026_elections_sets_correct_status` date expiry.
+`ruff check .` clean.
+
+## Running it
+
+Nothing changes in the database until the fix is deployed **and**
+`sync_mi_elections` runs. It is triggered by
+`POST /internal/tasks/sync-mi-sos/`, or locally with
+`python manage.py trigger_internal_task sync_mi_sos`.
+
+Order for tonight:
+
+1. Deploy. `fix/mi-boe-parser` is stacked on `fix/premature-certification`, so
+   either one PR from the top of the stack or two PRs merged in that order.
+2. `repair_premature_certification` for MO and IL (see the runbook above).
+3. `POST /internal/tasks/sync-mi-sos/` — this creates Michigan's 338 races and
+   716 candidacies, and backfills `geography_scope` on the 41 judicial races
+   that already exist.
+
+The re-sync is idempotent: a second run updates in place rather than
+duplicating, and it rewrites a blank `geography_scope`, both covered by
+`test_resyncing_the_general_listing_is_idempotent_and_backfills_scope`.
+
+## Will the results match tomorrow night
+
+`results/adapters/mi.py:47` sets each result row's `office_title` from
+`result_office_title(raw["contest"])` — the same `normalize_office_title` the
+listing goes through, which is what makes the match possible. MVIC names
+contests in the primary listing's wording, in capitals: the 705 fixture shows
+`35TH DISTRICT STATE SENATOR PARTIAL TERM ENDING 1/1/2027`. Those spellings
+are covered.
+
+The one thing not verifiable before the election is MVIC's exact wording for
+Governor and U.S. Senate in a November general; no such result file exists
+yet. The rules are written to tolerate the variants: `GOVERNOR`,
+`GOVERNOR / LT. GOVERNOR` and a prefixed `STATE OF MICHIGAN - GOVERNOR` all
+normalize to "Governor", which is why the governorship is matched by
+containment rather than a prefix test, with explicit phrase guards keeping the
+university boards out. Worth one check against the first real result file
+tomorrow.
+
+## Still open for Michigan
+- Multi-seat offices (Supreme Court 2 positions, the university boards 2 each,
+  36th District Court 3) are still ingested as single-seat: `mi_sos` sets
+  neither `vote_method` nor `max_selections`, so `results/winners.py` will
+  report `skipped_unknown_seats` and derive no winner for them. The seat count
+  is right there in the raw title ("8 Year Terms (2) Positions") and is kept in
+  `source_metadata["mi_office_raw"]`, so this is a contained follow-up.
+- Disqualified and withdrawn filings still create races and candidates, marked
+  `DISQUALIFIED`/`WITHDRAWN` — unchanged behaviour, but it means an office
+  whose only filing was disqualified appears as a race with no live candidate.
+- Civic's copies of Michigan's statewide races remain in #2232. They are inert
+  — #2232 is `needs_review` with `state=None` and is never polled — but they
+  are now genuine duplicates of #1891's races and should be cleaned when the
+  Civic routing fix lands.

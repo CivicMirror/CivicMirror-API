@@ -75,3 +75,84 @@ def test_sync_mi_elections_marks_absent_running_candidate_withdrawn(parsed_candi
 
     stale.refresh_from_db()
     assert stale.candidate_status == Candidate.CandidateStatus.WITHDRAWN
+
+
+@pytest.mark.django_db
+def test_sync_mi_elections_ingests_the_real_general_listing_end_to_end():
+    """From the captured Nov 3, 2026 BOE listing to races Michigan's results can match.
+
+    Before the parser fix this produced judicial races only: Michigan's record held
+    41 judicial contests and no Governor, U.S. Senate, Secretary of State or
+    Attorney General race at all.
+    """
+    from pathlib import Path
+
+    from integrations.mi_sos.mappers import result_office_title
+
+    fixture = (
+        Path(__file__).parent / "fixtures" / "boe_candidate_listing_2026_general.html"
+    ).read_text(encoding="utf-8")
+
+    with patch("integrations.mi_sos.tasks.MiSosClient") as client_cls:
+        client_cls.return_value.fetch_candidate_listing.return_value = fixture
+        sync_mi_elections()
+
+    election = Election.objects.get(state="MI", election_type="general", election_date="2026-11-03")
+    titles = set(Race.objects.filter(election=election).values_list("office_title", flat=True))
+    assert {"Governor", "U.S. Senate", "Secretary of State"} <= titles
+
+    governor = Race.objects.get(election=election, office_title="Governor")
+    assert governor.geography_scope == "statewide"
+    tickets = dict(Candidate.objects.filter(race=governor).values_list("name", "party"))
+    assert tickets["Benson, Jocelyn / Brinks, Winnie"] == "DEM"
+    assert tickets["James, John / DeBoyer, Jay"] == "REP"
+    assert tickets["Hudson, Anthony / Parmenter, Beau"] == "LIB"
+
+    senate = Race.objects.get(election=election, office_title="U.S. Senate")
+    assert senate.geography_scope == "federal"
+    parties = set(Candidate.objects.filter(race=senate).values_list("party", flat=True))
+    assert {"DEM", "REP"} <= parties
+    # UST, not the truncated "U.S" the old abbreviation fallback produced.
+    assert "UST" in parties
+
+    # The incumbency marker must land on the candidate, not in the party field.
+    incumbents = Candidate.objects.filter(race__election=election, incumbent=True)
+    assert incumbents.exists()
+    assert set(incumbents.values_list("party", flat=True)) == {""}
+
+    # The point of the fix: a results contest title keys to the race just created.
+    assert result_office_title("UNITED STATES SENATOR") == senate.office_title
+    assert result_office_title("GOVERNOR") == governor.office_title
+
+
+@pytest.mark.django_db
+def test_resyncing_the_general_listing_is_idempotent_and_backfills_scope():
+    """A second sync must update in place, not duplicate Michigan's ballot.
+
+    Also the backfill path for the 41 judicial races already in production with a
+    blank geography_scope: re-syncing writes it, because mi_sos owns the field.
+    """
+    from pathlib import Path
+
+    fixture = (
+        Path(__file__).parent / "fixtures" / "boe_candidate_listing_2026_general.html"
+    ).read_text(encoding="utf-8")
+
+    def _run():
+        with patch("integrations.mi_sos.tasks.MiSosClient") as client_cls:
+            client_cls.return_value.fetch_candidate_listing.return_value = fixture
+            sync_mi_elections()
+
+    _run()
+    election = Election.objects.get(state="MI", election_type="general", election_date="2026-11-03")
+    first_races = set(Race.objects.filter(election=election).values_list("pk", flat=True))
+    first_candidates = Candidate.objects.filter(race__election=election).count()
+
+    # Simulate the production state: scope blank, as mi_sos used to leave it.
+    Race.objects.filter(election=election).update(geography_scope="")
+
+    _run()
+
+    assert set(Race.objects.filter(election=election).values_list("pk", flat=True)) == first_races
+    assert Candidate.objects.filter(race__election=election).count() == first_candidates
+    assert not Race.objects.filter(election=election, geography_scope="").exists()

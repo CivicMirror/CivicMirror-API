@@ -11,7 +11,7 @@ from ops.models import SyncLog
 
 from .client import MiSosClient
 from .exceptions import MiSosRetryableError
-from .mappers import candidate_status, normalize_office_title, party_abbrev
+from .mappers import candidate_status, geography_scope, normalize_office_title, party_abbrev
 from .parsers import parse_boe_candidate_listing
 
 _MI_ELECTION_SPECS = [
@@ -87,6 +87,9 @@ def sync_mi_elections(self=None):
                     },
                     fields={
                         "jurisdiction": "Michigan",
+                        # Previously omitted, which left every MI race with a blank
+                        # geography_scope and made statewide filters miss Michigan.
+                        "geography_scope": geography_scope(office_title),
                         "source_metadata": {"mi_office_raw": row["office_title"]},
                     },
                 )
@@ -99,6 +102,7 @@ def sync_mi_elections(self=None):
                     party=party_abbrev(row["party"]),
                     fields={
                         "candidate_status": candidate_status(row["status"]),
+                        "incumbent": bool(row["incumbent"]),
                         "source_metadata": {
                             "mi_candidate_status_raw": row["status"],
                             "mi_filing_method": row["filing_method"],

@@ -38,42 +38,105 @@ def parse_mvic_elections(html: str) -> list[dict[str, str]]:
     return elections
 
 
+# Header label -> output field. The BOE report's column order differs between the
+# primary and general listings (the general one has a combined "Party / Incumbent"
+# column and no address), so columns are located by header text rather than by a
+# fixed index. Hardcoded indices silently dropped every partisan row of the Nov 3,
+# 2026 general listing: index 3 held "Democratic Party", which failed the status
+# check, so only non-partisan (judicial) offices survived.
+_HEADER_FIELDS = {
+    "status": "status",
+    "party": "party",
+    "incumbent": "incumbent",
+    "party / incumbent": "party_or_incumbent",
+    "party/incumbent": "party_or_incumbent",
+    "candidate name": "candidate_name",
+    "candidate address": "candidate_address",
+    "filed on": "filed_on",
+    "filing method": "filing_method",
+}
+_INCUMBENT_LABEL = "INCUMBENT"
+
+
+def _squash(value: str) -> str:
+    """Collapse whitespace, including the non-breaking spaces the BOE emits in tickets."""
+    return " ".join((value or "").split())
+
+
+def _direct_cells(tr) -> list[str]:
+    """
+    Cell text for this row only, never from a table nested inside it.
+
+    The live report nests the whole listing inside a one-cell layout table, so a
+    recursive search returns every cell in the document (~10,000) for the outer
+    row, which defeats every row-shape heuristic below.
+    """
+    return [_squash(cell.get_text(" ", strip=True)) for cell in tr.find_all(["td", "th"], recursive=False)]
+
+
+def _is_header(cells: list[str]) -> bool:
+    lowered = {cell.lower() for cell in cells}
+    return "candidate name" in lowered and "filed on" in lowered
+
+
+def _report_rows(soup) -> list[list[str]]:
+    """Rows of the innermost table that carries the report header, else every row."""
+    for table in reversed(soup.find_all("table")):
+        rows = [cells for cells in (_direct_cells(tr) for tr in table.find_all("tr")) if cells]
+        if any(_is_header(cells) for cells in rows):
+            return rows
+    return [cells for cells in (_direct_cells(tr) for tr in soup.find_all("tr")) if cells]
+
+
 def parse_boe_candidate_listing(html: str) -> list[dict[str, str]]:
     soup = BeautifulSoup(html or "", "html.parser")
-    table_rows = []
-    for tr in soup.find_all("tr"):
-        cells = [cell.get_text(" ", strip=True) for cell in tr.find_all(["td", "th"])]
-        if cells:
-            table_rows.append(cells)
 
     current_office = ""
+    columns: dict[int, str] = {}
     candidates: list[dict[str, str]] = []
-    for cells in table_rows:
+    for cells in _report_rows(soup):
         non_empty = [cell for cell in cells if cell]
         joined = " ".join(non_empty)
+        if _is_header(cells):
+            columns = {
+                index: _HEADER_FIELDS[cell.lower()]
+                for index, cell in enumerate(cells)
+                if cell.lower() in _HEADER_FIELDS
+            }
+            continue
         if len(non_empty) == 1 and "candidate" not in joined.lower():
             current_office = non_empty[0]
             continue
-        if "Candidate Name" in joined and "Filed On" in joined:
-            continue
-        if not current_office or len(cells) < 7:
+        if not current_office or not columns:
             continue
 
-        status = cells[3].strip() if len(cells) > 3 else ""
-        if status not in _STATUS_CODES:
+        row = {field: cells[index] for index, field in columns.items() if index < len(cells)}
+        if row.get("status", "") not in _STATUS_CODES:
             continue
-        candidate_name = cells[4].strip() if len(cells) > 4 else ""
+        candidate_name = row.get("candidate_name", "")
         if not candidate_name:
             continue
+
+        # One column may carry either a party name or the literal "INCUMBENT":
+        # non-partisan offices have no party, partisan ones no incumbent marker.
+        party = row.get("party", "")
+        incumbent = row.get("incumbent", "")
+        combined = row.get("party_or_incumbent", "")
+        if combined:
+            if combined.upper() == _INCUMBENT_LABEL:
+                incumbent = combined
+            else:
+                party = combined
+
         candidates.append({
             "office_title": current_office,
-            "party": cells[0].strip(),
-            "incumbent": cells[1].strip(),
-            "filing_method": cells[2].strip(),
-            "status": status,
+            "party": party,
+            "incumbent": incumbent,
+            "filing_method": row.get("filing_method", ""),
+            "status": row.get("status", ""),
             "candidate_name": candidate_name,
-            "candidate_address": cells[5].strip() if len(cells) > 5 else "",
-            "filed_on": cells[6].strip() if len(cells) > 6 else "",
+            "candidate_address": row.get("candidate_address", ""),
+            "filed_on": row.get("filed_on", ""),
         })
     return candidates
 
