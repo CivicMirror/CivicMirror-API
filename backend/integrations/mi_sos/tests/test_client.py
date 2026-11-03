@@ -58,14 +58,14 @@ def test_fetch_result_file_uses_cf_solver_payload_fetch():
     assert payload_url.endswith("/VoteHistory/GetElectionResultFile?electionId=705")
 
 
-def test_fetch_county_vote_records_uses_plain_requests():
-    response = MagicMock()
-    response.text = "<html>county records</html>"
-    response.raise_for_status.return_value = None
-
-    with patch("integrations.mi_sos.client.requests.Session") as session_cls:
-        session_cls.return_value.get.return_value = response
+def test_fetch_county_vote_records_goes_through_the_cf_solver():
+    """It used to use a plain request, which 403s like every other MVIC path."""
+    with patch("integrations.mi_sos.client.CfSolverClient") as solver_cls:
+        solver_cls.return_value.fetch_through_cf.return_value = "<html>county records</html>"
         text = MiSosClient().fetch_county_vote_records(705)
 
     assert text == "<html>county records</html>"
-    assert "GetCountyVoteRecords" in session_cls.return_value.get.call_args.args[0]
+    solve_url, payload_url = solver_cls.return_value.fetch_through_cf.call_args.args[:2]
+    assert solve_url == "https://mvic.sos.state.mi.us/votehistory/"
+    assert payload_url.endswith("/VoteHistory/GetCountyVoteRecords?electionId=705")
+

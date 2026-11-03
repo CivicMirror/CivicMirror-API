@@ -64,13 +64,17 @@ class MiSosClient:
             raise MiSosRetryableError(f"MVIC result file CF fetch failed: {exc}") from exc
 
     def fetch_county_vote_records(self, election_id: int) -> str:
+        """
+        The vote-records page for one election — the results adapter's fallback.
+
+        Also solver-routed. This was a plain GET, which answers 403 like every other
+        mvic.sos.state.mi.us path (verified 2026-11-02), so the fallback could never
+        have received anything in production: results.adapters.mi only wraps the bulk
+        fetch in its try/except, and a raise here propagates out of fetch_results.
+        """
+        page_url = f"{_MVIC_BASE}/votehistory/"
+        payload_url = f"{_MVIC_BASE}/VoteHistory/GetCountyVoteRecords?electionId={election_id}"
         try:
-            resp = self.session.get(
-                f"{_MVIC_BASE}/VoteHistory/GetCountyVoteRecords",
-                params={"electionId": election_id},
-                timeout=self.timeout,
-            )
-            resp.raise_for_status()
-            return resp.text
-        except requests.RequestException as exc:
-            raise MiSosRetryableError(f"MVIC county vote records fetch failed: {exc}") from exc
+            return CfSolverClient().fetch_through_cf(page_url, payload_url, payload_referer=page_url)
+        except CfSolverError as exc:
+            raise MiSosRetryableError(f"MVIC county vote records CF fetch failed: {exc}") from exc

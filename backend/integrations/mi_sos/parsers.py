@@ -9,7 +9,6 @@ from bs4 import BeautifulSoup
 
 _DATE_RE = re.compile(r"(?P<date>\d{1,2}/\d{1,2}/\d{4})")
 _STATUS_CODES = {"", "DISQ", "WITHD"}
-_PARTY_LABELS = {"DEMOCRATIC", "REPUBLICAN", "LIBERTARIAN", "GREEN", "NONPARTISAN", "NON-PARTISAN"}
 
 
 def parse_mvic_elections(html: str) -> list[dict[str, str]]:
@@ -176,32 +175,67 @@ def parse_mvic_result_file(text: str) -> list[dict[str, Any]]:
     return rows
 
 
-def parse_mvic_county_results_html(html: str) -> list[dict[str, Any]]:
-    soup = BeautifulSoup(html or "", "html.parser")
-    text = soup.get_text("\n", strip=True)
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    rows = []
-    current_contest = ""
-    current_party = ""
+# MVIC renders results as a Bootstrap grid inside the "Election Results" tab, not a
+# table: each contest is a <div class="row"> with no column children, and each result
+# a sibling row of col-md-* cells. The previous implementation flattened the document
+# with get_text("\n") and required name, votes and percent on ONE line separated by
+# two or more spaces, which is how the hand-written 705 fixture was shaped but not how
+# MVIC renders anything — it returned zero rows from the real document (verified
+# 2026-11-02 against electionId=706, 867 KB of official Aug 4, 2026 primary results).
+_RESULTS_PANE_ID = "tab-target-voteResults"
+# Party and contest subtotal rows ("Party Votes:", "Total Votes:") carry the same shape
+# as a result row and are marked only by this class on the label cell.
+_SUBTOTAL_CLASS = "bold"
+_MIN_RESULT_CELLS = 4
 
-    for line in lines:
-        upper = line.upper()
-        if " POSITION" in upper or " TERM " in upper:
-            current_contest = line
-            current_party = ""
+
+def parse_mvic_county_results_html(html: str) -> list[dict[str, Any]]:
+    """Per-candidate contest totals from MVIC's vote-records page."""
+    soup = BeautifulSoup(html or "", "html.parser")
+    pane = soup.find("div", id=_RESULTS_PANE_ID)
+    if pane is None:
+        return []
+
+    rows: list[dict[str, Any]] = []
+    current_contest = ""
+    for row in pane.find_all("div", class_="row"):
+        cells = row.find_all("div", recursive=False)
+
+        if not cells:
+            # A row with no columns is the contest banner.
+            title = _squash(row.get_text(" ", strip=True))
+            if title:
+                current_contest = title
             continue
-        if upper in _PARTY_LABELS:
-            current_party = line
+
+        if not current_contest or len(cells) < _MIN_RESULT_CELLS:
             continue
-        match = re.match(r"^(?P<name>.+?)\s{2,}(?P<votes>[\d,]+)\s{2,}(?P<pct>[\d.]+)%?$", line)
-        if current_contest and match:
-            rows.append({
+        if _SUBTOTAL_CLASS in (cells[1].get("class") or []):
+            continue
+
+        party = _squash(cells[0].get_text(" ", strip=True))
+        candidate_name = _squash(cells[1].get_text(" ", strip=True))
+        votes = _squash(cells[2].get_text(" ", strip=True)).replace(",", "")
+        vote_pct = _squash(cells[3].get_text(" ", strip=True)).replace("%", "")
+        if not candidate_name or not votes:
+            continue
+
+        rows.append({
+            "contest": current_contest,
+            "party": party,
+            "candidate_name": candidate_name,
+            "votes": votes,
+            "vote_pct": vote_pct,
+            # This endpoint reports statewide contest totals, not per-county splits, so
+            # the rows are contest totals (results.tasks keys those on an empty fragment).
+            "county": "",
+            "raw": {
+                "source": "mvic_county_records",
                 "contest": current_contest,
-                "party": current_party,
-                "candidate_name": match.group("name").strip(),
-                "votes": match.group("votes").replace(",", ""),
-                "vote_pct": match.group("pct"),
-                "county": "",
-                "raw": {"source": "mvic_html", "line": line},
-            })
+                "party": party,
+                "candidate_name": candidate_name,
+                "votes": votes,
+                "vote_pct": vote_pct,
+            },
+        })
     return rows

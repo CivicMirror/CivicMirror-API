@@ -59,14 +59,67 @@ def test_parse_mvic_result_file_returns_candidate_rows():
     assert rows[0]["county"] == "BAY"
 
 
+# ---------------------------------------------------------------------------
+# MVIC county vote records: a Bootstrap grid, not lines of text
+# ---------------------------------------------------------------------------
+
+def _county() -> list[dict[str, str]]:
+    return parse_mvic_county_results_html(_fixture("mvic_county_records_706.html"))
+
+
 def test_parse_mvic_county_results_html_returns_candidate_rows():
-    rows = parse_mvic_county_results_html(_fixture("mvic_county_records_705.html"))
-    assert len(rows) == 3
-    names = {row["candidate_name"] for row in rows}
-    assert "GREENE, CHEDRICK" in names
-    greene = next(row for row in rows if row["candidate_name"] == "GREENE, CHEDRICK")
-    assert greene["votes"] == "36583"
-    assert greene["vote_pct"] == "58.88"
+    """Real MVIC output, captured from electionId=706 (Aug 4, 2026 primary).
+
+    The previous implementation flattened the page and required name, votes and
+    percent on one line separated by two or more spaces. That is how the old
+    hand-written fixture was shaped and not how MVIC renders anything: the real
+    document yielded zero rows.
+    """
+    rows = _county()
+    assert rows
+
+    benson = next(r for r in rows if r["candidate_name"] == "Benson, Jocelyn")
+    assert benson["contest"] == "GOVERNOR 4 YEAR TERM (1) POSITION"
+    assert benson["party"] == "DEMOCRATIC"
+    assert benson["votes"] == "1251160"
+    assert benson["vote_pct"] == "83.22"
+    # This endpoint reports statewide contest totals, so results.tasks keys them
+    # on an empty jurisdiction_fragment.
+    assert benson["county"] == ""
+
+
+def test_party_and_contest_subtotal_rows_are_not_read_as_candidates():
+    """"Party Votes:" rows share a result row's shape and differ only by a class."""
+    rows = _county()
+
+    assert not [r for r in rows if "Votes:" in r["candidate_name"]]
+    assert all(r["votes"] for r in rows)
+
+
+def test_each_candidate_row_carries_its_own_party():
+    """MVIC repeats the party per row rather than using party header rows."""
+    governor = [r for r in _county() if r["contest"].startswith("GOVERNOR 4 YEAR")]
+
+    assert {r["party"] for r in governor} == {"DEMOCRATIC", "REPUBLICAN"}
+    james = next(r for r in governor if r["candidate_name"] == "James, John")
+    assert james["party"] == "REPUBLICAN"
+    assert james["vote_pct"] == "50.05"
+
+
+def test_contest_titles_normalize_to_the_races_the_candidate_listing_creates():
+    from integrations.mi_sos.mappers import result_office_title
+
+    titles = {result_office_title(r["contest"]) for r in _county()}
+
+    assert "Governor" in titles
+    assert "U.S. Senate" in titles
+    assert "U.S. House - District 1" in titles
+    assert "State Senate - District 35" in titles
+
+
+def test_county_results_without_the_results_pane_yield_nothing():
+    assert parse_mvic_county_results_html("<html><body><div class='row'>x</div></body></html>") == []
+    assert parse_mvic_county_results_html("") == []
 
 
 # ---------------------------------------------------------------------------

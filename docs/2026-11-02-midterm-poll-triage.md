@@ -752,3 +752,94 @@ today.
 
 So Michigan will still serve no results until the parsers are validated
 against real output, independently of everything fixed so far.
+
+---
+
+# MVIC county-records parser rewritten against the real document
+
+## What MVIC actually renders
+
+Not a table — a Bootstrap grid inside the "Election Results" tab
+(`div#tab-target-voteResults`), which holds 1,225 direct `div.row` children in
+three shapes:
+
+| Rows | Shape | Meaning |
+|---|---|---|
+| 170 | no column children | contest banner |
+| 552 | `col-md-2`, `col-md-4`, `col-md-2 text-right`, `col-md-1 text-right`, `col-md-3` | a candidate's result |
+| 503 | same, but the label cell adds `text-right bold` | "Party Votes:" subtotal |
+
+Each candidate row carries **its own party**; MVIC does not use party header
+rows. Subtotals are distinguished from results only by that `bold` class, so
+they have to be filtered on it rather than on text.
+
+## The rewrite
+
+`parse_mvic_county_results_html` now walks the results pane's rows, treats a
+row with no columns as the contest banner, reads party, candidate, votes and
+percent from the column cells, and skips `bold`-labelled subtotals. The old
+implementation flattened the page with `get_text("\n")` and required name,
+votes and percent on one line separated by two or more spaces.
+
+| | Old | New |
+|---|---|---|
+| Live `electionId=706` (867 KB) | **0 rows** | **552 rows, 170 contests** |
+
+Spot-checked against the live document: `Benson, Jocelyn DEMOCRATIC 1,251,160
+83.22%`, `James, John REPUBLICAN 466,714 50.05%`. No subtotal rows leak in and
+no row has empty votes. The data is also self-consistent with the candidate
+listing — James won the Republican gubernatorial primary and appears as the
+`James, John / DeBoyer, Jay` ticket on the general ballot.
+
+Contest titles from the real document normalize onto the races the BOE listing
+creates, which is the whole point:
+
+```
+GOVERNOR 4 YEAR TERM (1) POSITION                                -> Governor
+UNITED STATES SENATOR 6 YEAR TERM (1) POSITION                   -> U.S. Senate
+1ST DISTRICT REPRESENTATIVE IN CONGRESS 2 YEAR TERM (1) POSITION -> U.S. House - District 1
+35TH DISTRICT STATE SENATOR 4 YEAR TERM (1) POSITION             -> State Senate - District 35
+```
+
+## The fetch was broken too
+
+`fetch_county_vote_records` was a plain GET. Every MVIC path 403s, so the
+fallback could never have received anything — and the failure would not have
+been contained: `results/adapters/mi.py` wraps only the *bulk* fetch in its
+`try/except`, so a raise from the fallback propagates out of `fetch_results`
+and retries the task. Now solver-routed like the other two.
+
+## Fixtures
+
+`mvic_county_records_705.html` (332 bytes, synthetic) is **deleted** — it
+encoded a text shape MVIC does not produce and was the reason this went
+unnoticed. Replaced by `mvic_county_records_706.html`, trimmed from the live
+document (4 contests, 20 result rows, 9 KB) with style and aria attributes
+stripped and the row/column structure verbatim.
+
+`results/tests/test_mi_adapter.py`'s fallback test used inline text in the same
+invented shape; it now feeds the real fixture and asserts vote counts, the
+normalized office title, the empty jurisdiction fragment and write-in
+aggregation.
+
+Full suite: `1 failed, 2391 passed, 2 skipped` — the same pre-existing date
+expiry. `ruff check .` clean.
+
+## Michigan's results path now
+
+| Step | State |
+|---|---|
+| Races for results to match | fixed, `612f798` |
+| `mi_mvic_election_id` populated | wired, `4532599`; MVIC has not published Nov 3 yet |
+| County-records fetch + parse (fallback) | **fixed and verified against real output** |
+| Bulk TSV fetch + parse (primary path) | **still unverified** |
+
+The bulk path is the one remaining unknown. `GetElectionResultFile` is a file
+download, so it could not be retrieved with a browser-based solver locally, and
+`mvic_result_file_705.tsv` (318 bytes) is synthetic like the other two were —
+so `parse_mvic_result_file` should be assumed broken until a real file proves
+otherwise. `core.cf_solver` can fetch it in the deployed environment today
+using `electionId=706`, which would settle it before tomorrow night. Note the
+fallback now works, and when it is used the adapter reports
+`mapping_confidence="partial"`, so those races stay `partial_results` and never
+auto-certify.

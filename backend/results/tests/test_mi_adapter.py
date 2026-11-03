@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -79,21 +80,29 @@ def test_fetch_results_falls_back_to_html_when_bulk_fetch_fails(client_cls):
         jurisdiction_level=Election.JurisdictionLevel.STATE,
         state="MI",
         source_id="mi_test",
-        source_metadata={"mi_mvic_election_id": 705},
+        source_metadata={"mi_mvic_election_id": 706},
     )
     client = client_cls.return_value
     client.fetch_result_file.side_effect = MiSosRetryableError("cf blocked")
-    client.fetch_county_vote_records.return_value = """
-    35TH DISTRICT STATE SENATOR PARTIAL TERM ENDING 1/1/2027 (1) POSITION
-    DEMOCRATIC
-    GREENE, CHEDRICK  36,583  58.88%
-    """
+    # Real MVIC markup, captured from electionId=706. The inline text this test used
+    # to pass was in a shape MVIC does not produce, so it hid the fallback parser
+    # returning nothing on live input.
+    fixture = (
+        Path(__file__).parents[2]
+        / "integrations" / "mi_sos" / "tests" / "fixtures" / "mvic_county_records_706.html"
+    ).read_text(encoding="utf-8")
+    client.fetch_county_vote_records.return_value = fixture
 
     result = MichiganAdapter().fetch_results(election.election_date, election.pk)
 
     assert result.mapping_confidence == "partial"
-    assert result.rows[0].candidate_name == "GREENE, CHEDRICK"
-    assert result.rows[0].vote_count == 36583
+    by_name = {row.candidate_name: row for row in result.rows}
+    assert by_name["Benson, Jocelyn"].vote_count == 1251160
+    assert by_name["Benson, Jocelyn"].vote_pct == 83.22
+    assert by_name["Benson, Jocelyn"].office_title == "Governor"
+    assert by_name["Benson, Jocelyn"].jurisdiction_fragment == ""
+    # Write-ins are aggregated, not treated as a candidate.
+    assert by_name["WRITE-IN"].is_write_in_aggregate is True
 
 
 @pytest.mark.django_db
