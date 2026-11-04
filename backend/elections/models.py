@@ -121,6 +121,7 @@ class Race(models.Model):
         NY_BOE = 'ny_boe', 'New York BOE'
         MD_SBE = 'md_sbe', 'Maryland SBE'
         UT_ELECTIONS = 'ut_elections', 'Utah Elections'
+        AK_SOS = 'ak_sos', 'Alaska Division of Elections'
 
     class RaceStatus(models.TextChoices):
         DRAFT = 'draft', 'Draft'

@@ -171,6 +171,7 @@ INSTALLED_APPS += [
     'integrations.ut_elections',
     'integrations.vt_sos',
     'integrations.ny_boe',
+    'integrations.ak_sos',
     'internal',
     'api',
     'accounts',
