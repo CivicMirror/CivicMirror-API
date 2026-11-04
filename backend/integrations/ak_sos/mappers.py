@@ -74,6 +74,26 @@ def office_title_for(heading: str) -> str | None:
     return None
 
 
+def _primary_party(party_full: str, office_title: str) -> str:
+    """
+    For a Governor/Lt. Governor ticket, this page's party text can be two
+    parties joined by " / " (e.g. "Registered Republican / Registered
+    Democrat" on a split-ticket pair) -- confirmed live on the 2026 filing
+    list. aggregation.ingest.ingest_candidate derives Candidate.normalized_party
+    from whatever party string it's given, uppercased with no further
+    shortening when the text isn't a recognized code, and that column is
+    only 40 chars (elections.models.Candidate.normalized_party) -- long
+    enough for a single party's name but not two joined together, which
+    raised django.db.utils.DataError in production the first time this ran
+    against a real split ticket. Reducing to just the gubernatorial
+    candidate's own party keeps it meaningful and under the limit; the full
+    two-party text survives in source_metadata (see map_candidate).
+    """
+    if office_title == "Governor / Lieutenant Governor" and " / " in party_full:
+        return party_full.split(" / ", 1)[0].strip()
+    return party_full
+
+
 def normalize_candidate_name(raw_name: str, office_title: str) -> str:
     """
     Normalize this page's ballot name to the same string the results
@@ -172,7 +192,8 @@ def parse_candidates_html(html: str) -> list[dict]:
             name = normalize_candidate_name(ballot_name, office_title)
 
             small = name_cell.find("small")
-            party, status_raw = _party_and_status(small.get_text(strip=True)) if small else ("", "")
+            party_full, status_raw = _party_and_status(small.get_text(strip=True)) if small else ("", "")
+            party = _primary_party(party_full, office_title)
 
             incumbent_tag = name_cell.find("em")
             incumbent = bool(incumbent_tag and incumbent_tag.get_text(strip=True) == "Incumbent")
@@ -186,6 +207,7 @@ def parse_candidates_html(html: str) -> list[dict]:
                 "name": name,
                 "ballot_name": ballot_name,
                 "party": party,
+                "party_full": party_full,
                 "status_raw": status_raw,
                 "candidate_status": candidate_status_for(status_raw, withdrawn),
                 "incumbent": incumbent,
@@ -243,6 +265,7 @@ def map_candidate(record: dict) -> dict:
             "provider": "ak_sos",
             "ak_status": record["status_raw"],
             "ak_ballot_name": record["ballot_name"],
+            "ak_party_full": record["party_full"],
             "email": record["email"],
         },
     }

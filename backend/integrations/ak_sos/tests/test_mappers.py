@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from integrations.ak_sos.mappers import (
+    _primary_party,
     candidate_status_for,
     map_candidate,
     map_race_identity,
@@ -190,7 +191,7 @@ def test_map_candidate_fields():
     record = {
         "candidate_status": "running", "incumbent": True, "phone": "(907) 555-1234",
         "address": "PO Box 1 Juneau, AK 99801", "status_raw": "Certified",
-        "ballot_name": "Doe, Jane", "email": "jane@example.com",
+        "ballot_name": "Doe, Jane", "party_full": "Registered Republican", "email": "jane@example.com",
     }
     fields = map_candidate(record)
     assert fields["candidate_status"] == "running"
@@ -198,3 +199,34 @@ def test_map_candidate_fields():
     assert fields["contact_phone"] == "(907) 555-1234"
     assert fields["contact_office"] == "PO Box 1 Juneau, AK 99801"
     assert fields["source_metadata"]["email"] == "jane@example.com"
+    assert fields["source_metadata"]["ak_party_full"] == "Registered Republican"
+
+
+# ---------------------------------------------------------------------------
+# _primary_party — regression test for the production DataError (#233 follow-up):
+# Candidate.normalized_party is a 40-char column, and a split-ticket governor
+# race's two-party text ("Registered Republican / Registered Democrat", 43
+# chars) overflowed it the first time this ran against real data.
+# ---------------------------------------------------------------------------
+
+def test_governor_split_ticket_party_is_shortened_to_fit_normalized_party_column():
+    party = _primary_party("Registered Republican / Registered Democrat", "Governor / Lieutenant Governor")
+    assert party == "Registered Republican"
+    assert len(party.upper()) <= 40
+
+
+def test_non_governor_office_party_passed_through_unchanged():
+    assert _primary_party("Registered Republican / Registered Democrat", "U.S. Senator") == (
+        "Registered Republican / Registered Democrat"
+    )
+
+
+def test_parse_candidates_html_governor_split_ticket_party_fits_db_column():
+    # Real fixture row: "Parkin, James W. "JP4" / Greer, Ramadhani "Ram"" is
+    # (Registered Republican / Registered Democrat) -- the exact row that
+    # raised DataError in production before this fix.
+    records = parse_candidates_html(_fixture("governor.html"))
+    parkin = next(r for r in records if "Parkin" in r["ballot_name"])
+    assert len(parkin["party"].upper()) <= 40
+    assert parkin["party"] == "Registered Republican"
+    assert parkin["party_full"] == "Registered Republican / Registered Democrat"
