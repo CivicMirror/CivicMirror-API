@@ -12,6 +12,8 @@ from .exceptions import AlSosError, AlSosRetryableError
 
 _BASE_URL = "https://www2.alabamavotes.gov/electionNight/statewideResultsByContest.aspx"
 _FCPA_BASE_URL = "https://fcpa.alabamavotes.gov/page.request.do"
+_SOS_HOST = "www.sos.alabama.gov"
+_MAX_CERTIFICATION_PDF_BYTES = 40 * 1024 * 1024
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -173,6 +175,43 @@ class AlSosClient:
         except requests.RequestException as exc:
             raise AlSosRetryableError(f"Alabama election-information page request failed: {exc}") from exc
         return response.text
+
+    def fetch_candidate_certification_pdf(self, url: str) -> bytes:
+        """Download one PDF linked from Alabama SOS with TLS verification enabled."""
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or parsed.hostname != _SOS_HOST:
+            raise AlSosError("Alabama candidate certifications must be hosted on the official SOS HTTPS site")
+
+        try:
+            response = self.session.get(url, timeout=self.export_timeout, stream=True)
+            response.raise_for_status()
+            final_url = urlparse(response.url or url)
+            if final_url.scheme != "https" or final_url.hostname != _SOS_HOST:
+                raise AlSosError("Alabama candidate certification redirected away from the official SOS site")
+            content_length = response.headers.get("Content-Length")
+            if content_length and int(content_length) > _MAX_CERTIFICATION_PDF_BYTES:
+                raise AlSosError("Alabama candidate certification exceeds the 40 MiB limit")
+            chunks = []
+            size = 0
+            for chunk in response.iter_content(chunk_size=64 * 1024):
+                if not chunk:
+                    continue
+                size += len(chunk)
+                if size > _MAX_CERTIFICATION_PDF_BYTES:
+                    raise AlSosError("Alabama candidate certification exceeds the 40 MiB limit")
+                chunks.append(chunk)
+            content = b"".join(chunks)
+        except AlSosError:
+            raise
+        except (requests.RequestException, ValueError) as exc:
+            raise AlSosRetryableError(f"Alabama candidate certification request failed: {exc}") from exc
+        finally:
+            if "response" in locals():
+                response.close()
+
+        if not content.startswith(b"%PDF-"):
+            raise AlSosError("Alabama candidate certification response was not a PDF")
+        return content
 
     def fetch_fcpa_race_search(self, election_id: str, office_id: int, page_number: int, page_size: int = 100) -> str:
         params = {

@@ -20,6 +20,10 @@ RUN pip install --no-cache-dir \
     -r requirements/base.txt \
     -r requirements/dev.txt
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends poppler-utils tesseract-ocr && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 RUN adduser --disabled-password --gecos '' appuser
 
 COPY --chown=appuser:appuser . .
@@ -48,7 +52,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN apt-get update && \
     /usr/local/bin/playwright install-deps chromium && \
     /usr/local/bin/playwright install chromium && \
-    apt-get install -y --no-install-recommends xvfb && \
+    apt-get install -y --no-install-recommends xvfb poppler-utils tesseract-ocr && \
     chmod -R o+rx /ms-playwright && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 

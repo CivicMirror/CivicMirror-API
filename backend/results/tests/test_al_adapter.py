@@ -41,6 +41,39 @@ def test_alabama_adapter_fetches_by_ecode_metadata():
 
 
 @pytest.mark.django_db
+def test_alabama_primary_results_use_certification_office_and_party_race_identity():
+    from elections.models import Election
+
+    election = Election.objects.create(
+        source_id="al_2026_primary_identity",
+        name="2026 Primary Election",
+        state="AL",
+        election_type="primary",
+        election_date=date(2026, 5, 19),
+        status="RESULTS_PENDING",
+        jurisdiction_level="STATE",
+        source_metadata={"al_ecode": "1001295"},
+    )
+    content = (FIXTURES / "al_sos_enr_export.xlsx").read_bytes()
+
+    with patch("results.adapters.al.cache") as mock_cache, \
+         patch("results.adapters.al.AlSosClient") as MockClient:
+        mock_cache.get.return_value = None
+        MockClient.return_value.fetch_enr_export.return_value = content
+        result = AlabamaAdapter().fetch_results(election.election_date, election.pk)
+
+    primary_candidate = next(
+        row for row in result.rows
+        if row.office_title == "U.S. House - District 5" and row.raw.get("contest_variant") == "al:DEM"
+    )
+    assert primary_candidate.office_title == "U.S. House - District 5"
+    assert primary_candidate.raw["contest_variant"] == "al:DEM"
+    assert primary_candidate.raw["al_enr_contest_code"]
+    assert "contest_code" not in primary_candidate.raw
+    assert "party_code" not in primary_candidate.raw
+
+
+@pytest.mark.django_db
 def test_alabama_adapter_fetches_by_results_url_metadata():
     from elections.models import Election
 

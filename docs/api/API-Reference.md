@@ -825,6 +825,7 @@ Each trigger acquires a per-task idempotency lock (keyed to the current schedule
 | `/internal/tasks/sync-tn-sos/` | Tennessee SOS sync |
 | `/internal/tasks/sync-tn-result-index/` | Tennessee SOS results-index sync (links result pages to elections) |
 | `/internal/tasks/sync-al-elections/` | Alabama SOS election sync |
+| `/internal/tasks/sync-al-certifications/` | Parse Alabama SOS candidate certifications into election-specific races and candidates |
 | `/internal/tasks/sync-al-fcpa/` | Alabama FCPA candidate sync |
 | `/internal/tasks/sync-vt-sos/` | Vermont SOS sync |
 

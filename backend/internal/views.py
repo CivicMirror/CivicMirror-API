@@ -7,7 +7,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from integrations.ak_sos.tasks import sync_ak_races
-from integrations.al_sos.tasks import sync_al_elections, sync_al_fcpa_candidates
+from integrations.al_sos.tasks import sync_al_certifications, sync_al_elections, sync_al_fcpa_candidates
 from integrations.az_sos.tasks import sync_az_elections
 from integrations.ca_sos.tasks import sync_ca_elections
 from integrations.co_sos.tasks import sync_co_elections
@@ -397,6 +397,13 @@ def sync_al_elections_trigger(request):
 @require_internal_task_token
 def sync_al_fcpa_trigger(request):
     return _trigger("sync_al_fcpa", sync_al_fcpa_candidates, request)
+
+
+@csrf_exempt
+@require_POST
+@require_internal_task_token
+def sync_al_certifications_trigger(request):
+    return _trigger("sync_al_certifications", sync_al_certifications, request)
 
 
 @csrf_exempt

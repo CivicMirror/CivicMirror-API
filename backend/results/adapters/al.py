@@ -14,6 +14,7 @@ import logging
 from django.core.cache import cache
 
 from integrations.al_sos.client import AlSosClient, ecode_from_results_url, enr_url_for_ecode
+from integrations.al_sos.mappers import normalize_certification_office
 from integrations.al_sos.parsers import parse_enr_workbook
 
 from .base import AdapterResult, StateResultsAdapter
@@ -73,6 +74,20 @@ class AlabamaAdapter(StateResultsAdapter):
                 unchanged=True,
                 source_version=parsed.source_version,
             )
+
+        is_primary = election.election_type in {
+            Election.ElectionType.PRIMARY,
+            Election.ElectionType.PRIMARY_RUNOFF,
+        } or "primary" in election.name.lower()
+        for row in parsed.rows:
+            row.office_title = normalize_certification_office(row.office_title or "")
+            row.raw = dict(row.raw or {})
+            if is_primary:
+                party = (row.raw.get("party_code") or "").strip().upper()
+                row.raw["al_enr_contest_code"] = row.raw.pop("contest_code", "")
+                row.raw.pop("party_code", None)
+                if party:
+                    row.raw["contest_variant"] = f"al:{party}"
 
         return AdapterResult(
             rows=parsed.rows,

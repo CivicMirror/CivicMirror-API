@@ -94,6 +94,28 @@ def test_fetch_fcpa_committee_detail_base64_encodes_id():
     assert "id=NDgzNA%3D%3D" in url or "id=NDgzNA==" in url
 
 
+def test_fetch_candidate_certification_pdf_streams_only_official_sos_https_urls():
+    session = MagicMock()
+    response = MagicMock()
+    response.url = "https://www.sos.alabama.gov/certification.pdf"
+    response.headers = {"Content-Length": "12"}
+    response.iter_content.return_value = [b"%PDF-1.4", b"data"]
+    response.raise_for_status.return_value = None
+    session.get.return_value = response
+    client = AlSosClient(session=session)
+
+    assert client.fetch_candidate_certification_pdf(response.url) == b"%PDF-1.4data"
+    session.get.assert_called_once_with(response.url, timeout=60, stream=True)
+    response.close.assert_called_once()
+
+
+def test_fetch_candidate_certification_pdf_rejects_non_sos_host():
+    client = AlSosClient()
+
+    with pytest.raises(AlSosError, match="official SOS HTTPS site"):
+        client.fetch_candidate_certification_pdf("https://example.com/certification.pdf")
+
+
 def test_chain_fix_adapter_mounted_for_hosts_missing_their_intermediate_cert():
     """
     Regression test for #132: sos.alabama.gov and fcpa.alabamavotes.gov omit

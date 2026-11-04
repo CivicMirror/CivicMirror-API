@@ -15,7 +15,7 @@
 |---|---|---|---|
 | Stage 1 — Election Creation | ✅ Strong official source | SOS year-specific Election Information pages and election calendars | High — HTML and links captured 2026-07-18 |
 | Stage 1 — Provisional Race/Candidate Discovery | ✅ Structured public source confirmed | FCPA Political Race Search JSON + committee-detail records | High — HAR captured 2026-07-20 |
-| Stage 1 — Ballot-Qualified Race/Candidate Creation | ⚠️ Official source confirmed; parser pending | Party, amended-party, and state candidate-certification PDFs | Medium-high — document index captured; PDF schemas not fully validated |
+| Stage 1 — Ballot-Qualified Race/Candidate Creation | 🟡 Parser implemented; rollout pending | Party, amended-party, and state candidate-certification PDFs | Medium-high — scanned 2026 documents inspected; production ingestion not run |
 | Stage 1 — Sample Ballot Validation / Local Expansion | ⚠️ Source indexes confirmed | SOS county/party sample-ballot pages | Medium — links captured; ballot PDF schemas not reviewed |
 | Stage 1 — Statewide Ballot Measures | ⚠️ Partial official path | State certification of statewide/constitutional amendments + sample ballots | Medium — links captured; document schemas not reviewed |
 | District Geometry — Congressional | ✅ Public structured source | Alabama ArcGIS FeatureServer layers | High — metadata and query traffic captured 2026-07-20 |
@@ -438,32 +438,49 @@ Latest official sample ballot
 
 Every document version should be retained. An amendment should supersede, not erase, the earlier certification.
 
-## 4.2 Proposed Certification Parser
+## 4.2 Stage 1 Certification Integration
 
-1. Scrape the year page and group documents under their election heading.
-2. Classify documents by link label:
-   - party candidate certification;
-   - amended candidate certification;
-   - state candidate certification;
-   - amendment certification;
-   - result certification.
-3. Download and checksum each file.
-4. Parse office headings, district/jurisdiction, candidate ballot names, party, and certification date.
-5. Create or promote provisional FCPA candidates to `ballot_certified`.
-6. Mark missing previously certified candidates as superseded/withdrawn only when supported by a newer official document.
-7. Preserve original PDF and parser output for audit.
+The Stage 1 integration lives in `backend/integrations/al_sos/`. The internal task
+`sync_al_certifications(year)` reads the SOS election links already stored by
+`sync_al_elections`, selects the latest eligible candidate-certification link per
+party in page order, downloads the PDF from the official SOS host, records its
+SHA-256, and creates or updates election-specific Race and Candidate rows.
 
-## 4.3 Current Validation Gap
+The reviewed 2026 certification files are scanned image PDFs, not text PDFs. The
+parser renders pages with Poppler and OCRs them with Tesseract. It handles upright
+two-column tables, rotated four-column state certificates, and the independent
+certificate's office/name pairs. Office labels are normalized to the same titles
+used by the Alabama ENR results adapter. Federal, statewide, state-legislative,
+and judicial seats are included when present in the certification.
 
-The candidate-certification PDFs were linked in the SOS HAR but were not opened in the supplied capture. Before production implementation, download representative files and document:
+Primary and primary-runoff races carry party-specific `contest_variant` values
+(`al:DEM`, `al:REP`, or `al:IND`) so the ENR result rows can match each party's
+race. Candidate and race metadata retain source URL, document label, party, and
+checksum; election metadata keeps document version history. An unchanged URL and
+checksum avoids a second OCR pass. OCR-derived races and candidates carry
+`al_certification_ocr_review_required=true`; clear it only after checking both
+the office and candidate names against the source PDF. The internal trigger is
+`POST /internal/tasks/sync-al-certifications/`.
 
-- whether the PDFs are text-based or scanned;
-- office-heading and district formatting;
-- multi-column behavior;
-- candidate-name punctuation;
-- write-in and unopposed markers;
-- amended-certification conventions;
-- whether statewide and district offices share one consistent schema.
+This parser is deliberately additive: omission from a later document does not
+withdraw or delete an earlier candidate. Conflicting or materially changed
+documents need a reviewed reconciliation rule before removal/status changes.
+County sample ballots, local contests, statewide ballot measures, and exact ballot
+ordering remain outside this integration.
+
+## 4.3 Validation and Rollout Status
+
+Representative Democratic, Republican, amended Republican, and independent 2026
+certificates have now been downloaded and inspected. OCR and office normalization
+have focused tests. Remaining validation before marking this coverage live:
+
+- run the internal task against the current AL elections and review parsed races
+  and candidates before production ingestion;
+- verify whether every current special-election certificate is associated with
+  its exact special election heading;
+- add the task to the production scheduler and deploy the OCR-enabled runtime;
+- compare the complete parsed roster with the official certifications and record
+  any OCR corrections.
 
 ---
 
@@ -1007,6 +1024,10 @@ Google Civic, Ballotpedia, OpenStates, and other third-party sources may still e
 
 ## Current Coverage Tier
 
-**Full Core Coverage (shipped 2026-07-20).** `sync_al_elections` ingests elections from the SOS year page; `sync_al_fcpa_candidates` ingests state/statewide-office races and candidates from FCPA (Governor down through State Senator/Representative — FCPA has no federal-office data) for any Election manually tagged with `source_metadata["al_fcpa_election_id"]`; `results/adapters/al.py` ingests live/unofficial results from the ENR export (shipped earlier).
-
-Deferred to future work (see §4-§6 above): candidate-certification PDF parsing and the FCPA-provisional -> certified-ballot-qualified promotion path, sample-ballot validation, statewide ballot measures, and ArcGIS district-geometry ingestion.
+**Core coverage is not yet declared live.** `sync_al_elections` creates elections,
+and `sync_al_certifications` now parses official statewide candidate
+certifications into election-specific races and candidates. The parser has not
+been run against the production election set; its internal endpoint is not yet
+scheduled in production. FCPA remains a separate provisional source. Sample-ballot
+validation, local contests, statewide ballot measures, and ArcGIS geometry remain
+deferred.

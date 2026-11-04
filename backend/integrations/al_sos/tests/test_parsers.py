@@ -2,17 +2,209 @@ import datetime as dt
 import io
 from pathlib import Path
 
+import pytest
 from openpyxl import load_workbook
 
 from integrations.al_sos.parsers import (
+    _rotated_table_rows_from_tsv,
+    _table_rows_from_tsv,
+    _two_column_table_rows_from_tsv,
     normalize_contest_title,
+    parse_candidate_certification_pdf,
+    parse_candidate_certification_table,
     parse_election_year_page,
     parse_enr_workbook,
     parse_fcpa_committee_detail,
     parse_fcpa_race_search_response,
+    parse_independent_candidate_certificate,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def test_parse_candidate_certification_table_normalizes_offices_and_keeps_party():
+    parsed = parse_candidate_certification_table(
+        [
+            ("Office", "Name"),
+            ("U.S. Senate", "Barry Moore"),
+            ("U.S. Congress Congressional District 3", "Mike Rogers"),
+            ("Alabama State Senate District 10", "J.T. Smith"),
+            ("County Sheriff", "Pat Smith"),
+            ("Governor", "Jane Smith RECEIVED"),
+        ],
+        party="REP",
+        document_label="State Certification of Republican Candidates",
+        source_url="https://www.sos.alabama.gov/cert.pdf",
+        sha256="abc123",
+    )
+
+    assert parsed == [
+        {
+            "office_title": "U.S. Senate",
+            "candidate_name": "Barry Moore",
+            "party": "REP",
+            "document_label": "State Certification of Republican Candidates",
+            "source_url": "https://www.sos.alabama.gov/cert.pdf",
+            "source_sha256": "abc123",
+        },
+        {
+            "office_title": "U.S. House - District 3",
+            "candidate_name": "Mike Rogers",
+            "party": "REP",
+            "document_label": "State Certification of Republican Candidates",
+            "source_url": "https://www.sos.alabama.gov/cert.pdf",
+            "source_sha256": "abc123",
+        },
+        {
+            "office_title": "State Senate - District 10",
+            "candidate_name": "J.T. Smith",
+            "party": "REP",
+            "document_label": "State Certification of Republican Candidates",
+            "source_url": "https://www.sos.alabama.gov/cert.pdf",
+            "source_sha256": "abc123",
+        },
+        {
+            "office_title": "Governor",
+            "candidate_name": "Jane Smith",
+            "party": "REP",
+            "document_label": "State Certification of Republican Candidates",
+            "source_url": "https://www.sos.alabama.gov/cert.pdf",
+            "source_sha256": "abc123",
+        },
+    ]
+
+
+def test_rotated_certification_table_joins_district_and_place_columns():
+    headers = (
+        "level", "page_num", "block_num", "par_num", "line_num", "word_num",
+        "left", "top", "width", "height", "conf", "text",
+    )
+    entries = [
+        (1, 1, 1, 1, 378, 192, 106, 41, "Office"),
+        (1, 1, 1, 2, 1040, 192, 220, 41, "District/Jurisdiction"),
+        (1, 1, 1, 3, 1388, 192, 90, 41, "|Place"),
+        (1, 1, 1, 4, 1494, 192, 120, 41, "|Ballot"),
+        (2, 1, 1, 1, 379, 300, 80, 30, "State"),
+        (2, 1, 1, 2, 470, 300, 120, 30, "Senator"),
+        (2, 1, 1, 3, 1100, 300, 20, 30, "2"),
+        (2, 1, 1, 4, 1494, 300, 100, 30, "Jane"),
+        (2, 1, 1, 5, 1598, 300, 100, 30, "Smith"),
+    ]
+    tsv = "\t".join(headers) + "\n" + "\n".join(
+        "\t".join(map(str, (5, 1, *entry[:8], 95, entry[8])))
+        for entry in entries
+    )
+
+    assert _rotated_table_rows_from_tsv(tsv) == [("State Senator District 2", "Jane Smith")]
+
+
+def test_two_column_certification_table_uses_office_and_name_header_without_grid_rules():
+    headers = (
+        "level", "page_num", "block_num", "par_num", "line_num", "word_num",
+        "left", "top", "width", "height", "conf", "text",
+    )
+    words = (
+        (1, 1, 1, 1, 100, 100, 70, 20, "Office"),
+        (1, 1, 1, 2, 600, 100, 60, 20, "Name"),
+        (2, 1, 1, 1, 100, 150, 100, 20, "Governor"),
+        (2, 1, 1, 2, 600, 150, 60, 20, "Jane"),
+        (2, 1, 1, 3, 665, 150, 70, 20, "Smith"),
+    )
+    tsv = "\t".join(headers) + "\n" + "\n".join(
+        "\t".join(map(str, (5, 1, *word[:8], 95, word[8])))
+        for word in words
+    )
+
+    assert _two_column_table_rows_from_tsv(tsv) == [("Governor", "Jane Smith")]
+
+
+def test_two_column_certification_continuation_uses_widest_cell_gap_without_header():
+    headers = (
+        "level", "page_num", "block_num", "par_num", "line_num", "word_num",
+        "left", "top", "width", "height", "conf", "text",
+    )
+    words = (
+        (1, 1, 1, 1, 100, 100, 70, 20, "U.S."),
+        (1, 1, 1, 2, 180, 100, 85, 20, "Senate"),
+        (1, 1, 1, 3, 600, 100, 60, 20, "Barry"),
+        (1, 1, 1, 4, 665, 100, 70, 20, "Moore"),
+        (2, 1, 1, 1, 100, 140, 90, 20, "Governor"),
+        (2, 1, 1, 2, 600, 140, 60, 20, "Jane"),
+        (2, 1, 1, 3, 665, 140, 70, 20, "Smith"),
+        (3, 1, 1, 1, 100, 180, 130, 20, "Attorney"),
+        (3, 1, 1, 2, 235, 180, 80, 20, "General"),
+        (3, 1, 1, 3, 600, 180, 70, 20, "Alex"),
+        (3, 1, 1, 4, 675, 180, 70, 20, "Jones"),
+    )
+    tsv = "\t".join(headers) + "\n" + "\n".join(
+        "\t".join(map(str, (5, 1, *word[:8], 95, word[8])))
+        for word in words
+    )
+
+    assert _two_column_table_rows_from_tsv(tsv, allow_headerless=True) == [
+        ("U.S. Senate", "Barry Moore"),
+        ("Governor", "Jane Smith"),
+        ("Attorney General", "Alex Jones"),
+    ]
+
+
+def test_parse_independent_candidate_certificate_reads_office_name_pairs():
+    parsed = parse_independent_candidate_certificate(
+        [
+            "STATE OF ALABAMA",
+            "Alabama State Senate, District 10",
+            "Jesse Battles",
+            "Alabama State House of Representatives, District 7",
+            "Trent Ford",
+        ],
+        document_label="State Certification of Independent Candidate",
+        source_url="https://www.sos.alabama.gov/independent.pdf",
+        sha256="def456",
+    )
+
+    assert [(row["office_title"], row["candidate_name"], row["party"]) for row in parsed] == [
+        ("State Senate - District 10", "Jesse Battles", "IND"),
+        ("State House - District 7", "Trent Ford", "IND"),
+    ]
+
+
+def test_candidate_certification_pdf_rejects_non_pdf_bytes():
+    with pytest.raises(ValueError, match="not a PDF"):
+        parse_candidate_certification_pdf(
+            b"not a PDF",
+            party="REP",
+            document_label="State Certification of Republican Candidates",
+            source_url="https://www.sos.alabama.gov/cert.pdf",
+            sha256="abc123",
+        )
+
+
+def test_table_rows_from_tsv_keeps_cells_separate_across_continued_rows():
+    headers = (
+        "level", "page_num", "block_num", "par_num", "line_num", "word_num",
+        "left", "top", "width", "height", "conf", "text",
+    )
+    words = (
+        (1, 105, 1, 100, 70, "U.S."),
+        (1, 105, 2, 175, 90, "Senate"),
+        (1, 105, 3, 520, 90, "Barry"),
+        (1, 100, 4, 615, 70, "Moore"),
+        (2, 145, 1, 100, 70, "State"),
+        (2, 145, 2, 175, 80, "Senate"),
+        (2, 145, 3, 260, 100, "District"),
+        (2, 145, 4, 365, 20, "10"),
+        (2, 145, 5, 520, 80, "Jane"),
+        (2, 145, 6, 605, 70, "Smith"),
+    )
+    tsv = "\t".join(headers) + "\n" + "\n".join(
+        "\t".join(map(str, ("5", "1", "1", "1", line, word, left, top, width, "12", "95", text)))
+        for line, top, word, left, width, text in words
+    )
+
+    assert _table_rows_from_tsv(tsv, [100, 130, 140, 180], 500) == [
+        ("U.S. Senate", "Barry Moore"),
+        ("State Senate District 10", "Jane Smith"),
+    ]
 
 
 def test_normalize_contest_title_strips_party_suffix():

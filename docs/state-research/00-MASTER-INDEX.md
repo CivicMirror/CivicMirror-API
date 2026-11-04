@@ -146,7 +146,7 @@ Stage 2 results adapter is complete and active. Stage 1 race creation relies on 
 Stage 2 results adapter available. No dedicated Stage 1 adapter — elections and races come from Civic API, which may be incomplete for state primaries.
 
 - Arkansas (AR) — TotalVote ENR
-- Alabama (AL) — Stage 2 ENR Excel export adapter; Stage 1 still Google Civic/manual until state candidate/race source is implemented. Requires `source_metadata["al_ecode"]` until ecode discovery is built.
+- Alabama (AL) — Stage 1 elections from the SOS year page and candidate-certification PDF ingestion implemented; internal certification task is not yet scheduled in production. Stage 2 ENR Excel results adapter requires `source_metadata["al_ecode"]` until ecode discovery is built. See [AL Election Research](AL/AL-Election_Research.md).
 - Missouri (MO) — Grand Totals PDF (pdfplumber), statewide top-of-ticket, 2024 general only (PR #83)
 - New Mexico (NM) — BPro TotalVote election-wide CSV, hyper-local municipal election data (PR #85); Civera ElectionStats deferred, issue #84
 - Utah (UT) — EnhancedVotingAdapter subclass (same platform as GA/VA/WA), statewide `ballotItems` only (PR #86)

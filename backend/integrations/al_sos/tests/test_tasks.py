@@ -115,6 +115,92 @@ def _make_al_election(**overrides):
     return Election.objects.create(**defaults)
 
 
+@pytest.mark.django_db
+def test_sync_al_certifications_creates_party_specific_races_and_candidate_provenance():
+    from elections.models import Candidate, Election, Race
+    from integrations.al_sos.tasks import sync_al_certifications
+
+    election = _make_al_election(
+        election_type="primary",
+        election_date="2026-05-19",
+        name="2026 Primary Election",
+        source_metadata={
+            "al_document_links": [
+                {"label": "State Certification of Democratic Party Candidates", "url": "https://www.sos.alabama.gov/dem.pdf"},
+                {"label": "State Certification of Republican Party Candidates", "url": "https://www.sos.alabama.gov/rep.pdf"},
+            ]
+        },
+    )
+
+    def parsed_rows(_content, *, party, document_label, source_url, sha256):
+        candidate_name = "Alice Democrat" if party == "DEM" else "Robert Republican"
+        return [{
+            "office_title": "Governor",
+            "candidate_name": candidate_name,
+            "party": party,
+            "document_label": document_label,
+            "source_url": source_url,
+            "source_sha256": sha256,
+        }]
+
+    with patch("integrations.al_sos.tasks.AlSosClient") as MC, patch(
+        "integrations.al_sos.tasks.parse_candidate_certification_pdf", side_effect=parsed_rows,
+    ):
+        MC.return_value.fetch_candidate_certification_pdf.return_value = b"%PDF-1.4 certification"
+        sync_al_certifications.apply(kwargs={"year": 2026})
+
+    races = list(Race.objects.filter(election=election).order_by("party"))
+    assert len(races) == 2
+    assert {race.party for race in races} == {"DEM", "REP"}
+    assert {race.source_metadata["contest_variant"] for race in races} == {"al:DEM", "al:REP"}
+    assert all(race.source_metadata["al_certification_ocr_review_required"] for race in races)
+    candidates = list(Candidate.objects.filter(race__election=election))
+    assert {candidate.name for candidate in candidates} == {"Alice Democrat", "Robert Republican"}
+    assert all(candidate.source_metadata["al_certification_sources"] for candidate in candidates)
+    assert all(candidate.source_metadata["al_certification_ocr_review_required"] for candidate in candidates)
+    election.refresh_from_db()
+    assert election.source_metadata["al_certification_documents"]
+
+
+@pytest.mark.django_db
+def test_sync_al_certifications_uses_latest_linked_amendment_and_skips_unchanged_ocr():
+    from elections.models import Candidate, Election, Race
+    from integrations.al_sos.tasks import sync_al_certifications
+
+    election = _make_al_election(
+        election_type="general",
+        name="2026 General Election",
+        source_id="al_sos_test_general_certifications",
+        source_metadata={
+            "al_document_links": [
+                {"label": "Republican Party Certification of Candidates", "url": "https://www.sos.alabama.gov/rep-original.pdf"},
+                {"label": "State Certification of Republican Party Candidates", "url": "https://www.sos.alabama.gov/rep-state.pdf"},
+                {"label": "Republican Party Amended Certification of Candidates", "url": "https://www.sos.alabama.gov/rep-amended.pdf"},
+            ]
+        },
+    )
+    with patch("integrations.al_sos.tasks.AlSosClient") as MC, patch(
+        "integrations.al_sos.tasks.parse_candidate_certification_pdf",
+    ) as parser:
+        MC.return_value.fetch_candidate_certification_pdf.return_value = b"%PDF-1.4 amended"
+        parser.return_value = [{
+            "office_title": "State House - District 51",
+            "candidate_name": "Allen Treadaway",
+            "party": "REP",
+            "document_label": "Republican Party Amended Certification of Candidates",
+            "source_url": "https://www.sos.alabama.gov/rep-amended.pdf",
+            "source_sha256": "unused",
+        }]
+        sync_al_certifications.apply(kwargs={"year": 2026})
+        sync_al_certifications.apply(kwargs={"year": 2026})
+
+    parser.assert_called_once()
+    assert parser.call_args.kwargs["source_url"] == "https://www.sos.alabama.gov/rep-amended.pdf"
+    assert Race.objects.filter(election=election, office_title="State House - District 51").count() == 1
+    candidate = Candidate.objects.get(race__election=election, name="Allen Treadaway")
+    assert candidate.source_metadata["al_certification_sources"][0]["url"].endswith("rep-amended.pdf")
+
+
 _SEARCH_PAGE_1 = {
     "data": {
         "totalRecords": 1,
